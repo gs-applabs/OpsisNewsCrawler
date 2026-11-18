@@ -9,7 +9,7 @@ namespace OpsisNewsCrawler.OpsisPlugin;
 /// Hosted, the crawler never creates its own tray icon: its commands are offered through <see cref="GetTrayMenuItems"/>
 /// and its settings are a tab of the host.
 /// </summary>
-public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginProfileAware
+public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginProfileAware, IPluginUpdateSource, IPluginHostSettingsAware
 {
     public const string NavigationKey = "OpsisNewsCrawler";
 
@@ -66,6 +66,16 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
             Color.FromArgb(text), Color.FromArgb(textMuted), Color.FromArgb(accent), Theme.Opacity); // the strip keeps its own transparency setting
 
     public void SetHardwareProfile(string tier) => _controller.Host.SetHostTier(tier);
+
+    /// <summary>Contract 1.0.0.0: Opsis tells where the releases of this plugin are (its Update button is the only updater).</summary>
+    public PluginUpdateSource GetUpdateSource() => new("gs-applabs/OpsisNewsCrawler", "OpsisNewsCrawler-Plugin.zip");
+
+    /// <summary>Contract 1.0.0.0: shared settings pushed by Opsis. A host that does not know this interface never calls it.</summary>
+    public void SetHostSettings(PluginHostSettings settings)
+    {
+        _controller.Host.HostManagesUpdates = settings.HostManagesUpdates;
+        SetHardwareProfile(settings.HardwareTier);
+    }
 
     public void SetLanguage(string code)
     {

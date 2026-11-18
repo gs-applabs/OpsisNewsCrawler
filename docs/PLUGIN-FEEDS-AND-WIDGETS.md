@@ -1,6 +1,6 @@
 # Plugin feeds and widgets (contract extension, 0.20.1)
 
-Source of the request: the plugin contract note (PLUGIN-CONTRACT-2026-11.md, in the shared notes folder) (the "San simera" / Chronikologio plugin). The assembly version of `OpsisNewsCrawler.Plugin.Abstractions` stays **0.8.0.0** (Opsis loads the contract DLL in its default context; a plugin that asks for a newer assembly version cannot be bound). Everything added is optional: a plugin that does not implement it keeps working.
+Source of the request: the plugin contract note (PLUGIN-CONTRACT-2026-11.md, in the shared notes folder) (the "San simera" / Chronikologio plugin). The assembly version of `OpsisNewsCrawler.Plugin.Abstractions` was **0.8.0.0** until 0.24.1 and is **1.0.0.0** from 0.25.0 (Opsis 2.6.0: Opsis hands its own copy of the contract to every plugin, so a plugin built against 0.8.0.0 still binds; see Opsis docs/PHASE-P-STATUS.md). Contract 1.0.0.0 adds `IPluginUpdateSource` and `IPluginHostSettingsAware`. Historical note for 2.4.6: (Opsis loads the contract DLL in its default context; a plugin that asks for a newer assembly version cannot be bound). Everything added is optional: a plugin that does not implement it keeps working.
 
 ## New public types (`Plugin.Abstractions/PluginContract.cs`)
 | Type | Purpose |

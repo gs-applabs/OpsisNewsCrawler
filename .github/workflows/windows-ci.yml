@@ -24,6 +24,9 @@ jobs:
         run: dotnet test tests/OpsisNewsCrawler.Core.Tests/OpsisNewsCrawler.Core.Tests.csproj --configuration Release
       - name: Plugin contract tests
         run: dotnet test tests/OpsisNewsCrawler.Plugin.Tests/OpsisNewsCrawler.Plugin.Tests.csproj --configuration Release
+      - name: Contract DLL copies have the same SHA-256
+        shell: pwsh
+        run: ./tools/check-contract-sha.ps1
       - name: Urgent-news detector precision and recall
         if: always()
         shell: pwsh

@@ -30,14 +30,14 @@ public class ContractTests
             t.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly).Select(Describe))));
 
     [Fact]
-    public void TheContractKeepsTheFrozenAssemblyVersion() =>
-        Assert.Equal(new Version(0, 8, 0, 0), typeof(PluginFeeds).Assembly.GetName().Version);
+    public void TheContractIsAssemblyVersion1000() =>
+        Assert.Equal(new Version(1, 0, 0, 0), typeof(PluginFeeds).Assembly.GetName().Version);
 
     [Fact]
     public void EveryPublicSignatureOfThePluginsContractIsInOurContract()
     {
         var ours = Surface(typeof(PluginFeeds).Assembly);
-        var lines = File.ReadAllLines(SurfaceFile).Where(l => l.Length > 0 && !l.StartsWith('#')).ToList();
+        var lines = File.ReadAllLines(SurfaceFile).Where(l => l.Length > 0 && !l.StartsWith('#')).Select(l => l.Replace("Version=0.8.0.0", "Version=1.0.0.0")).ToList();   // the text was written from the 0.8.0.0 DLL: same members, older assembly version in the type names
         Assert.True(lines.Count > 20, "the reference surface is empty");
         foreach (var line in lines)
         {

@@ -101,7 +101,7 @@ public sealed class TickerHost : IDisposable
     /// <summary>About 30 seconds after the start and then every 24 hours (GearWin's logic); while offline it asks again after a minute, up to four times.</summary>
     private async Task AutoCheckForUpdatesAsync()
     {
-        if (!Config.CheckForUpdates || autoChecking || disposed) return;
+        if (!Config.CheckForUpdates || HostManagesUpdates || autoChecking || disposed) return;
         autoChecking = true;
         try
         {
@@ -614,6 +614,9 @@ public sealed class TickerHost : IDisposable
 
     /// <summary>Set by the Opsis plugin before the first ApplyConfig: Opsis widgets, DeskStrip and DeskZones follow the work area.</summary>
     public bool HostedByOpsis { get; set; }
+
+    /// <summary>Set from the host settings (contract 1.0.0.0): Opsis checks and installs the updates of the plugin, so the plugin runs no updater and shows no update card.</summary>
+    public bool HostManagesUpdates { get; set; }
 
     public bool EffectiveReserveSpace => Config.ReserveScreenSpace ?? HostedByOpsis;
 

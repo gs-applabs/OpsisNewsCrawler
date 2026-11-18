@@ -39,6 +39,9 @@ if ($opsisCopy) {
   $opsisVersion = [Reflection.AssemblyName]::GetAssemblyName($opsisCopy).Version
   if ($contract -ne $opsisVersion) { throw "plugin contract is $contract but the copy in Opsis\libs is $opsisVersion" }
 }
+if ($contract -ne [version]"1.0.0.0") { throw "plugin contract is $contract, expected 1.0.0.0" }
+$canonical = (Get-FileHash "$r	estsOpsisNewsCrawler.Plugin.TestseferenceOpsisNewsCrawler.Plugin.Abstractions.dll" -Algorithm SHA256).Hash
+if ((Get-FileHash "$pluginDstOpsisNewsCrawler.Plugin.Abstractions.dll" -Algorithm SHA256).Hash -ne $canonical) { throw "the contract DLL in the plugin payload is not the canonical copy" }
 "contract version: $contract"
 
 # Any installed Inno Setup (5, 6, 7...): the newest real install folder wins (the ISCC.exe on the PATH is, on a CI runner, a shim of an older version); the PATH is the last resort.
@@ -71,11 +74,18 @@ Remove-Item "$r\Output\portable-stage" -Recurse -Force
 $ph = (Get-FileHash $portable -Algorithm SHA256).Hash.ToLower()
 [IO.File]::WriteAllText("$portable.sha256", "$ph  OpsisNewsCrawler-$ver-portable.zip`n")
 
+# Plugin zip for the Opsis update button (Opsis 2.6.0): the plugin folder at the root of the zip, plus its SHA-256. Opsis verifies the SHA-256, extracts safely and asks for the approval of the new content once.
+$pluginZip = "$rOutputOpsisNewsCrawler-Plugin.zip"
+if (Test-Path $pluginZip) { Remove-Item $pluginZip -Force }
+Compress-Archive -Path "$pluginDst*" -DestinationPath $pluginZip
+$pz = (Get-FileHash $pluginZip -Algorithm SHA256).Hash.ToLower()
+[IO.File]::WriteAllText("$pluginZip.sha256", "$pz  OpsisNewsCrawler-Plugin.zip`n")
+
 # Everything to publish, in one folder (release\<version>-assets): installer, portable zip, their checksums, release notes (el + en).
 $assets = "$r\release\$ver-assets"
 if (Test-Path $assets) { Remove-Item $assets -Recurse -Force }
 New-Item -ItemType Directory -Force $assets | Out-Null
-Copy-Item "$r\Output\OpsisNewsCrawler-Setup.exe", "$r\Output\OpsisNewsCrawler-Setup.exe.sha256", $portable, "$portable.sha256" $assets
+Copy-Item "$r\Output\OpsisNewsCrawler-Setup.exe", "$r\Output\OpsisNewsCrawler-Setup.exe.sha256", $portable, "$portable.sha256", $pluginZip, "$pluginZip.sha256" $assets
 $notes = "$r\docs\releases\RELEASE-$ver.md"
 if (Test-Path $notes) { Copy-Item $notes "$assets\RELEASE-NOTES.md" } else { "note: $notes is missing - write the release notes before publishing" }
 if (Test-Path "$assets\RELEASE-NOTES.md") {

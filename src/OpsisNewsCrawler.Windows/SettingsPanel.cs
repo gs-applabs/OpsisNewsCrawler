@@ -612,6 +612,7 @@ public sealed class SettingsPanel : UserControl
         updateStatus = new Label { AutoSize = true, Tag = "muted", MaximumSize = new Size(700, 0), Margin = new Padding(0, 6, 0, 0), UseMnemonic = false, Text = Loc.T("upd.current", AboutTexts.Version) };
         updFlow.Controls.Add(updateStatus);
         updates.Controls.Add(updFlow);
+        updates.Visible = !host.HostManagesUpdates;   // inside Opsis 2.6.0 the Opsis update button is the only place that updates this plugin
         flow.Controls.Add(updates);
         checkNow.Click += async (_, _) => await CheckUpdatesNowAsync(checkNow);
         installUpdate.Click += async (_, _) => await InstallUpdateAsync();
