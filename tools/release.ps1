@@ -40,8 +40,8 @@ if ($opsisCopy) {
   if ($contract -ne $opsisVersion) { throw "plugin contract is $contract but the copy in Opsis\libs is $opsisVersion" }
 }
 if ($contract -ne [version]"1.0.0.0") { throw "plugin contract is $contract, expected 1.0.0.0" }
-$canonical = (Get-FileHash "$r	estsOpsisNewsCrawler.Plugin.TestseferenceOpsisNewsCrawler.Plugin.Abstractions.dll" -Algorithm SHA256).Hash
-if ((Get-FileHash "$pluginDstOpsisNewsCrawler.Plugin.Abstractions.dll" -Algorithm SHA256).Hash -ne $canonical) { throw "the contract DLL in the plugin payload is not the canonical copy" }
+$canonical = (Get-FileHash "$r\tests\OpsisNewsCrawler.Plugin.Tests\reference\OpsisNewsCrawler.Plugin.Abstractions.dll" -Algorithm SHA256).Hash
+if ((Get-FileHash "$pluginDst\OpsisNewsCrawler.Plugin.Abstractions.dll" -Algorithm SHA256).Hash -ne $canonical) { throw "the contract DLL in the plugin payload is not the canonical copy" }
 "contract version: $contract"
 
 # Any installed Inno Setup (5, 6, 7...): the newest real install folder wins (the ISCC.exe on the PATH is, on a CI runner, a shim of an older version); the PATH is the last resort.
@@ -75,9 +75,9 @@ $ph = (Get-FileHash $portable -Algorithm SHA256).Hash.ToLower()
 [IO.File]::WriteAllText("$portable.sha256", "$ph  OpsisNewsCrawler-$ver-portable.zip`n")
 
 # Plugin zip for the Opsis update button (Opsis 2.6.0): the plugin folder at the root of the zip, plus its SHA-256. Opsis verifies the SHA-256, extracts safely and asks for the approval of the new content once.
-$pluginZip = "$rOutputOpsisNewsCrawler-Plugin.zip"
+$pluginZip = "$r\Output\OpsisNewsCrawler-Plugin.zip"
 if (Test-Path $pluginZip) { Remove-Item $pluginZip -Force }
-Compress-Archive -Path "$pluginDst*" -DestinationPath $pluginZip
+Compress-Archive -Path "$pluginDst\*" -DestinationPath $pluginZip
 $pz = (Get-FileHash $pluginZip -Algorithm SHA256).Hash.ToLower()
 [IO.File]::WriteAllText("$pluginZip.sha256", "$pz  OpsisNewsCrawler-Plugin.zip`n")
 
