@@ -22,4 +22,8 @@
     <ProjectReference Include="../../src/OpsisNewsCrawler.Plugin.Abstractions/OpsisNewsCrawler.Plugin.Abstractions.csproj" />
     <None Include="reference/*.txt;reference/*.sha256;reference/*.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- Like the app and the plugin: the contract DLL next to the tests is the canonical copy (a Release build of the project reference has another SHA-256). -->
+  <Target Name="UseCanonicalContract" AfterTargets="Build">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)reference\OpsisNewsCrawler.Plugin.Abstractions.dll" DestinationFolder="$(OutDir)" />
+  </Target>
 </Project>
