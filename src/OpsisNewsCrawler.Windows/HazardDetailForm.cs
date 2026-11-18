@@ -218,8 +218,8 @@ internal sealed class HazardDetailForm : Form
         var color = e.Level >= 3 ? "#d62828" : e.Level == 2 ? "#e67e22" : "#e0a020";
         var offline = Loc.T("pk.the.map.needs.an");
         return @"<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='referrer' content='origin-when-cross-origin'>
-<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>
-<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>
+<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css' integrity='sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=' crossorigin=''>
+<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js' integrity='sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=' crossorigin=''></script>
 <style>
 html,body{margin:0;height:100%;font-family:'Segoe UI',sans-serif;background:#1e1e1e}
 #map{position:absolute;inset:0;color:#ddd;display:flex;align-items:center;justify-content:center}
