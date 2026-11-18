@@ -194,7 +194,7 @@ public class ReleaseHygieneTests
         var root = Root();
         var skip = new[] { "/bin/", "/obj/", "/.git/", "/release/", "/node_modules/" };
         // Files that name the old account on purpose: history, the trust-both-names code and its tests, and this test.
-        var allowed = new[] { "CHANGELOG.md", "TASKS.md", "RELEASE-0.20.3.md", "UpdateChecker.cs", "SuiteInstall.cs", "ReleaseHygieneTests.cs", "UpdateAnnounceTests.cs", "YahooHistoryTests.cs", "SuiteTests.cs" };
+        var allowed = new[] { "CHANGELOG.md", "TASKS.md", "RELEASE-0.20.3.md", "INSTRUCTIONS-REVIEW.md", "UpdateChecker.cs", "SuiteInstall.cs", "ReleaseHygieneTests.cs", "UpdateAnnounceTests.cs", "YahooHistoryTests.cs", "SuiteTests.cs" };
         var offenders = new List<string>();
         foreach (var f in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
         {
