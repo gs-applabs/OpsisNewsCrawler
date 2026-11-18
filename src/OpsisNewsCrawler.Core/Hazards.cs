@@ -305,7 +305,7 @@ public sealed class HazardService
         http = handler is null ? new HttpClient() : new HttpClient(handler, disposeHandler: false);
         http.Timeout = TimeSpan.FromSeconds(15);
         http.MaxResponseContentBufferSize = 8 * 1024 * 1024;
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("OpsisNewsCrawler/1.0 (+https://github.com/giorstergiopoulos-design/OpsisNewsCrawler)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("OpsisNewsCrawler/1.0 (+https://github.com/gs-applabs/OpsisNewsCrawler)");
     }
 
     /// <summary>Names of the sources that did not answer in the last run.</summary>

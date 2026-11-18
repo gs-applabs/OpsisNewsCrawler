@@ -18,9 +18,11 @@ public sealed record UpdateInfo(Version Version, string PageUrl, string? SetupUr
 /// </summary>
 public static class UpdateChecker
 {
-    public const string Repository = "giorstergiopoulos-design/OpsisNewsCrawler";
+    public const string Repository = "gs-applabs/OpsisNewsCrawler";
+    /// <summary>The previous account name; old releases and redirects may still carry it, so trusted-URL checks accept both.</summary>
+    public const string LegacyRepository = "giorstergiopoulos-design/OpsisNewsCrawler";
     private const string SetupName = "OpsisNewsCrawler-Setup.exe";
-    private static readonly string DownloadPrefix = $"https://github.com/{Repository}/releases/download/";
+    private static readonly string[] DownloadPrefixes = { $"https://github.com/{Repository}/releases/download/", $"https://github.com/{LegacyRepository}/releases/download/" };
 
     private static readonly object CacheLock = new();
     private static string? etag;
@@ -72,7 +74,7 @@ public static class UpdateChecker
 
         var page = root.GetProperty("html_url").GetString() ?? $"https://github.com/{Repository}/releases";
         // Only addresses of this repository's releases are ever followed.
-        if (!page.StartsWith($"https://github.com/{Repository}/", StringComparison.Ordinal)) return null;
+        if (!page.StartsWith($"https://github.com/{Repository}/", StringComparison.Ordinal) && !page.StartsWith($"https://github.com/{LegacyRepository}/", StringComparison.Ordinal)) return null;
         string? setup = null, sum = null, digest = null;
         if (root.TryGetProperty("assets", out var assets))
         {
@@ -95,7 +97,7 @@ public static class UpdateChecker
     /// <summary>True for https://github.com/&lt;this repository&gt;/releases/download/... and nothing else.</summary>
     public static bool IsTrustedDownloadUrl(string? url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps && u.Host == "github.com"
-        && string.IsNullOrEmpty(u.UserInfo) && url!.StartsWith(DownloadPrefix, StringComparison.Ordinal);
+        && string.IsNullOrEmpty(u.UserInfo) && DownloadPrefixes.Any(p => url!.StartsWith(p, StringComparison.Ordinal));
 
     /// <summary>"sha256:ABC..." gives "abc..." (64 hex digits), anything else null.</summary>
     public static string? ParseDigest(string? digest)

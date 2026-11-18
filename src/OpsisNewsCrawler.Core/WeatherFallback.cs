@@ -30,7 +30,7 @@ public sealed class MetNoWeather
         get
         {
             var v = typeof(MetNoWeather).Assembly.GetName().Version;
-            return $"OpsisNewsCrawler/{(v == null ? "0" : v.ToString(3))} (+https://github.com/giorstergiopoulos-design/OpsisNewsCrawler)";
+            return $"OpsisNewsCrawler/{(v == null ? "0" : v.ToString(3))} (+https://github.com/gs-applabs/OpsisNewsCrawler)";
         }
     }
 

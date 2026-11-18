@@ -162,7 +162,7 @@ public sealed class SuiteReleaseTests
         JsonSerializer.Serialize(new
         {
             tag_name = "v1.2.3", draft, prerelease = pre,
-            html_url = "https://github.com/giorstergiopoulos-design/OpsisNewsCrawler/releases/tag/v1.2.3",
+            html_url = "https://github.com/gs-applabs/OpsisNewsCrawler/releases/tag/v1.2.3",
             assets = new object[]
             {
                 new { name, browser_download_url = assetUrl, size = 1234, digest },
@@ -170,7 +170,7 @@ public sealed class SuiteReleaseTests
             }
         });
 
-    private const string Good = "https://github.com/giorstergiopoulos-design/OpsisNewsCrawler/releases/download/v1.2.3/OpsisNewsCrawler-Setup.exe";
+    private const string Good = "https://github.com/gs-applabs/OpsisNewsCrawler/releases/download/v1.2.3/OpsisNewsCrawler-Setup.exe";
     private static readonly string Hex = new('a', 64);
 
     [Fact]
@@ -207,7 +207,7 @@ public sealed class SuiteReleaseTests
     public void WithoutAnyHashTheDownloadCannotBeVerified()
     {
         var app = Catalog.Find("gearwin")!;      // no checksum asset in the catalogue
-        var json = Release("https://github.com/giorstergiopoulos-design/GearWin/releases/download/v1.2.3/GearWin-Setup-1.2.3.exe", "GearWin-Setup-1.2.3.exe");
+        var json = Release("https://github.com/gs-applabs/GearWin/releases/download/v1.2.3/GearWin-Setup-1.2.3.exe", "GearWin-Setup-1.2.3.exe");
         var d = SuiteReleases.PickDownload(json, Catalog, app, out _);
         Assert.NotNull(d);
         Assert.False(d!.CanVerify);
@@ -405,7 +405,7 @@ public class SuiteFamilyTests
     [Fact]
     public void ACatalogueShowsWhatIsInItsAppsListAndIgnoresUnknownFields()
     {
-        var json = """{"schema":1,"owner":"giorstergiopoulos-design","futureField":{"x":1},"apps":[""" + App.Replace("\"id\"", "\"unknown\":[1,2,3],\"id\"") + """],"alsoNew":true}""";
+        var json = """{"schema":1,"owner":"gs-applabs","futureField":{"x":1},"apps":[""" + App.Replace("\"id\"", "\"unknown\":[1,2,3],\"id\"") + """],"alsoNew":true}""";
         Assert.True(SuiteCatalog.TryParse(json, out var c, out var error), error);
         Assert.Equal(new[] { "mediasuite" }, c!.Apps.Select(a => a.Id).ToArray());
     }

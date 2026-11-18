@@ -78,6 +78,11 @@ public static class SuiteReleases
 {
     public static string LatestApiUrl(SuiteCatalog catalog, SuiteApp app) => $"https://api.github.com/repos/{catalog.Owner}/{app.Repo}/releases/latest";
 
+    /// <summary>The catalog owner plus the other account name when it is one of the two this project has used (giorstergiopoulos-design renamed to gs-applabs).</summary>
+    internal static string[] OwnerNames(string owner) =>
+        owner.Equals("gs-applabs", StringComparison.OrdinalIgnoreCase) ? new[] { owner, "giorstergiopoulos-design" }
+        : owner.Equals("giorstergiopoulos-design", StringComparison.OrdinalIgnoreCase) ? new[] { owner, "gs-applabs" } : new[] { owner };
+
     public static string RepoUrl(SuiteCatalog catalog, SuiteApp app) => $"https://github.com/{catalog.Owner}/{app.Repo}";
 
     /// <summary>
@@ -97,8 +102,9 @@ public static class SuiteReleases
             tag = root.TryGetProperty("tag_name", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null;
             if (tag is null) return null;
             var page = root.TryGetProperty("html_url", out var h) && h.ValueKind == JsonValueKind.String ? h.GetString() : null;
-            var prefix = $"https://github.com/{catalog.Owner}/{app.Repo}/releases/download/";
-            page = page is not null && page.StartsWith($"https://github.com/{catalog.Owner}/{app.Repo}/", StringComparison.Ordinal) ? page : RepoUrl(catalog, app) + "/releases";
+            var owners = OwnerNames(catalog.Owner);
+            var prefixes = owners.Select(o => $"https://github.com/{o}/{app.Repo}/releases/download/").ToArray();
+            page = page is not null && owners.Any(o => page.StartsWith($"https://github.com/{o}/{app.Repo}/", StringComparison.Ordinal)) ? page : RepoUrl(catalog, app) + "/releases";
             if (app.InstallerAsset is null || !root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array) return null;
 
             var pattern = new Regex(app.InstallerAsset, RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(200));
@@ -108,7 +114,7 @@ public static class SuiteReleases
             {
                 var name = a.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
                 var url = a.TryGetProperty("browser_download_url", out var u) && u.ValueKind == JsonValueKind.String ? u.GetString() : null;
-                if (name is null || url is null || !url.StartsWith(prefix, StringComparison.Ordinal) || !SuiteCatalog.IsAllowedSource(url)) continue;
+                if (name is null || url is null || !prefixes.Any(p => url.StartsWith(p, StringComparison.Ordinal)) || !SuiteCatalog.IsAllowedSource(url)) continue;
                 if (!DownloadPolicy.IsSafeFileName(name)) continue;
                 if (app.ChecksumAsset is not null && string.Equals(name, app.ChecksumAsset, StringComparison.OrdinalIgnoreCase)) checksumUrl = url;
                 if (found is null && pattern.IsMatch(name))

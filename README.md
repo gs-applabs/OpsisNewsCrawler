@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-<a href="../../releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/giorstergiopoulos-design/OpsisNewsCrawler"/></a>
+<a href="../../releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/gs-applabs/OpsisNewsCrawler"/></a>
 <a href="LICENSE"><img alt="license MIT" src="https://img.shields.io/badge/license-MIT-blue"/></a>
 <img alt="Windows 11" src="https://img.shields.io/badge/Windows-11-0078d4"/>
 <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512bd4"/>
@@ -217,16 +217,16 @@ Needs the .NET 10 SDK and Inno Setup 6/7. Layout: `src/OpsisNewsCrawler.Core` (m
 
 | App | |
 |---|---|
-| [Opsis](https://github.com/giorstergiopoulos-design/Opsis) | Desktop customisation for Windows 11 — wallpapers, widgets, DeskStrip, plugins / Εξατομίκευση επιφάνειας εργασίας |
-| [Opsis News Crawler](https://github.com/giorstergiopoulos-design/OpsisNewsCrawler) | News and markets ticker inside your taskbar (**this repository**) |
-| [GearWin](https://github.com/giorstergiopoulos-design/GearWin) | Complete PC care for Windows 11 |
-| [Opsis Media Suite](https://github.com/giorstergiopoulos-design/OpsisMediaSuite) | Video and audio player, converter and photo tools |
-| [Kombos](https://github.com/giorstergiopoulos-design/Kombos) | A local hub for AI tools, with Claude as the agent |
+| [Opsis](https://github.com/gs-applabs/Opsis) | Desktop customisation for Windows 11 — wallpapers, widgets, DeskStrip, plugins / Εξατομίκευση επιφάνειας εργασίας |
+| [Opsis News Crawler](https://github.com/gs-applabs/OpsisNewsCrawler) | News and markets ticker inside your taskbar (**this repository**) |
+| [GearWin](https://github.com/gs-applabs/GearWin) | Complete PC care for Windows 11 |
+| [Opsis Media Suite](https://github.com/gs-applabs/OpsisMediaSuite) | Video and audio player, converter and photo tools |
+| [Kombos](https://github.com/gs-applabs/Kombos) | A local hub for AI tools, with Claude as the agent |
 
 ## Άδεια / License
 
-[MIT](LICENSE) © 2026 giorstergiopoulos-design
+[MIT](LICENSE) © 2026 gs-applabs
 
-Ελληνικά: ελεύθερη χρήση, αντιγραφή, τροποποίηση και διανομή, με την προϋπόθεση να διατηρείται η σημείωση πνευματικών δικαιωμάτων και η άδεια· το λογισμικό παρέχεται «ως έχει», χωρίς εγγύηση. Εκδότης όλων των αρχείων: giorstergiopoulos-design.
+Ελληνικά: ελεύθερη χρήση, αντιγραφή, τροποποίηση και διανομή, με την προϋπόθεση να διατηρείται η σημείωση πνευματικών δικαιωμάτων και η άδεια· το λογισμικό παρέχεται «ως έχει», χωρίς εγγύηση. Εκδότης όλων των αρχείων: gs-applabs.
 
-English: you may use, copy, modify and distribute the program as long as the copyright notice and the licence text are kept; it is provided "as is", without warranty. Publisher of all files: giorstergiopoulos-design.
+English: you may use, copy, modify and distribute the program as long as the copyright notice and the licence text are kept; it is provided "as is", without warranty. Publisher of all files: gs-applabs.

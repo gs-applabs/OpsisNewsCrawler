@@ -27,8 +27,8 @@ public sealed record SuiteApp(
 public sealed class SuiteCatalog
 {
     public const int MaxBytes = 256 * 1024;
-    public const string DefaultOwner = "giorstergiopoulos-design";
-    public const string LiveUrl = "https://raw.githubusercontent.com/giorstergiopoulos-design/Opsis/main/suite/apps.json";
+    public const string DefaultOwner = "gs-applabs";
+    public const string LiveUrl = "https://raw.githubusercontent.com/gs-applabs/Opsis/main/suite/apps.json";
 
     private static readonly string[] AllowedHosts = { "github.com", "raw.githubusercontent.com", "api.github.com" };
 

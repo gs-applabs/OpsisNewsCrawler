@@ -133,12 +133,12 @@ public class YahooCatalogTests
 public class UpdateLogicTests
 {
     private static string Release(string tag, string setupUrl, string digest) => $$"""
-    {"tag_name":"{{tag}}","draft":false,"prerelease":false,"html_url":"https://github.com/giorstergiopoulos-design/OpsisNewsCrawler/releases/tag/{{tag}}",
+    {"tag_name":"{{tag}}","draft":false,"prerelease":false,"html_url":"https://github.com/gs-applabs/OpsisNewsCrawler/releases/tag/{{tag}}",
      "assets":[{"name":"OpsisNewsCrawler-Setup.exe","browser_download_url":"{{setupUrl}}","digest":"{{digest}}"},
-               {"name":"OpsisNewsCrawler-Setup.exe.sha256","browser_download_url":"https://github.com/giorstergiopoulos-design/OpsisNewsCrawler/releases/download/{{tag}}/OpsisNewsCrawler-Setup.exe.sha256"}]}
+               {"name":"OpsisNewsCrawler-Setup.exe.sha256","browser_download_url":"https://github.com/gs-applabs/OpsisNewsCrawler/releases/download/{{tag}}/OpsisNewsCrawler-Setup.exe.sha256"}]}
     """;
 
-    private const string Good = "https://github.com/giorstergiopoulos-design/OpsisNewsCrawler/releases/download/v9.0.0/OpsisNewsCrawler-Setup.exe";
+    private const string Good = "https://github.com/gs-applabs/OpsisNewsCrawler/releases/download/v9.0.0/OpsisNewsCrawler-Setup.exe";
     private static readonly string Hex = new('a', 64);
 
     [Fact]
@@ -173,9 +173,9 @@ public class UpdateLogicTests
     public void IsTrustedDownloadUrl_OnlyThisRepositorysReleases()
     {
         Assert.True(UpdateChecker.IsTrustedDownloadUrl(Good));
-        Assert.False(UpdateChecker.IsTrustedDownloadUrl("http://github.com/giorstergiopoulos-design/OpsisNewsCrawler/releases/download/v1/x.exe"));
+        Assert.False(UpdateChecker.IsTrustedDownloadUrl("http://github.com/gs-applabs/OpsisNewsCrawler/releases/download/v1/x.exe"));
         Assert.False(UpdateChecker.IsTrustedDownloadUrl("https://github.com/other/repo/releases/download/v1/x.exe"));
-        Assert.False(UpdateChecker.IsTrustedDownloadUrl("https://user@github.com/giorstergiopoulos-design/OpsisNewsCrawler/releases/download/v1/x.exe"));
+        Assert.False(UpdateChecker.IsTrustedDownloadUrl("https://user@github.com/gs-applabs/OpsisNewsCrawler/releases/download/v1/x.exe"));
     }
 
     [Fact]

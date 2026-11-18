@@ -11,7 +11,7 @@
 param(
     [Parameter(Mandatory)][ValidateSet('fresh', 'from-per-user', 'from-latest', 'update-helper')][string]$Scenario,
     [Parameter(Mandatory)][string]$NewSetup,
-    [string]$Repository = 'giorstergiopoulos-design/OpsisNewsCrawler',
+    [string]$Repository = 'gs-applabs/OpsisNewsCrawler',
     [string]$PerUserTag = 'v0.17.0',
     [string]$Out = (Join-Path ([IO.Path]::GetTempPath()) 'opsis-e2e'),
     [switch]$IAmADisposableMachine

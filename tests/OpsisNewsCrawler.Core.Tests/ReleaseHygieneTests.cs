@@ -154,10 +154,10 @@ public class ReleaseHygieneTests
             {
                 var info = FileVersionInfo.GetVersionInfo(file);
                 var name = Path.GetFileName(file);
-                Assert.True(info.CompanyName == "giorstergiopoulos-design", $"{name}: company '{info.CompanyName}'");
+                Assert.True(info.CompanyName == "gs-applabs", $"{name}: company '{info.CompanyName}'");
                 Assert.False(string.IsNullOrWhiteSpace(info.ProductName), $"{name}: product");
                 Assert.False(string.IsNullOrWhiteSpace(info.FileDescription), $"{name}: description");
-                Assert.Contains("giorstergiopoulos-design", info.LegalCopyright ?? "");
+                Assert.Contains("gs-applabs", info.LegalCopyright ?? "");
                 Assert.False(string.IsNullOrWhiteSpace(info.FileVersion), $"{name}: file version");
                 checkedFiles++;
             }
@@ -169,7 +169,7 @@ public class ReleaseHygieneTests
     public void TheInstallerScriptNamesThePublisherEverywhereAndRequiresInnoSetup7()
     {
         var iss = File.ReadAllText(Path.Combine(Root(), "OpsisNewsCrawler.iss"), Encoding.UTF8);
-        Assert.Contains("#define MyPublisher \"giorstergiopoulos-design\"", iss);
+        Assert.Contains("#define MyPublisher \"gs-applabs\"", iss);
         Assert.Contains("AppPublisher={#MyPublisher}", iss);
         foreach (var key in new[] { "AppPublisherURL=", "AppSupportURL=", "VersionInfoCompany={#MyPublisher}", "VersionInfoDescription=", "VersionInfoVersion=", "VersionInfoCopyright=", "VersionInfoProductName=" })
             Assert.Contains(key, iss);
@@ -181,10 +181,40 @@ public class ReleaseHygieneTests
     public void TheLicenseIsTheStandardMitText()
     {
         var text = File.ReadAllText(Path.Combine(Root(), "LICENSE"), Encoding.UTF8).Replace("\r\n", "\n");
-        Assert.StartsWith("MIT License\n\nCopyright (c) 2026 giorstergiopoulos-design\n\nPermission is hereby granted, free of charge, to any person obtaining a copy", text);
+        Assert.StartsWith("MIT License\n\nCopyright (c) 2026 gs-applabs\n\nPermission is hereby granted, free of charge, to any person obtaining a copy", text);
         Assert.Contains("THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND", text);
         Assert.Contains("OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.", text);
         var props = File.ReadAllText(Path.Combine(Root(), "Directory.Build.props"));
         Assert.Contains("<PackageLicenseExpression>MIT</PackageLicenseExpression>", props);
+    }
+
+    [Fact]
+    public void TheAccountNameIsGsApplabsEverywhereExceptTheChangelogHistoryAndTheLegacyTrustChecks()
+    {
+        var root = Root();
+        var skip = new[] { "/bin/", "/obj/", "/.git/", "/release/", "/node_modules/" };
+        // Files that name the old account on purpose: history, the trust-both-names code and its tests, and this test.
+        var allowed = new[] { "CHANGELOG.md", "TASKS.md", "RELEASE-0.20.3.md", "UpdateChecker.cs", "SuiteInstall.cs", "ReleaseHygieneTests.cs", "UpdateAnnounceTests.cs", "YahooHistoryTests.cs", "SuiteTests.cs" };
+        var offenders = new List<string>();
+        foreach (var f in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
+        {
+            if (skip.Any(s => f.Replace(Path.DirectorySeparatorChar, '/').Contains(s, StringComparison.OrdinalIgnoreCase))) continue;
+            var ext = Path.GetExtension(f).ToLowerInvariant();
+            if (ext is not (".cs" or ".md" or ".json" or ".props" or ".iss" or ".ps1" or ".yml" or "")) continue;
+            if (allowed.Contains(Path.GetFileName(f))) continue;
+            if (new FileInfo(f).Length > 2_000_000) continue;
+            if (File.ReadAllText(f).Contains("giorstergiopoulos-design", StringComparison.OrdinalIgnoreCase)) offenders.Add(Path.GetRelativePath(root, f));
+        }
+        Assert.True(offenders.Count == 0, "old account name in: " + string.Join(", ", offenders));
+        Assert.Equal("gs-applabs/OpsisNewsCrawler", UpdateChecker.Repository);
+        Assert.Contains("https://github.com/gs-applabs/OpsisNewsCrawler", File.ReadAllText(Path.Combine(root, "Directory.Build.props")));
+    }
+
+    [Fact]
+    public void TrustedUrlChecksAcceptBothAccountNames()
+    {
+        Assert.True(UpdateChecker.IsTrustedDownloadUrl("https://github.com/gs-applabs/OpsisNewsCrawler/releases/download/v1/x.exe"));
+        Assert.True(UpdateChecker.IsTrustedDownloadUrl("https://github.com/giorstergiopoulos-design/OpsisNewsCrawler/releases/download/v1/x.exe"));
+        Assert.False(UpdateChecker.IsTrustedDownloadUrl("https://github.com/someone-else/OpsisNewsCrawler/releases/download/v1/x.exe"));
     }
 }

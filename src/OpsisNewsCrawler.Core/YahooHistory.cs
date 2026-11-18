@@ -51,7 +51,7 @@ public static class YahooHistory
     private static HttpClient Create()
     {
         var c = new HttpClient { Timeout = TimeSpan.FromSeconds(30), MaxResponseContentBufferSize = 4 * 1024 * 1024 };
-        c.DefaultRequestHeaders.UserAgent.ParseAdd("OpsisNewsCrawler/0.13 (+https://github.com/giorstergiopoulos-design/OpsisNewsCrawler)");
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("OpsisNewsCrawler/0.13 (+https://github.com/gs-applabs/OpsisNewsCrawler)");
         return c;
     }
 

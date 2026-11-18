@@ -15,7 +15,7 @@ namespace OpsisNewsCrawler.Windows;
 internal sealed class HazardDetailForm : Form
 {
     private const int ToolbarHeight = 44;
-    private const string TileReferer = "https://github.com/giorstergiopoulos-design/OpsisNewsCrawler";
+    private const string TileReferer = "https://github.com/gs-applabs/OpsisNewsCrawler";
 
     private readonly WebView2 web = new() { Dock = DockStyle.Fill, DefaultBackgroundColor = Color.FromArgb(30, 30, 30) };
     private readonly Panel toolbar = new() { Dock = DockStyle.Bottom, Height = ToolbarHeight };

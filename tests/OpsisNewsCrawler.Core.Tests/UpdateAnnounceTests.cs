@@ -29,7 +29,7 @@ public sealed class UpdateAnnounceTests
                 {
                     Content = new StringContent("""
                     { "tag_name": "v9.0.0", "draft": false, "prerelease": false,
-                      "html_url": "https://github.com/giorstergiopoulos-design/OpsisNewsCrawler/releases/tag/v9.0.0", "assets": [] }
+                      "html_url": "https://github.com/gs-applabs/OpsisNewsCrawler/releases/tag/v9.0.0", "assets": [] }
                     """)
                 };
                 ok.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"abc\"");
