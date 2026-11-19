@@ -14,6 +14,7 @@ public class ContractTests
 {
     // The plugin's own copy of the contract (22 016 bytes, SHA-256 F3074836696EAD48ACC38F9E1E483BF0F3636EFE7A483C3E841AF47FF6374D63) carries its author's build paths, so it is
     // not kept in this repository: its public surface is, as text. To refresh the text from a DLL, set OPSIS_REFERENCE_DLL to its path and run the test WriteTheReferenceSurface.
+    private static string NormFw(string s) => System.Text.RegularExpressions.Regex.Replace(s, @"Version=\d+\.0\.0\.0(, Culture=neutral, PublicKeyToken=(?:7cec85d7bea7798e|b03f5f7f11d50a3a|cc7b13ffcd2ddd51|b77a5c561934e089|31bf3856ad364e35))", "Version=FW$1");
     private static string SurfaceFile => Path.Combine(AppContext.BaseDirectory, "reference", "san-shmera-surface.txt");
 
     private static string Describe(MemberInfo m) => m switch
@@ -36,8 +37,8 @@ public class ContractTests
     [Fact]
     public void EveryPublicSignatureOfThePluginsContractIsInOurContract()
     {
-        var ours = Surface(typeof(PluginFeeds).Assembly);
-        var lines = File.ReadAllLines(SurfaceFile).Where(l => l.Length > 0 && !l.StartsWith('#')).Select(l => l.Replace("Version=0.8.0.0", "Version=1.0.0.0")).ToList();   // the text was written from the 0.8.0.0 DLL: same members, older assembly version in the type names
+        var ours = Surface(typeof(PluginFeeds).Assembly).ToDictionary(kv => kv.Key, kv => new HashSet<string>(kv.Value.Select(NormFw)));   // framework assembly versions are normalised: the text was written under .NET 10, the host now runs .NET 11
+        var lines = File.ReadAllLines(SurfaceFile).Where(l => l.Length > 0 && !l.StartsWith('#')).Select(l => NormFw(l.Replace("Version=0.8.0.0", "Version=1.0.0.0"))).ToList();   // the text was written from the 0.8.0.0 DLL: same members, older assembly version in the type names
         Assert.True(lines.Count > 20, "the reference surface is empty");
         foreach (var line in lines)
         {

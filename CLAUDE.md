@@ -1,6 +1,6 @@
 # Opsis News Crawler — project guide for Claude Code
 
-A Windows desktop news/market ticker bar (.NET 10, WinForms). It runs standalone
+A Windows desktop news/market ticker bar (.NET 11, WinForms). It runs standalone
 (`OpsisNewsCrawler.exe`) and as a plugin hosted by **Opsis / Opsis**.
 Owner's language is Greek: reply to the user in Greek unless asked otherwise; code, identifiers and
 comments stay in English; UI strings are bilingual "Ελληνικά / English".
@@ -26,8 +26,8 @@ and compiles `OpsisNewsCrawler.iss` with Inno Setup 7/6/5 (`ISCC`, found automat
 ## Solution layout (`src/`)
 | Project | Role |
 |---|---|
-| `OpsisNewsCrawler.Core` (net10.0) | models, `TickerState`, `AppConfig` (JSON in `%AppData%\OpsisNewsCrawler\config.json`), RSS parsing, other non-UI logic |
-| `OpsisNewsCrawler.Windows` (net10.0-windows) | all WinForms UI + Win32 interop: `TickerHost` (owns window, config, refresh loops), `TickerWindow`, `TickerCanvas` (custom painted strip), `ArticlePreviewForm`, `SettingsForm`, `FaviconCache`, `Native` |
+| `OpsisNewsCrawler.Core` (net11.0) | models, `TickerState`, `AppConfig` (JSON in `%AppData%\OpsisNewsCrawler\config.json`), RSS parsing, other non-UI logic |
+| `OpsisNewsCrawler.Windows` (net11.0-windows) | all WinForms UI + Win32 interop: `TickerHost` (owns window, config, refresh loops), `TickerWindow`, `TickerCanvas` (custom painted strip), `ArticlePreviewForm`, `SettingsForm`, `FaviconCache`, `Native` |
 | `OpsisNewsCrawler.App` | standalone exe (tray icon, single instance mutex) |
 | `OpsisNewsCrawler.Plugin.Abstractions` | `IOpsisNewsCrawlerPlugin` contract that Opsis implements against |
 | `OpsisNewsCrawler.OpsisPlugin` | the plugin DLL; wraps the same `TickerHost` |

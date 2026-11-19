@@ -4,6 +4,7 @@ The complete history (all versions, in Greek and English) is also inside the pro
 Detailed notes per release: `docs/releases/RELEASE-<version>.md` and the GitHub releases.
 
 ## 0.25.0 — 2026-11-18
+- **.NET 11:** the program and the Opsis plugin now target `net11.0-windows10.0.19041.0` and **require the .NET 11 Desktop Runtime** (the installer asks for / installs it). The plugin must run in a net11 host (Opsis 2.6.0); the contract assembly stays net10 and is unchanged (same SHA-256).
 - **Requires Opsis 2.6.0.** New plugin mechanism 1.0.0 (Phase P): the contract assembly `OpsisNewsCrawler.Plugin.Abstractions` is now **1.0.0.0** (was 0.8.0.0). Only additions: `PluginUpdateSource` + `IPluginUpdateSource` (where the plugin's releases are; the Opsis Update button is the only updater of the plugin) and `PluginHostSettings` + `IPluginHostSettingsAware` (language, theme, hardware tier, UI scale and "Opsis manages updates", pushed by Opsis). With Opsis 2.4.6 stay on 0.24.1 (it stays on `main`, contract 0.8.0.0).
 - Inside Opsis the plugin runs no updater and shows no "Updates" card; the release now also carries `OpsisNewsCrawler-Plugin.zip` (+ `.sha256`) for the Opsis update button. Opsis asks once for the approval of the new content (SHA-256).
 - The canonical copy of the contract DLL is kept in `tests/OpsisNewsCrawler.Plugin.Tests/reference` (with `contract.sha256`); the plugin and the program ship that very file; `tools/check-contract-sha.ps1` (run in CI) and `ContractCopiesTests` check that every copy has the same SHA-256 (QA-001).
