@@ -20,6 +20,8 @@ public sealed partial class TickerHost : IDisposable
     private readonly System.Windows.Forms.Timer snoozeTimer = new();
     private bool snoozed;
     private readonly CancellationTokenSource cts = new();
+    private readonly CancellationToken lifetimeToken;
+    private readonly RefreshScheduler refreshScheduler = new();
     private readonly ReadStore readStore = new();
 
     /// <summary>What the user taught the program about urgent news ("not breaking", muted source / topic); local only.</summary>
@@ -54,6 +56,9 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>Scroll state of the second bar (inside the taskbar).</summary>
     public TickerState State2 { get; } = new();
 
+    /// <summary>Number of periodic refresh operations currently executing.</summary>
+    public int RunningRefreshes => refreshScheduler.RunningCount;
+
     /// <summary>The main bar.</summary>
     public TickerWindow Window { get; }
 
@@ -75,7 +80,7 @@ public sealed partial class TickerHost : IDisposable
     public async Task<UpdateInfo?> CheckForUpdatesAsync()
     {
         var current = Version.TryParse(AboutTexts.Version, out var v) ? v : new Version(0, 0);
-        var found = await UpdateChecker.CheckAsync(current, cts.Token);
+        var found = await UpdateChecker.CheckAsync(current, lifetimeToken);
         Config.LastUpdateCheck = DateTimeOffset.Now;
         SaveConfig();
         AvailableUpdate = found;
@@ -127,7 +132,7 @@ public sealed partial class TickerHost : IDisposable
                 catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
                 {
                     if (disposed || cts.IsCancellationRequested) return;
-                    await Task.Delay(TimeSpan.FromMinutes(1), cts.Token).ConfigureAwait(true);   // offline: wait for the network
+                    await Task.Delay(TimeSpan.FromMinutes(1), lifetimeToken).ConfigureAwait(true);   // offline: wait for the network
                 }
             }
         }
@@ -144,7 +149,7 @@ public sealed partial class TickerHost : IDisposable
     {
         try
         {
-            await Task.Delay(TimeSpan.FromMinutes(15), cts.Token).ConfigureAwait(true);
+            await Task.Delay(TimeSpan.FromMinutes(15), lifetimeToken).ConfigureAwait(true);
             _ = AutoCheckForUpdatesAsync();
         }
         catch (OperationCanceledException) { }
@@ -154,7 +159,7 @@ public sealed partial class TickerHost : IDisposable
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(30), cts.Token).ConfigureAwait(true);
+            await Task.Delay(TimeSpan.FromSeconds(30), lifetimeToken).ConfigureAwait(true);
             _ = AutoCheckForUpdatesAsync();
         }
         catch (OperationCanceledException) { }
@@ -238,6 +243,7 @@ public sealed partial class TickerHost : IDisposable
     {
         this.configPath = configPath ?? AppConfig.DefaultPath;
         this.hostWindowDetector = hostWindowDetector;
+        lifetimeToken = cts.Token;
         OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.Changed += OnPluginFeedsChanged;
         Config = AppConfig.Load(this.configPath);
 
@@ -262,18 +268,18 @@ public sealed partial class TickerHost : IDisposable
         refreshTimer.Tick += (_, _) =>
         {
             // While another program is in front the ticker is frozen; it refreshes when the desktop is back.
-            if (!Window.IsPausedByForeground) _ = RefreshAsync(force: false);
+            if (!Window.IsPausedByForeground) refreshScheduler.TryRun("news", () => RefreshAsync(force: false), lifetimeToken);
         };
         quoteTimer.Tick += (_, _) =>
         {
             // Re-evaluate the interval as the exchange session opens/closes.
             quoteTimer.Interval = PerformanceProfile.Current.Scaled(GetQuoteRefreshIntervalMilliseconds() / 1000) * 1000;
-            if (!Window.IsPausedByForeground) _ = RefreshQuotesAsync();
+            if (!Window.IsPausedByForeground) refreshScheduler.TryRun("quotes", () => RefreshQuotesAsync(), lifetimeToken);
         };
         Loc.Changed += OnLanguageChanged;
-        weatherTimer.Tick += (_, _) => _ = RefreshWeatherAsync();
-        hazardTimer.Tick += (_, _) => _ = RefreshHazardsAsync();
-        alertTimer.Tick += (_, _) => _ = CheckWeatherAlertsAsync();
+        weatherTimer.Tick += (_, _) => refreshScheduler.TryRun("weather", RefreshWeatherAsync, lifetimeToken);
+        hazardTimer.Tick += (_, _) => refreshScheduler.TryRun("hazards", RefreshHazardsAsync, lifetimeToken);
+        alertTimer.Tick += (_, _) => refreshScheduler.TryRun("weather-alerts", CheckWeatherAlertsAsync, lifetimeToken);
         snoozeTimer.Tick += (_, _) =>
         {
             snoozeTimer.Stop();
@@ -304,8 +310,8 @@ public sealed partial class TickerHost : IDisposable
         };
         w.RefreshRequested += () =>
         {
-            _ = RefreshAsync(force: false);
-            _ = RefreshQuotesAsync();
+            refreshScheduler.TryRun("news", () => RefreshAsync(force: false), lifetimeToken);
+            refreshScheduler.TryRun("quotes", () => RefreshQuotesAsync(), lifetimeToken);
         };
         w.ItemOpened += item =>
         {
@@ -710,11 +716,11 @@ public sealed partial class TickerHost : IDisposable
         hazardTimer.Start();
         alertTimer.Start();
         breakingTimer.Start();
-        _ = RefreshAsync(force: true);
-        _ = RefreshQuotesAsync();
-        _ = RefreshWeatherAsync();
-        _ = RefreshHazardsAsync();
-        _ = CheckWeatherAlertsAsync();
+        refreshScheduler.TryRun("news", () => RefreshAsync(force: true), lifetimeToken);
+        refreshScheduler.TryRun("quotes", () => RefreshQuotesAsync(), lifetimeToken);
+        refreshScheduler.TryRun("weather", RefreshWeatherAsync, lifetimeToken);
+        refreshScheduler.TryRun("hazards", RefreshHazardsAsync, lifetimeToken);
+        refreshScheduler.TryRun("weather-alerts", CheckWeatherAlertsAsync, lifetimeToken);
         UpdateMiniWeather();
     }
 
@@ -1165,7 +1171,7 @@ public sealed partial class TickerHost : IDisposable
         try
         {
             var city = Config.ResolveAlertCity();
-            var found = await alertService.FetchAsync(city, cts.Token);
+            var found = await alertService.FetchAsync(city, lifetimeToken);
             if (found is null || disposed) return;
             void Apply()
             {
@@ -1306,7 +1312,7 @@ public sealed partial class TickerHost : IDisposable
         refreshingHazards = true;
         try
         {
-            var events = await hazardService.FetchAsync((HazardSources)Config.HazardSources, cts.Token);
+            var events = await hazardService.FetchAsync((HazardSources)Config.HazardSources, lifetimeToken);
             var failed = hazardService.LastFailed;
             var skipped = hazardService.LastSkipped;
             void Apply()
@@ -1401,7 +1407,7 @@ public sealed partial class TickerHost : IDisposable
         {
             var ids = Config.WeatherCities.Distinct().ToList();
             if (!NeedsWeatherForBars) ids = ids.Take(1).ToList();   // only the icon wants it
-            var readings = await weather.FetchAsync(ids, cts.Token);
+            var readings = await weather.FetchAsync(ids, lifetimeToken);
             var failed = weather.LastFailed;
             void Apply()
             {
@@ -1445,7 +1451,7 @@ public sealed partial class TickerHost : IDisposable
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(60), cts.Token);
+            await Task.Delay(TimeSpan.FromSeconds(60), lifetimeToken);
             if (!disposed && BarsOn) _ = RefreshWeatherAsync();
         }
         catch (OperationCanceledException)
@@ -1538,7 +1544,7 @@ public sealed partial class TickerHost : IDisposable
         quoteRetryPending = true;
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(60), cts.Token);
+            await Task.Delay(TimeSpan.FromSeconds(60), lifetimeToken);
             if (!disposed && BarsOn) _ = RefreshQuotesAsync();
         }
         catch (OperationCanceledException)
@@ -1649,6 +1655,7 @@ public sealed partial class TickerHost : IDisposable
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaysChanged;
         Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         cts.Cancel();
+        refreshScheduler.Dispose();
         refreshTimer.Dispose();
         performanceTimer.Dispose();
         updateTimer.Dispose();

@@ -20,7 +20,7 @@ public sealed partial class TickerHost
         {
             var list = Config.Watchlist.Where(w => w.Enabled).Concat(PortfolioInstruments()).ToList();
             var ui = SynchronizationContext.Current;
-            var n = await YahooHistory.BackfillAsync(quotes.Store, list, 40, cts.Token, () => ui?.Post(_ => { if (!disposed) QuotesUpdated?.Invoke(); }, null));
+            var n = await YahooHistory.BackfillAsync(quotes.Store, list, 40, lifetimeToken, () => ui?.Post(_ => { if (!disposed) QuotesUpdated?.Invoke(); }, null));
             if (n > 0 && !disposed)
             {
                 Log.Write($"Yahoo history added for {n} instruments.");
@@ -64,7 +64,7 @@ public sealed partial class TickerHost
             }
 
             // Each source shows up as soon as it has answered; a slow one cannot keep the others waiting.
-            var items = await quotes.FetchItemsAsync(Config.Watchlist, Loc.IsGreek, cts.Token, Show, PortfolioInstruments());
+            var items = await quotes.FetchItemsAsync(Config.Watchlist, Loc.IsGreek, lifetimeToken, Show, PortfolioInstruments());
             quotesFailed = quotes.LastFailed.Count > 0 || items.Count == 0 && Config.Watchlist.Any(w => w.Enabled);
             Show(items);
             QuotesUpdated?.Invoke();

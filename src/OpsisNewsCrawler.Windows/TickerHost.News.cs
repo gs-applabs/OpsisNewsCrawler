@@ -17,7 +17,7 @@ public sealed partial class TickerHost
             foreach (var id in wanted)
             {
                 if (disposed || cts.IsCancellationRequested) return;
-                var items = await extraNewsProvider.FetchAsync(Config.GetFeeds(id), Config.MaxItemsPerFeed, cts.Token, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst);
+                var items = await extraNewsProvider.FetchAsync(Config.GetFeeds(id), Config.MaxItemsPerFeed, lifetimeToken, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst);
                 var failedFeeds = extraNewsProvider.LastFailedFeeds.ToList();
                 var category = id;
                 void Apply()
@@ -65,7 +65,7 @@ public sealed partial class TickerHost
         try
         {
             var category = Config.ActiveCategory;
-            var items = await news.FetchAsync(Config.GetFeeds(category), Config.MaxItemsPerFeed, cts.Token, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst);
+            var items = await news.FetchAsync(Config.GetFeeds(category), Config.MaxItemsPerFeed, lifetimeToken, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst);
             var failedFeeds = news.LastFailedFeeds.ToList();
             if (disposed || !string.Equals(category, Config.ActiveCategory, StringComparison.OrdinalIgnoreCase)) return; // the category changed meanwhile; a new refresh is running
 
