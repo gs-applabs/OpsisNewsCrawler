@@ -34,7 +34,9 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
 
     public string Id => "giorstergiopoulos.opsisnewscrawler";
     public string Name => "Opsis News Crawler";
-    public string Version => typeof(OpsisNewsCrawlerPlugin).Assembly.GetName().Version?.ToString(4) ?? "1.0.0.0";
+    // This is the plugin PRODUCT version used by Opsis to choose the newest installed copy.
+    // DLL AssemblyVersion/FileVersion are intentionally pinned at 1.0.0.0 for ABI identity.
+    public string Version => AboutTexts.Version;
 
     public void Start()
     {
