@@ -34,7 +34,7 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
 
     public string Id => "giorstergiopoulos.opsisnewscrawler";
     public string Name => "Opsis News Crawler";
-    public string Version => AboutTexts.Version;
+    public string Version => typeof(OpsisNewsCrawlerPlugin).Assembly.GetName().Version?.ToString(4) ?? "1.0.0.0";
 
     public void Start()
     {
