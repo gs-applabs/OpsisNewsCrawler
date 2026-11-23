@@ -37,9 +37,9 @@ public sealed class P1EventHubTests
     }
 
     [Fact]
-    public void LegacyContractIdentityIsUntouched()
+    public void NewContractIdentityIs1_0_0_0()
     {
-        Assert.Equal(new Version(0,8,0,0), typeof(PluginFeeds).Assembly.GetName().Version);
+        Assert.Equal(new Version(1,0,0,0), typeof(PluginFeeds).Assembly.GetName().Version);
         Assert.NotNull(typeof(IOpsisNewsCrawlerPlugin).GetMethod("GetTrayMenuItems"));
     }
 }

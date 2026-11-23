@@ -35,8 +35,8 @@ jobs:
           }
           Write-Host 'Plugin DLL versions: 1.0.0.0'
           $contract = (Resolve-Path 'publish-plugin/OpsisNewsCrawler.Plugin.Abstractions.dll').Path
-          if ([Reflection.AssemblyName]::GetAssemblyName($contract).Version.ToString() -ne '0.8.0.0') {
-            throw 'Shared plugin contract changed incompatibly'
+          if ([Reflection.AssemblyName]::GetAssemblyName($contract).Version.ToString() -ne '1.0.0.0') {
+            throw 'P3 shared plugin contract must be 1.0.0.0'
           }
       - uses: actions/upload-artifact@v4
         if: success()
