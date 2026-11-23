@@ -1,4 +1,5 @@
 using OpsisNewsCrawler.Core;
+using OpsisNewsCrawler.Plugin.Abstractions;
 using System.Diagnostics;
 
 namespace OpsisNewsCrawler.Windows;
@@ -50,6 +51,18 @@ public sealed partial class TickerHost : IDisposable
     private string? breakingVideoContext;
 
     public AppConfig Config { get; }
+
+    /// <summary>One in-memory-only snapshot for a host desktop widget; no network requests.</summary>
+    public IReadOnlyList<NewsItem> WidgetSnapshot(string widget) => widget switch
+    {
+        "news" => allItems.Where(x => x.Kind == NewsItemKind.News).Take(12).ToArray(),
+        "markets" => stockItems.Where(x => x.Kind == NewsItemKind.Quote).Take(12).ToArray(),
+        "weather" => WeatherForDisplay().Where(x => x.Kind == NewsItemKind.Weather).Take(8).ToArray(),
+        "breaking" => breakingItems.Take(10).ToArray(),
+        "history" => OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.AllRich().FirstOrDefault() is { } rich
+            ? PluginFeedForDisplay(rich.Key).Take(12).ToArray() : Array.Empty<NewsItem>(),
+        _ => Array.Empty<NewsItem>()
+    };
 
     /// <summary>Scroll state of the main bar.</summary>
     public TickerState State { get; } = new();
@@ -1084,6 +1097,9 @@ public sealed partial class TickerHost : IDisposable
         if (urgent.Count == 0) return;
 
         breakingVideoContext = urgent[0].Title;
+        foreach (var item in urgent.Take(6))
+            SuiteEventHub.Publish(new SuiteEvent(SuiteEventKind.Breaking, "crawler", item.Url,
+                item.Title, item.PublishedAt, item.Url, item.Why));
         var isNew = urgent.Where(i => !readStore.IsRead("breaking:" + i.Url)).ToList();
         foreach (var i in isNew) readStore.MarkRead("breaking:" + i.Url); // remembered, so a restart does not replay the intro
         // Price and weather alerts have no link: they stay on the bar next to the urgent headlines.
