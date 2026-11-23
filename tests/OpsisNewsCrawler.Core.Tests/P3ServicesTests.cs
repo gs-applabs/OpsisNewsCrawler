@@ -60,4 +60,16 @@ public sealed class P3ServicesTests
         Assert.Contains("SUMMARY:GDP", ics);
         Assert.DoesNotContain("Should not export", ics);
     }
+
+    [Fact] public void EvidenceReviewExcludesLocalUrls()
+    {
+        var records = new[] {
+            new NewsItem("Private", "http://127.0.0.1/admin", "Local", Now),
+            new NewsItem("External", "https://example.org/story", "Public", Now)
+        };
+        var cluster = new StoryCluster("id", "Example", Now, records, 2);
+        var review = FactCheckSupport.Review(cluster);
+        Assert.Equal("External", Assert.Single(review.Reports).Title);
+        Assert.Equal("https://example.org/story", Assert.Single(review.Links));
+    }
 }
