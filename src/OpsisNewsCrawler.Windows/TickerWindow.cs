@@ -491,6 +491,7 @@ public sealed class TickerWindow : Form
     private readonly System.Windows.Forms.Timer sampleSlow = new() { Interval = 15000 };
     private bool autoText = true;
     private bool textShadow;
+    private bool autoShadow;
 
     /// <summary>true = on a transparent bar the text is light or dark by what is behind it; false = the colour of the theme.</summary>
     public bool AutoText
@@ -502,7 +503,14 @@ public sealed class TickerWindow : Form
     public bool TextShadow
     {
         get => textShadow;
-        set { if (textShadow == value) return; textShadow = value; canvas.SetTextShadow(value); canvasB.SetTextShadow(value); }
+        set { if (textShadow == value) return; textShadow = value; ApplyShadow(); }
+    }
+
+    private void ApplyShadow()
+    {
+        var visibleShadow = textShadow || autoShadow;
+        canvas.SetTextShadow(visibleShadow);
+        canvasB.SetTextShadow(visibleShadow);
     }
 
     /// <summary>Only a plain themed bar with a see-through background: a chosen colour, the taskbar's own text colour, the breaking red and High Contrast keep their colours.</summary>
@@ -534,7 +542,18 @@ public sealed class TickerWindow : Form
     private void TakeSample()
     {
         if (IsDisposed || !IsHandleCreated || !Visible || !AutoTextActive) return;
-        if (BackdropSampler.Sample(Bounds) is not { } luminance) return;
+        var observation = BackdropSampler.SampleDetailed(Bounds);
+        if (observation is null)
+        {
+            // When the desktop cannot be sampled (remote/secure desktop), a shadow is safer
+            // than assuming any wallpaper luminance.
+            if (!autoShadow) { autoShadow = true; ApplyShadow(); }
+            return;
+        }
+        var luminance = observation.Median;
+        var dark = contrast.UseDarkText ?? ContrastChooser.Contrast(luminance, true) >= ContrastChooser.Contrast(luminance, false);
+        var shadow = ContrastVariationPolicy.NeedsShadow(observation.DarkPercentile, observation.LightPercentile, dark);
+        if (autoShadow != shadow) { autoShadow = shadow; ApplyShadow(); }
         var changed = contrast.Update(luminance);
         if (!changed && contrast.IsPending)
         {
