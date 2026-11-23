@@ -11,8 +11,9 @@ public static class FactCheckSupport
 {
     public static ClaimEvidence Review(StoryCluster cluster)
     {
-        var real=cluster.Reports.Where(x=>Uri.TryCreate(x.Url,UriKind.Absolute,out var uri)
-            && uri.Scheme is "http" or "https").Take(50).ToArray();
+        // Do not surface local-network, loopback or malformed URLs in editorial evidence.
+        // The source comparison is an outbound-link viewer, never a URL fetcher.
+        var real=cluster.Reports.Where(x=>NetGuard.IsPublicHttpUrl(x.Url)).Take(50).ToArray();
         return new ClaimEvidence(cluster.Headline,real,cluster.PublisherGroups,
             real.Select(x=>x.Url).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             "Multiple headlines are not independent verification. Check original documents, timestamps and retractions.");
