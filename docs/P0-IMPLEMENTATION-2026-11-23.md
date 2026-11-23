@@ -2,7 +2,7 @@
 
 Branch: `p0/stability-feed-contract-ui-audit-20261123`
 
-This batch implements source-level changes for every item in the agreed P0 roadmap, *without* claiming that all acceptance criteria or release QA are complete. Version 0.24.1 and the plugin contract assembly identity 0.8.0.0 are intentionally unchanged until a coordinated Opsis host/plugin rollout.
+This batch implements source-level changes for all **15 original P0** items plus an early, optional diagnostic slice of **P1 item #20**, *without* claiming that every acceptance criterion or release QA gate is complete. Version 0.24.1 and the plugin contract assembly identity 0.8.0.0 are intentionally unchanged until a coordinated Opsis host/plugin rollout.
 
 | Original item | Area | Code status | Remaining release gate |
 |---|---|---|---|
@@ -18,7 +18,7 @@ This batch implements source-level changes for every item in the agreed P0 roadm
 | #17 | Shutdown | Cached cancellation token survives CTS disposal; stop cancels/halts periodic timers and scheduler | Extended stop/start and slow I/O race tests |
 | #18 | TickerHost | Split news, plugin, market, weather, hazard logic into partial modules | Full service interfaces/DI refactor is future work |
 | #19 | SettingsPanel | Split markets, appearance, history, breaking, weather, read-later, sources into partial modules | Refactor shared field dependencies into independent panels |
-| #20 | Diagnostics | CPU, process memory, GDI, active refreshes, cache writes/skips, RSS health | Per-provider network bytes and FPS telemetry |
+| P1 #20 (brought forward) | Diagnostics | CPU, process memory, GDI, active refreshes, cache writes/skips, RSS health | Per-provider network bytes and FPS telemetry |
 | #42 | Rich Feed metadata | Preserves Kind, ImageId, CountryCode, LanguageCode, HistoricalYear, DetailId, Priority in NewsItem.PluginMetadata | Display/click consumers must opt in to the new metadata |
 | #43 | Async plugin feed | AsyncRichFeedSnapshot lets plugin producers refresh in background and expose immutable synchronous GetItems | Updated contract DLL needed in Opsis/Chronikologio before their plugins use the new type |
 | #49 | Contract tests | Frozen 0.8.0.0 assembly identity; baseline public surface + async compatibility regression tests | Cross-repo host/Chronikologio integration test with identical packaged DLL |
