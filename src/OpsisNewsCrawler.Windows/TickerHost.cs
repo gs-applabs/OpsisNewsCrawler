@@ -7,7 +7,7 @@ namespace OpsisNewsCrawler.Windows;
 /// Owns the bars (the main one, and optionally a second one inside the taskbar), their state, the settings and the
 /// news / quotes refresh loops. Used by the standalone app and by the Opsis plugin. Create and use it on the UI thread.
 /// </summary>
-public sealed class TickerHost : IDisposable
+public sealed partial class TickerHost : IDisposable
 {
     private static readonly TimeSpan MinRefreshGap = TimeSpan.FromSeconds(30);
 
@@ -975,49 +975,6 @@ public sealed class TickerHost : IDisposable
     }
 
     /// <summary>Fetches the categories of <see cref="ExtraNewsCategories"/>, one after the other, and keeps (and stores) the last good result of each.</summary>
-    private async Task RefreshExtraNewsAsync()
-    {
-        if (disposed || refreshingExtra) return;
-        var wanted = ExtraNewsCategories();
-        if (wanted.Count == 0) return;
-        refreshingExtra = true;
-        try
-        {
-            foreach (var id in wanted)
-            {
-                if (disposed || cts.IsCancellationRequested) return;
-                var items = await extraNewsProvider.FetchAsync(Config.GetFeeds(id), Config.MaxItemsPerFeed, cts.Token, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst);
-                var failedFeeds = extraNewsProvider.LastFailedFeeds.ToList();
-                var category = id;
-                void Apply()
-                {
-                    if (disposed) return;
-                    if (items.Count > 0)
-                    {
-                        extraNews[category] = items.ToList();
-                        extraNewsAt[category] = DateTimeOffset.Now;
-                        extraNewsFailed.Remove(category);
-                        DataCache.Save("news-" + category, extraNews[category]);
-                    }
-                    else extraNewsFailed[category] = failedFeeds;
-                    PushAll();
-                }
-                if (Window.IsHandleCreated && Window.InvokeRequired) Window.Invoke(new Action(Apply)); else Apply();
-            }
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            Log.Write($"extra news failed: {ex.GetType().Name}: {ex.Message}");
-        }
-        finally
-        {
-            refreshingExtra = false;
-        }
-    }
-
     private IReadOnlyList<NewsItem> StocksForDisplay()
     {
         var failed = quotes.LastFailed.Select(QuoteService.ProviderName).Distinct().ToList();
@@ -1067,42 +1024,6 @@ public sealed class TickerHost : IDisposable
         w.SetItemsB(ItemsFor(second), st.ScrollOffsetB);
     }
 
-    private readonly Dictionary<string, (DateTime Day, DateTime At, string Signature, IReadOnlyList<NewsItem> Items)> pluginFeedCache = new(StringComparer.OrdinalIgnoreCase);
-    private bool pluginFeedCacheWired;
-
-    /// <summary>
-    /// The lines of a feed that a plugin registered. A rich feed (details per line) wins over a text feed of the same key. The result is kept for the day and for one minute at most
-    /// (the plugin fills its feed in the background; the registry's Changed event empties the cache at once), so the strip does not ask the plugin at every refresh. A failing plugin gives an
-    /// empty bar and a log line, never an exception.
-    /// </summary>
-    private IReadOnlyList<NewsItem> PluginFeedForDisplay(string? key)
-    {
-        var rich = OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.FindRich(key);
-        var text = rich is null ? OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.Find(key) : null;
-        var feedKey = rich?.Key ?? text?.Key;
-        if (feedKey is null || Config.DisabledPluginFeeds.Contains(feedKey, StringComparer.OrdinalIgnoreCase)) return Array.Empty<NewsItem>();
-        if (!pluginFeedCacheWired) { pluginFeedCacheWired = true; OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.Changed += () => { lock (pluginFeedCache) pluginFeedCache.Clear(); }; }
-
-        var options = PluginFeedOptions.From(Config, Loc.Language);
-        var signature = $"{options.MaxLines}|{options.Order}|{options.Country}|{options.Language}|{(rich is null ? "t" : "r")}";
-        lock (pluginFeedCache)
-            if (pluginFeedCache.TryGetValue(feedKey, out var hit) && hit.Day == DateTime.Today && hit.Signature == signature && DateTime.UtcNow - hit.At < TimeSpan.FromMinutes(1)) return hit.Items;
-        try
-        {
-            var now = DateTimeOffset.Now;
-            IReadOnlyList<NewsItem> items = rich is not null
-                ? PluginFeedMapper.FromRich(rich.GetItems(), Loc.Pick(rich.TitleEl, rich.TitleEn), now, options)
-                : PluginFeedMapper.FromText(text!.GetItems(), Loc.Pick(text.TitleEl, text.TitleEn), now, options);
-            lock (pluginFeedCache) pluginFeedCache[feedKey] = (DateTime.Today, DateTime.UtcNow, signature, items);
-            return items;
-        }
-        catch (Exception ex)
-        {
-            Log.Write($"Plugin feed '{key}' failed: {ex.Message}");
-            return Array.Empty<NewsItem>();
-        }
-    }
-
     private IReadOnlyList<NewsItem> ItemsFor(BarSlot slot) => slot.Kind switch
     {
         SlotKind.Stocks => StocksForDisplay(),
@@ -1117,69 +1038,6 @@ public sealed class TickerHost : IDisposable
     {
         readStore.Clear();
         if (allItems.Count > 0) PushAll();
-    }
-
-    private async Task RefreshAsync(bool force)
-    {
-        if (disposed) return;
-        if (!NeedsNews) return;
-        if (refreshing)
-        {
-            // Remember a forced request (e.g. mode change) and run it as soon as the current one ends.
-            if (force) pendingForced = true;
-            return;
-        }
-        if (!force && State.LastNewsRefresh is { } last && DateTimeOffset.UtcNow - last < MinRefreshGap) return;
-
-        refreshing = true;
-        try
-        {
-            var category = Config.ActiveCategory;
-            var items = await news.FetchAsync(Config.GetFeeds(category), Config.MaxItemsPerFeed, cts.Token, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst);
-            var failedFeeds = news.LastFailedFeeds.ToList();
-            if (disposed || !string.Equals(category, Config.ActiveCategory, StringComparison.OrdinalIgnoreCase)) return; // the category changed meanwhile; a new refresh is running
-
-            void Apply()
-            {
-                if (disposed) return;
-                State.MarkNewsRefresh();
-                if (items.Count > 0)
-                {
-                    hasRealItems = true;
-                    allItems = items.ToList();
-                    newsDataAt = DateTimeOffset.Now;
-                    newsFailedFeeds = new();
-                    DataCache.Save("news-" + category, allItems);
-                    DetectBreaking(allItems);
-                }
-                else
-                {
-                    // Nothing came back: keep (and say that we keep) what we showed or stored before.
-                    newsFailedFeeds = failedFeeds;
-                }
-                PushAll();
-            }
-
-            if (Window.IsHandleCreated && Window.InvokeRequired) Window.Invoke(new Action(Apply));
-            else Apply();
-            await RefreshExtraNewsAsync();
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Opsis News Crawler: refresh failed: {ex}");
-        }
-        finally
-        {
-            refreshing = false;
-            if (pendingForced && !disposed)
-            {
-                pendingForced = false;
-                _ = RefreshAsync(force: true);
-            }
-        }
     }
 
     // ---- breaking news and the live preview ----------------------------------------------
@@ -1767,89 +1625,6 @@ public sealed class TickerHost : IDisposable
         form.DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
         bmp.Save(pngPath);
         form.Close();
-    }
-
-    private bool backfilling;
-
-    /// <summary>
-    /// When the user switched it on (Sources &gt; Markets flow): fills the stored price history from Yahoo Finance, a few instruments per run,
-    /// one try per instrument and day. Off by default.
-    /// </summary>
-    public async void StartHistoryBackfill()
-    {
-        if (!Config.HistoryFromYahoo || backfilling || disposed) return;
-        backfilling = true;
-        try
-        {
-            var list = Config.Watchlist.Where(w => w.Enabled).Concat(PortfolioInstruments()).ToList();
-            var ui = SynchronizationContext.Current;
-            var n = await YahooHistory.BackfillAsync(quotes.Store, list, 40, cts.Token, () => ui?.Post(_ => { if (!disposed) QuotesUpdated?.Invoke(); }, null));
-            if (n > 0 && !disposed)
-            {
-                Log.Write($"Yahoo history added for {n} instruments.");
-                QuotesUpdated?.Invoke();
-            }
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            Log.Write($"history backfill failed: {ex.GetType().Name}: {ex.Message}");   // async void: nothing may escape
-        }
-        finally
-        {
-            backfilling = false;
-        }
-    }
-
-    private IEnumerable<QuoteInstrument> PortfolioInstruments() => Config.Portfolio.Select(p => p.ToInstrument());
-
-    private async Task RefreshQuotesAsync(bool force = false)
-    {
-        if (disposed || !(NeedsStocks || portfolioOpen && Config.Portfolio.Count > 0) || refreshingQuotes) return;
-        refreshingQuotes = true;
-        try
-        {
-            void Show(IReadOnlyList<NewsItem> list)
-            {
-                void Apply()
-                {
-                    if (disposed) return;
-                    hasQuotes = true;
-                    if (list.Count > 0 || stockItems.Count == 0) stockItems = list; // nothing came back: keep what is shown
-                    PushAll();
-                }
-
-                if (!Window.IsHandleCreated) return;
-                if (Window.InvokeRequired) Window.BeginInvoke(new Action(Apply));
-                else Apply();
-            }
-
-            // Each source shows up as soon as it has answered; a slow one cannot keep the others waiting.
-            var items = await quotes.FetchItemsAsync(Config.Watchlist, Loc.IsGreek, cts.Token, Show, PortfolioInstruments());
-            quotesFailed = quotes.LastFailed.Count > 0 || items.Count == 0 && Config.Watchlist.Any(w => w.Enabled);
-            Show(items);
-            QuotesUpdated?.Invoke();
-            StartHistoryBackfill();
-            CheckPriceAlerts();
-            if (quotesFailed) ScheduleQuoteRetry();
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Opsis News Crawler: quotes failed: {ex}");
-            Log.Write($"quotes failed: {ex.GetType().Name}: {ex.Message}");
-            hasQuotes = true; // the bar says "unavailable" instead of "loading" for ever
-            quotesFailed = true;
-            ScheduleQuoteRetry();
-        }
-        finally
-        {
-            refreshingQuotes = false;
-        }
     }
 
     private void OnPluginFeedsChanged()
