@@ -717,5 +717,13 @@
   "geo.myloc": "Adicionar a minha localização aproximada",
   "geo.myloc.consent": "O programa pedirá uma vez ao Windows a sua localização aproximada. Para a meteorologia só são usadas, e enviadas por HTTPS ao fornecedor, coordenadas arredondadas a cerca de 1 km; nada mais preciso é guardado. Continuar?",
   "geo.myloc.denied": "A localização não está disponível ou não foi permitida em Definições do Windows > Privacidade > Localização.",
-  "geo.myloc.name": "A minha localização (aprox.)"
+  "geo.myloc.name": "A minha localização (aprox.)",
+  "diag.button": "Estado RSS e diagnóstico de desempenho",
+  "diag.title": "Feeds RSS • Saúde e desempenho",
+  "diag.source": "Fonte",
+  "diag.lastSuccess": "Último sucesso",
+  "diag.failures": "Falhas",
+  "diag.nextAttempt": "Próxima tentativa",
+  "diag.error": "Erro",
+  "diag.metrics": "CPU: {0:N1}% • RAM: {1:N0} MB • GDI: {2} • Gravações: {3} • Evitadas: {4} • Atualizações: {5}"
 }

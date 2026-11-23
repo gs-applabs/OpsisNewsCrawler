@@ -717,5 +717,13 @@
   "geo.myloc": "Añadir mi ubicación aproximada",
   "geo.myloc.consent": "El programa pedirá a Windows una vez tu ubicación aproximada. Para el tiempo solo se usan, y se envían por HTTPS al proveedor, coordenadas redondeadas a unos 1 km; no se guarda nada más preciso. ¿Continuar?",
   "geo.myloc.denied": "La ubicación no está disponible o no se permitió en Configuración de Windows > Privacidad > Ubicación.",
-  "geo.myloc.name": "Mi ubicación (aprox.)"
+  "geo.myloc.name": "Mi ubicación (aprox.)",
+  "diag.button": "Estado de RSS y diagnóstico de rendimiento",
+  "diag.title": "Fuentes RSS • Estado y rendimiento",
+  "diag.source": "Fuente",
+  "diag.lastSuccess": "Último éxito",
+  "diag.failures": "Fallos",
+  "diag.nextAttempt": "Próximo intento",
+  "diag.error": "Error",
+  "diag.metrics": "CPU: {0:N1}% • RAM: {1:N0} MB • GDI: {2} • Escrituras: {3} • Evitadas: {4} • Actualizaciones: {5}"
 }

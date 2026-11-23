@@ -717,5 +717,13 @@
   "geo.myloc": "おおよその現在地を追加",
   "geo.myloc.consent": "プログラムは Windows に一度だけおおよその現在地を問い合わせます。天気には約 1 km に丸めた座標だけを使い、HTTPS でプロバイダーに送信します。それ以上に正確な情報は保存されません。続行しますか？",
   "geo.myloc.denied": "位置情報が利用できないか、Windows の設定 > プライバシー > 位置情報で許可されていません。",
-  "geo.myloc.name": "現在地（概算）"
+  "geo.myloc.name": "現在地（概算）",
+  "diag.button": "RSS フィードの状態とパフォーマンス診断",
+  "diag.title": "RSS フィード • 状態とパフォーマンス",
+  "diag.source": "ソース",
+  "diag.lastSuccess": "最終成功",
+  "diag.failures": "失敗回数",
+  "diag.nextAttempt": "次の試行",
+  "diag.error": "エラー",
+  "diag.metrics": "CPU: {0:N1}% • RAM: {1:N0} MB • GDI: {2} • 書き込み: {3} • 回避: {4} • 更新: {5}"
 }

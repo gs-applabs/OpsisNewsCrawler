@@ -717,5 +717,13 @@
   "geo.myloc": "添加我的大致位置",
   "geo.myloc.consent": "程序将向 Windows 请求一次您的大致位置。天气仅使用约精确到 1 公里的坐标，并通过 HTTPS 发送给提供商；不会保存更精确的信息。继续吗？",
   "geo.myloc.denied": "位置不可用，或未在 Windows 设置 > 隐私 > 位置 中允许。",
-  "geo.myloc.name": "我的位置（大致）"
+  "geo.myloc.name": "我的位置（大致）",
+  "diag.button": "RSS 订阅源状态与性能诊断",
+  "diag.title": "RSS 订阅源 • 状态与性能",
+  "diag.source": "来源",
+  "diag.lastSuccess": "上次成功",
+  "diag.failures": "失败次数",
+  "diag.nextAttempt": "下次尝试",
+  "diag.error": "错误",
+  "diag.metrics": "CPU: {0:N1}% • 内存: {1:N0} MB • GDI: {2} • 写入: {3} • 已避免: {4} • 刷新: {5}"
 }

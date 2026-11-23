@@ -717,5 +717,13 @@
   "geo.myloc": "Ajouter ma position approximative",
   "geo.myloc.consent": "Le programme demandera une fois à Windows votre position approximative. Pour la météo, seules des coordonnées arrondies à environ 1 km sont utilisées et envoyées en HTTPS au fournisseur ; rien de plus précis n’est enregistré. Continuer ?",
   "geo.myloc.denied": "La position est indisponible ou n’a pas été autorisée dans Paramètres Windows > Confidentialité > Position.",
-  "geo.myloc.name": "Ma position (approx.)"
+  "geo.myloc.name": "Ma position (approx.)",
+  "diag.button": "État RSS et diagnostic des performances",
+  "diag.title": "Flux RSS • État et performances",
+  "diag.source": "Source",
+  "diag.lastSuccess": "Dernier succès",
+  "diag.failures": "Échecs",
+  "diag.nextAttempt": "Prochaine tentative",
+  "diag.error": "Erreur",
+  "diag.metrics": "CPU : {0:N1}% • RAM : {1:N0} Mo • GDI : {2} • Écritures : {3} • Évitées : {4} • Actualisations : {5}"
 }
