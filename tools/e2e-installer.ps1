@@ -80,15 +80,15 @@ if ($Scenario -eq 'integrated') {
     $pluginDir = Join-Path $pluginRoot 'Opsis - Desktop Customization'
     New-Item -ItemType Directory -Force $hostLibs, $pluginRoot | Out-Null
     Remove-Item $hostContract -Force -ErrorAction SilentlyContinue
-    $args = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/MODE=integrated',
+    $setupArgs = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/MODE=integrated',
               "/PLUGINROOT=`"$pluginRoot`"", '/DEPS=none')
-    $denied = Run-Setup $NewSetup $args 'integrated-denied.log'
+    $denied = Run-Setup $NewSetup $setupArgs 'integrated-denied.log'
     Check ($denied -ne 0) 'installer refuses integrated plugin deployment without host ABI 1.0.0.0'
     Check (-not (Test-Path (Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'))) 'refused install did not write plugin DLL'
     Copy-Item $ContractFile $hostContract -Force
     $hostVersion = [Reflection.AssemblyName]::GetAssemblyName($hostContract).Version.ToString()
     Check ($hostVersion -eq '1.0.0.0') "staged host ABI identity is $hostVersion"
-    $installed = Run-Setup $NewSetup $args 'integrated-installed.log'
+    $installed = Run-Setup $NewSetup $setupArgs 'integrated-installed.log'
     Check ($installed -eq 0) "integrated installation succeeds against host ABI 1.0.0.0 (exit $installed)"
     $dll = Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'
     Check (Test-Path $dll) 'integrated setup installs the real Crawler plugin in Opsis plugin root'
