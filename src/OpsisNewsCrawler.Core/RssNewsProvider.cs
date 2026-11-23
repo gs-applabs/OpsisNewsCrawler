@@ -320,8 +320,8 @@ public sealed class RssNewsProvider : IDisposable
             if (string.IsNullOrEmpty(title) || link is null) continue;
 
             if (title.Length > MaxTitleLength) title = title[..MaxTitleLength].TrimEnd() + "…";
-            var date = ParseDate(ChildValue(entry, "pubDate") ?? ChildValue(entry, "published")
-                                 ?? ChildValue(entry, "updated") ?? ChildValue(entry, "date"));
+            var date = NewsDatePolicy.Normalize(ParseDate(ChildValue(entry, "pubDate") ?? ChildValue(entry, "published")
+                                 ?? ChildValue(entry, "updated") ?? ChildValue(entry, "date")), DateTimeOffset.UtcNow);
             var summary = ExtractSummary(entry, title);
             var image = ExtractImage(entry);
             items.Add(new NewsItem(title, link, sourceName, date ?? DateTimeOffset.MinValue, summary, image));

@@ -1079,7 +1079,7 @@ public sealed partial class TickerHost : IDisposable
         var candidates = items.Where(i => !NewsKeywordFilter.IsMuted(i, Config.MutedNewsKeywords)).ToList();
         var urgent = engine.Urgent(candidates, hazardEvents, DateTimeOffset.Now)
             .Where(a => !readStore.IsRead(a.Item.Url))
-            .Select(a => a.Item with { Breaking = true, Why = BreakingWhy.Text(a.Reasons) }).ToList();
+            .Select(a => a.Item with { Breaking = true, Why = BreakingWhy.Detailed(a, BreakingEngine.ParseSensitivity(Config.BreakingSensitivity)) }).ToList();
         if (urgent.Count == 0) return;
 
         var isNew = urgent.Where(i => !readStore.IsRead("breaking:" + i.Url)).ToList();

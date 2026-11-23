@@ -6,6 +6,20 @@ public static class BreakingWhy
     public static string Text(IEnumerable<BreakingReason> reasons) =>
         string.Join(" · ", reasons.Select(Sentence).Where(s => s.Length > 0));
 
+    /// <summary>
+    /// Human-readable explanation of the local algorithm. The numeric score is *not* a
+    /// truthfulness probability and does not certify a story as independently verified.
+    /// </summary>
+    public static string Detailed(BreakingAssessment assessment, BreakingSensitivity sensitivity)
+    {
+        ArgumentNullException.ThrowIfNull(assessment);
+        var score = $"Score {assessment.Score}/100 (threshold {BreakingEngine.Threshold(sensitivity)})";
+        var why = Text(assessment.Reasons);
+        var negatives = assessment.Penalties.Count == 0 ? "" : " · -" + string.Join(", -", assessment.Penalties);
+        return $"{score} · {assessment.Publishers} independent publisher group(s)"
+               + (why.Length > 0 ? " · " + why : "") + negatives;
+    }
+
     private static string Sentence(BreakingReason r) => r.Code switch
     {
         "sources" => Loc.T("why.sources", r.Arg1 ?? "", r.Arg2 ?? ""),
