@@ -407,19 +407,25 @@ internal sealed class TickerCanvas : Control
     // Widths of texts: measured once per font and text (the strip is laid out again after every refresh and every change of font or size,
     // and most headlines are the same as in the previous layout). Cleared when it grows too big or the fonts change.
     private static readonly Dictionary<(string Font, float Size, FontStyle Style, string Text), int> MeasureCache = new();
+    private static readonly object MeasureGate = new();
     private const int MeasureCacheLimit = 4000;
 
     private static int Measure(string text, Font font)
     {
         var key = (font.Name, font.Size, font.Style, text);
-        if (MeasureCache.TryGetValue(key, out var cached)) return cached;
-        var width = (int)Math.Ceiling(MeasureGraphics.MeasureString(text, font, PointF.Empty, TextFormat).Width);
-        if (MeasureCache.Count >= MeasureCacheLimit) MeasureCache.Clear();
-        MeasureCache[key] = width;
-        return width;
+        // Multiple ticker windows and UI tests share this Graphics instance. GDI+ is not
+        // thread-safe: cache and MeasureGraphics must be protected by the same lock.
+        lock (MeasureGate)
+        {
+            if (MeasureCache.TryGetValue(key, out var cached)) return cached;
+            var width = (int)Math.Ceiling(MeasureGraphics.MeasureString(text, font, PointF.Empty, TextFormat).Width);
+            if (MeasureCache.Count >= MeasureCacheLimit) MeasureCache.Clear();
+            MeasureCache[key] = width;
+            return width;
+        }
     }
 
-    internal static int MeasureCacheCount => MeasureCache.Count;
+    internal static int MeasureCacheCount { get { lock (MeasureGate) return MeasureCache.Count; } }
 
     /// <summary>Greek capitals are written without accents ("ΕΚΤΑΚΤΗ", not "ΈΚΤΑΚΤΗ").</summary>
     internal static string UpperNoAccents(string text) => Loc.Upper(text);
@@ -427,7 +433,7 @@ internal sealed class TickerCanvas : Control
     private void BuildLayout()
     {
         entries.Clear();
-        textHeight = (int)Math.Ceiling(titleFont.GetHeight(MeasureGraphics));
+        lock (MeasureGate) textHeight = (int)Math.Ceiling(titleFont.GetHeight(MeasureGraphics));
 
         var x = 0;
         foreach (var item in items)
