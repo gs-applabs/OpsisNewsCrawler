@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.28.0 — 2026-11-23
+- **Version alignment:** standalone application, Core, Windows UI, plugin, installer and tests upgraded to product version 0.28.0. Crawler plugin assembly and file version pinned at 1.0.0.0; shared host contract assembly stays 0.8.0.0 (new contract members require synchronized DLL rollout).
+- **P0 reliability:** RSS concurrency, bounded downloads, retry/backoff, cache write reduction, graceful shutdown, GDI measurement protection, refresh scheduler, rich plugin feed metadata and health diagnostics.
+- **P1 interaction:** Live Video Hub and channel selection, explainable breaking scores and publisher-group independence, optional Opsis desktop widgets, suite events, DPI, keyboard focus, smart contrast, regional power/metered network behavior.
+- **P2 local research:** topic watchlists, story source explorer, local multi-app timeline, daily offline HTML digest (print to PDF via browser), optional portfolio trade ledger, price-percent alerts, and unified Opsis-style insights center.
+- **Release validation:** Windows build/tests, settings audits and an installer/portable/source workflow with hashes and fresh/update-helper installation scenarios. Physical multi-monitor/GPU soak and host binary compatibility are still necessary before wide deployment.
+
 The complete history (all versions, in Greek and English) is also inside the program: Settings → Information → History.
 Detailed notes per release: `docs/releases/RELEASE-<version>.md` and the GitHub releases.
 

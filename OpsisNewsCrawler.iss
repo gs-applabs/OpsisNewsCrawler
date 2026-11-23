@@ -1,4 +1,5 @@
-﻿; Inno Setup 7 script for Opsis News Crawler. Saved as UTF-8 with BOM so the Greek texts display correctly.
+#preproc ispp
+; Inno Setup 7 script for Opsis News Crawler. Saved as UTF-8 with BOM so the Greek texts display correctly.
 ; Run it through Run-OpsisNewsCrawler-Build.bat (option 2 or 3) after the "bin" folder has been created.
 ;
 ; Two ways to install (chosen on the second wizard page):
@@ -17,7 +18,7 @@
 #define MyAppName "Opsis News Crawler"
 #define MyPublisher "gs-applabs"
 #define MyAppUrl "https://github.com/gs-applabs/OpsisNewsCrawler"
-#define MyAppVersion "0.24.1"
+#define MyAppVersion "0.28.0"
 #ifndef BinDir
 #define BinDir "bin"
 #endif
@@ -659,7 +660,7 @@ begin
   Result := '';
   Left := RemovePerUserInstall;
   if Left <> '' then
-    Result := CustomMessage('OldInstallRemains') + #13#10 + Left;
+    Result := CustomMessage('OldInstallRemains') + Chr(13) + Chr(10) + Left;
 end;
 
 procedure CurPageChanged_StartupDefault(CurPageID: Integer);
@@ -717,10 +718,10 @@ begin
     Info.Top := ModePage.CheckListBox.Top + ModePage.CheckListBox.Height + ScaleY(10);
     Info.Height := ScaleY(150);
     if OpsisFound then
-      Info.Caption := FmtMessage(CustomMessage('OpsisFound'), [OpsisVersion]) + #13#10#13#10
+      Info.Caption := FmtMessage(CustomMessage('OpsisFound'), [OpsisVersion]) + Chr(13) + Chr(10) + Chr(13) + Chr(10)
     else
-      Info.Caption := CustomMessage('OpsisNotFound') + #13#10#13#10;
-    Info.Caption := Info.Caption + CustomMessage('ModeIntegratedHelp') + #13#10#13#10 + CustomMessage('ModeSeparateHelp');
+      Info.Caption := CustomMessage('OpsisNotFound') + Chr(13) + Chr(10) + Chr(13) + Chr(10);
+    Info.Caption := Info.Caption + CustomMessage('ModeIntegratedHelp') + Chr(13) + Chr(10) + Chr(13) + Chr(10) + CustomMessage('ModeSeparateHelp');
     ModePage.CheckListBox.Height := ScaleY(60);
     Info.Top := ModePage.CheckListBox.Top + ModePage.CheckListBox.Height + ScaleY(10);
   end;
@@ -728,7 +729,7 @@ begin
   if CurPageID = wpFinished then
   begin
     if IsIntegrated() then
-      WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 + CustomMessage('RestartOpsis');
+      WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + Chr(13) + Chr(10) + Chr(13) + Chr(10) + CustomMessage('RestartOpsis');
   end;
 end;
 

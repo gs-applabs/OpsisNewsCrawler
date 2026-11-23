@@ -12,6 +12,8 @@ public sealed class PriceAlert
     /// <summary>Text shown in the settings list and in the alert (usually the symbol).</summary>
     public string Label { get; set; } = "";
     public bool Above { get; set; } = true;
+    /// <summary>price (legacy) or changePercent (day-over-day, from source when available).</summary>
+    public string Metric { get; set; } = "price";
     public decimal Threshold { get; set; }
     public bool Enabled { get; set; } = true;
 
@@ -21,7 +23,8 @@ public sealed class PriceAlert
 
     public PriceAlert Clone() => new()
     {
-        Source = Source, Code = Code, Market = Market, Label = Label, Above = Above, Threshold = Threshold, Enabled = Enabled, Fired = Fired
+        Source = Source, Code = Code, Market = Market, Label = Label, Above = Above, Threshold = Threshold,
+        Enabled = Enabled, Fired = Fired, Metric = Metric
     };
 
     public bool Matches(QuoteInstrument instrument) =>
@@ -42,13 +45,15 @@ public static class PriceAlertCheck
         var hits = new List<(PriceAlert, MarketQuote)>();
         foreach (var alert in alerts)
         {
-            if (!alert.Enabled || alert.Threshold <= 0) continue;
+            if (!alert.Enabled || (alert.Metric == "changePercent" ? alert.Threshold is < -100 or > 100 : alert.Threshold <= 0)) continue;
             MarketQuote? quote = null;
             foreach (var (instrument, candidate) in prices)
                 if (alert.Matches(instrument)) { quote = candidate; break; }
             if (quote is null) continue;
 
-            var passed = alert.Above ? quote.Price >= alert.Threshold : quote.Price <= alert.Threshold;
+            var observed = alert.Metric == "changePercent" ? quote.ChangePercent : quote.Price;
+            if (observed is null) { alert.Fired = false; continue; }
+            var passed = alert.Above ? observed.Value >= alert.Threshold : observed.Value <= alert.Threshold;
             if (passed && !alert.Fired)
             {
                 alert.Fired = true;

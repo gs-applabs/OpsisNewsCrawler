@@ -1,0 +1,85 @@
+name: Package and verify Opsis News Crawler 0.28.0
+on:
+  push:
+    branches: ['release/p2-v0.28.0-*']
+  pull_request:
+    branches: ['feat/p1-opsis-integration-live-video-20261123']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crawler-028-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-release:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Core + plugin regression tests
+        shell: pwsh
+        run: |
+          dotnet test tests/OpsisNewsCrawler.Core.Tests/OpsisNewsCrawler.Core.Tests.csproj -c Release -m:1
+          if ($LASTEXITCODE -ne 0) { throw 'Core tests failed' }
+          dotnet test tests/OpsisNewsCrawler.Plugin.Tests/OpsisNewsCrawler.Plugin.Tests.csproj -c Release -m:1
+          if ($LASTEXITCODE -ne 0) { throw 'Plugin tests failed' }
+      - name: Set up free Inno Setup compiler
+        shell: pwsh
+        run: ./tools/ci-install-inno.ps1
+      - name: Build installer + portable 0.28.0
+        shell: pwsh
+        run: ./tools/release.ps1
+      - name: Prepare exact source archive and verify version identities
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release/0.28.0-assets | Out-Null
+          git archive --format=zip -o release/0.28.0-assets/OpsisNewsCrawler-0.28.0-source.zip HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'git archive failed' }
+          $src = 'release/0.28.0-assets/OpsisNewsCrawler-0.28.0-source.zip'
+          $digest = (Get-FileHash $src -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText("$src.sha256", "$digest  OpsisNewsCrawler-0.28.0-source.zip`n")
+          $app = (Get-Item Output/stage/OpsisNewsCrawler.exe).VersionInfo.ProductVersion.Split('+')[0]
+          if ($app -ne '0.28.0') { throw "wrong app version $app" }
+          $plugin = 'Output/stage/plugins/Opsis - Desktop Customization/OpsisNewsCrawler.OpsisPlugin.dll'
+          $abi = [Reflection.AssemblyName]::GetAssemblyName((Resolve-Path $plugin)).Version.ToString()
+          if ($abi -ne '1.0.0.0') { throw "wrong plugin assembly version $abi" }
+          $contract = 'Output/stage/plugins/Opsis - Desktop Customization/OpsisNewsCrawler.Plugin.Abstractions.dll'
+          $shared = [Reflection.AssemblyName]::GetAssemblyName((Resolve-Path $contract)).Version.ToString()
+          if ($shared -ne '0.8.0.0') { throw "unexpected shared contract identity $shared" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OpsisNewsCrawler-0.28.0-candidate
+          path: release/0.28.0-assets/*
+          if-no-files-found: error
+          retention-days: 30
+
+  isolated-install:
+    needs: build-release
+    runs-on: windows-2022
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [fresh, update-helper]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: OpsisNewsCrawler-0.28.0-candidate
+          path: package
+      - name: Test real setup install/update/uninstall in Windows VM
+        shell: pwsh
+        run: ./tools/e2e-installer.ps1 -Scenario '${{ matrix.scenario }}' -NewSetup "$PWD/package/OpsisNewsCrawler-Setup.exe" -Repository '${{ github.repository }}' -Out "$env:RUNNER_TEMP/e2e"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p2-e2e-${{ matrix.scenario }}
+          path: ${{ runner.temp }}/e2e
+          if-no-files-found: ignore
+          retention-days: 14
