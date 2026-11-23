@@ -51,6 +51,7 @@ public sealed class P0RssSafetyTests
         var feeds = Enumerable.Range(0, 15)
             .Select(i => new FeedSource("Provider " + i, $"https://domain{i % 5}.example.org/rss-{i}"));
         await rss.FetchAsync(feeds, 2);
+        Assert.True(rss.DownloadedBytes > 0);
         Assert.InRange(handler.Peak, 1, RssNewsProvider.MaxConcurrentFeeds);
         Assert.InRange(rss.PeakConcurrentRequests, 1, RssNewsProvider.MaxConcurrentFeeds);
 

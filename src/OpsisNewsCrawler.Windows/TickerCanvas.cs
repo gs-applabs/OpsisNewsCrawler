@@ -653,11 +653,14 @@ internal sealed class TickerCanvas : Control
     }
 
     private int partialFrameCount;
+    private long renderedFrames;
     internal int PartialFrameCount => partialFrameCount;
+    internal long RenderedFrames => Interlocked.Read(ref renderedFrames);
 
     /// <summary>Renders only an invalidated region when safe, or the whole frame for alpha fades/shape effects.</summary>
     private void ComposeFrame(Rectangle? dirty = null)
     {
+        Interlocked.Increment(ref renderedFrames);
         var resized = buffer is null || buffer.Width != Width || buffer.Height != Height;
         if (resized)
         {

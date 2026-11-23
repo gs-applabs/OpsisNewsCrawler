@@ -7,6 +7,8 @@ namespace OpsisNewsCrawler.Windows;
 
 public sealed class TickerWindow : Form
 {
+    /// <summary>Frames composed by both strips, for the opt-in performance dashboard.</summary>
+    public long RenderedFrames => canvas.RenderedFrames + canvasB.RenderedFrames;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
     private const int WS_EX_NOACTIVATE = 0x08000000;
     private int TickerHeight { get; set; } = 42;

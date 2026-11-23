@@ -72,6 +72,8 @@ public sealed partial class TickerHost : IDisposable
 
     /// <summary>Number of periodic refresh operations currently executing.</summary>
     public int RunningRefreshes => refreshScheduler.RunningCount;
+    /// <summary>Successful RSS payload bytes; local process counter (not an upload).</summary>
+    public long NetworkReceivedBytes => news.DownloadedBytes + extraNewsProvider.DownloadedBytes;
 
     /// <summary>The main bar.</summary>
     public TickerWindow Window { get; }
