@@ -53,13 +53,9 @@ internal sealed class LivePreviewForm : Form
         Font = new Font("Segoe UI", 9.5f);
         KeyPreview = true;
 
-        // 16:9 picture + toolbar, above the bar and towards its right end.
-        var width = 520;
-        var height = (int)((width - Skew) * 9 / 16.0) + ToolbarHeight;
+        // Screen-aware 16:9 popup: stays on the selected monitor at 100/150/200% DPI.
         var screen = Screen.FromRectangle(anchorBar).WorkingArea;
-        var x = Math.Max(screen.Left, Math.Min(anchorBar.Right - width - 16, screen.Right - width));
-        var y = Math.Max(screen.Top, anchorBar.Top - height - 10);
-        normalBounds = new Rectangle(x, y, width, height);
+        normalBounds = UiDpiLayout.PopupAt(anchorBar, screen, DeviceDpi);
         Bounds = normalBounds;
 
         playPause.Text = "⏸";
