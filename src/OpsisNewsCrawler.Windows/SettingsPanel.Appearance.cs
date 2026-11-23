@@ -72,7 +72,36 @@ public sealed partial class SettingsPanel
         themeNote = Note("", 640);
         flow.Controls.Add(themeNote);
         flow.Controls.Add(BuildTextAndSize());
+
+        // Opsis UI 6-compatible presets: native shared FlatCard and FlatButton only.
+        var presetsCard = new FlatCard(L("p2.presets.title"));
+        var presetsRow = new FlowLayoutPanel
+        {
+            AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true
+        };
+        foreach (var preset in VisualPresetPolicy.All)
+        {
+            var selected = preset;
+            var btn = new FlatButton { Text = L("p2.presets." + selected.Key) };
+            btn.Click += (_, _) => ApplyVisualPreset(selected);
+            presetsRow.Controls.Add(btn);
+        }
+        presetsCard.Controls.Add(presetsRow);
+        flow.Controls.Add(presetsCard);
         return page;
+    }
+
+    private void ApplyVisualPreset(VisualPreset selected)
+    {
+        if (!HostThemeLocked) themeMode.SelectSilently(ThemeIndex(selected.ThemeName));
+        barBackdrop.SelectSilently(selected.Backdrop == "blur" ? 1 : selected.Backdrop == "gradient" ? 2 : 0);
+        opacity.SetValueSilently(selected.Opacity);
+        opacityLabel.Text = $"{selected.Opacity} %";
+        edgeFade.Checked = selected.EdgeFade;
+        textShadow.Checked = selected.Shadow;
+        textColorMode.SelectSilently(selected.AutoText ? 0 : 1);
+        UpdatePreview();
+        MarkDirty();
     }
 
     // ---- "History flow": the text feeds that plugins register (for example "On this day") ----------------------------------------------------
