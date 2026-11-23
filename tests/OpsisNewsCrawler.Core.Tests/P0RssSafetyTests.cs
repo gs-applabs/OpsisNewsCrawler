@@ -103,7 +103,7 @@ public sealed class P0RssSafetyTests
         using var provider = new RssNewsProvider(handler);
         var found = await provider.FetchAsync(new[]
         {
-            new FeedSource("Bad", "file:///etc/hosts"),
+            new FeedSource("Bad", "not-an-absolute-rss-url"),
             new FeedSource("Good", "https://rss.example.org/ok")
         }, 2);
         Assert.Single(found);
