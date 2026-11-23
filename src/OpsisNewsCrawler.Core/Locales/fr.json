@@ -725,5 +725,10 @@
   "diag.failures": "Échecs",
   "diag.nextAttempt": "Prochaine tentative",
   "diag.error": "Erreur",
-  "diag.metrics": "CPU : {0:N1}% • RAM : {1:N0} Mo • GDI : {2} • Écritures : {3} • Évitées : {4} • Actualisations : {5}"
+  "diag.metrics": "CPU : {0:N1}% • RAM : {1:N0} Mo • GDI : {2} • Écritures : {3} • Évitées : {4} • Actualisations : {5}",
+  "energy.normal": "Connexion normale",
+  "energy.metered": "Connexion limitée (économiser les données)",
+  "energy.label": "Coût de connexion",
+  "dash.title": "Vue d'ensemble des paramètres",
+  "dash.metrics": "Actualités : {0} · RSS OK : {1}/{2} · Profil : {3} · Tâches : {4} · Écritures cache : {5} (évitée : {6}) · Énergie : ×{7:N2}"
 }

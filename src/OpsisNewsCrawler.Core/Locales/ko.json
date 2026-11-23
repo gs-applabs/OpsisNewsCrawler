@@ -725,5 +725,10 @@
   "diag.failures": "실패 횟수",
   "diag.nextAttempt": "다음 시도",
   "diag.error": "오류",
-  "diag.metrics": "CPU: {0:N1}% • RAM: {1:N0} MB • GDI: {2} • 쓰기: {3} • 생략: {4} • 새로고침: {5}"
+  "diag.metrics": "CPU: {0:N1}% • RAM: {1:N0} MB • GDI: {2} • 쓰기: {3} • 생략: {4} • 새로고침: {5}",
+  "energy.normal": "일반 연결",
+  "energy.metered": "데이터 요금제 연결 (절약)",
+  "energy.label": "연결 비용",
+  "dash.title": "설정 개요",
+  "dash.metrics": "뉴스: {0} · 정상 RSS: {1}/{2} · 프로필: {3} · 작업: {4} · 캐시 쓰기: {5} (생략 {6}) · 에너지: ×{7:N2}"
 }

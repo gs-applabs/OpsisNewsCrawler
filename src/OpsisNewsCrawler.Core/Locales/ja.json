@@ -725,5 +725,10 @@
   "diag.failures": "失敗回数",
   "diag.nextAttempt": "次の試行",
   "diag.error": "エラー",
-  "diag.metrics": "CPU: {0:N1}% • RAM: {1:N0} MB • GDI: {2} • 書き込み: {3} • 回避: {4} • 更新: {5}"
+  "diag.metrics": "CPU: {0:N1}% • RAM: {1:N0} MB • GDI: {2} • 書き込み: {3} • 回避: {4} • 更新: {5}",
+  "energy.normal": "通常接続",
+  "energy.metered": "従量制接続 (データ節約)",
+  "energy.label": "接続料金",
+  "dash.title": "設定の概要",
+  "dash.metrics": "ニュース: {0} · 正常RSS: {1}/{2} · プロファイル: {3} · 処理数: {4} · 書込み: {5} (回避 {6}) · 電力: ×{7:N2}"
 }

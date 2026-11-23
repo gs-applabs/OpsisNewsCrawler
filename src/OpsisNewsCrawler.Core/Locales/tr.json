@@ -725,5 +725,10 @@
   "diag.failures": "Hatalar",
   "diag.nextAttempt": "Sonraki deneme",
   "diag.error": "Hata",
-  "diag.metrics": "CPU: {0:N1}% • RAM: {1:N0} MB • GDI: {2} • Yazma: {3} • Atlanan: {4} • Yenilemeler: {5}"
+  "diag.metrics": "CPU: {0:N1}% • RAM: {1:N0} MB • GDI: {2} • Yazma: {3} • Atlanan: {4} • Yenilemeler: {5}",
+  "energy.normal": "Normal bağlantı",
+  "energy.metered": "Kotalı bağlantı (veri tasarrufu)",
+  "energy.label": "Bağlantı maliyeti",
+  "dash.title": "Ayarlar özeti",
+  "dash.metrics": "Haberler: {0} · RSS sağlıklı: {1}/{2} · Profil: {3} · İşler: {4} · Önbellek yazma: {5} (atlanan {6}) · Enerji: ×{7:N2}"
 }
