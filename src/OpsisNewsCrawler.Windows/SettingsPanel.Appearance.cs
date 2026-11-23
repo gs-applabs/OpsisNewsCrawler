@@ -95,7 +95,7 @@ public sealed partial class SettingsPanel
     {
         if (!HostThemeLocked) themeMode.SelectSilently(ThemeIndex(selected.ThemeName));
         barBackdrop.SelectSilently(selected.Backdrop == "blur" ? 1 : selected.Backdrop == "gradient" ? 2 : 0);
-        opacity.SetValueSilently(selected.Opacity);
+        opacity.Value = selected.Opacity;
         opacityLabel.Text = $"{selected.Opacity} %";
         edgeFade.Checked = selected.EdgeFade;
         textShadow.Checked = selected.Shadow;
