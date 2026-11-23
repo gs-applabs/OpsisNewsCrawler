@@ -225,6 +225,12 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>The headlines loaded for the active category (a copy; UI thread).</summary>
     public IReadOnlyList<NewsItem> RecentNews => allItems.ToList();
 
+    /// <summary>Combined RSS feed health for the opt-in diagnostics window.</summary>
+    public IReadOnlyList<FeedHealth> FeedHealth => news.Health().Concat(extraNewsProvider.Health())
+        .GroupBy(h => h.Url, StringComparer.OrdinalIgnoreCase)
+        .Select(g => g.OrderByDescending(h => h.LastTry).First())
+        .OrderBy(h => h.Url, StringComparer.OrdinalIgnoreCase).ToList();
+
     /// <summary>Raised when the user right-clicks a bar. The standalone app opens its window, the plugin asks Opsis to show its tab.</summary>
     public event Action? SettingsRequested;
 
