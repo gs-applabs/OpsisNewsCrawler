@@ -729,6 +729,7 @@ public sealed partial class SettingsPanel : UserControl
         var main = new FlatCard(L("card.mainBar"));
         var mainFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
         mainPicker = new SlotPicker();
+        mainPicker.Changed += MarkDirty;
         mainFlow.Controls.Add(mainPicker.Build());
         mainFlow.Controls.Add(Note(SplitNote(), 600));
         main.Controls.Add(mainFlow);
@@ -740,6 +741,7 @@ public sealed partial class SettingsPanel : UserControl
         secondEnabled = new FlatToggle { RowWidth = 600, Text = L("chk.secondEnabled") };
         secondFlow.Controls.Add(secondEnabled);
         secondPicker = new SlotPicker();
+        secondPicker.Changed += MarkDirty;
         secondFlow.Controls.Add(secondPicker.Build());
         secondNote = Note(L("note.secondBar"), 560);
         secondFlow.Controls.Add(secondNote);
@@ -764,6 +766,7 @@ public sealed partial class SettingsPanel : UserControl
             var s = others[i];
             var check = new FlatCheckBox { Text = Loc.T("fmt.monitor", Array.IndexOf(Screen.AllScreens, s) + 1, s.Bounds.Width, s.Bounds.Height) };
             var picker = new SlotPicker();
+            picker.Changed += MarkDirty;
             monitorFlow.Controls.Add(check);
             monitorFlow.Controls.Add(picker.Build());
             monitorRows.Add((s, check, picker));
@@ -908,6 +911,7 @@ public sealed partial class SettingsPanel : UserControl
         miniWeather = new FlatToggle { RowWidth = 600, Text = Loc.T("pk.show.a.bar.on") };
         miniFlow.Controls.Add(miniWeather);
         miniPicker = new SlotPicker();
+        miniPicker.Changed += MarkDirty;
         miniFlow.Controls.Add(miniPicker.Build());
         miniW = new FlatNumber();
         miniW.Configure(200, 4000, 10);
@@ -1888,6 +1892,7 @@ public sealed partial class SettingsPanel : UserControl
     /// <summary>Two drop-downs that say what a bar shows: the first part (or the whole bar) and an optional second part (the bar is then split in the middle).</summary>
     private sealed class SlotPicker
     {
+        public event Action? Changed;
         private readonly FlatComboBox a = new() { Width = 380 };
         private readonly FlatComboBox b = new() { Width = 380 };
         private List<BarSlot> choices = new();
@@ -1913,9 +1918,65 @@ public sealed partial class SettingsPanel : UserControl
         public Control Build()
         {
             var box = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-            box.Controls.Add(Row(Loc.T("pk.content.or.left.half"), a, 260));
-            box.Controls.Add(Row(Loc.T("pk.right.half.split.in"), b, 260));
+            // Keep the native Opsis FlatComboBox as a keyboard-accessible alternative
+            // to drag-and-drop. Only internal drag payloads are accepted.
+            box.Controls.Add(DraggableRow(Loc.T("pk.content.or.left.half"), a, "a"));
+            box.Controls.Add(DraggableRow(Loc.T("pk.right.half.split.in"), b, "b"));
+            var swap = new FlatButton { Text = "⇄ " + Loc.T("p2.bars.swap"), AccessibleName = Loc.T("p2.bars.swap") };
+            swap.Click += (_, _) => Swap();
+            box.Controls.Add(swap);
             return box;
+        }
+
+        private Control DraggableRow(string title, FlatComboBox target, string slot)
+        {
+            var row = new FlowLayoutPanel
+            {
+                AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false,
+                Margin = new Padding(0, 2, 0, 2)
+            };
+            var label = new Label
+            {
+                Text = title, AutoSize = false, Width = 252, Height = 30,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            var grip = new Label
+            {
+                Text = "⋮⋮", Width = 30, Height = 30, Cursor = Cursors.SizeAll,
+                TextAlign = ContentAlignment.MiddleCenter,
+                AccessibleName = Loc.T("p2.bars.drag")
+            };
+            grip.MouseDown += (_, e) => { if (e.Button == MouseButtons.Left) grip.DoDragDrop("opsis-slot:" + slot, DragDropEffects.Move); };
+            void Enter(object? sender, DragEventArgs e)
+            {
+                var value = e.Data?.GetData(DataFormats.Text) as string;
+                e.Effect = value is "opsis-slot:a" or "opsis-slot:b" ? DragDropEffects.Move : DragDropEffects.None;
+            }
+            void Drop(object? sender, DragEventArgs e)
+            {
+                var value = e.Data?.GetData(DataFormats.Text) as string;
+                if (value is not ("opsis-slot:a" or "opsis-slot:b")) return;
+                if (value == "opsis-slot:" + slot) return;
+                Swap();
+            }
+            foreach (var control in new Control[] { target, grip, row })
+            {
+                control.AllowDrop = true;
+                control.DragEnter += Enter;
+                control.DragDrop += Drop;
+            }
+            row.Controls.Add(label);
+            row.Controls.Add(target);
+            row.Controls.Add(grip);
+            return row;
+        }
+
+        private void Swap()
+        {
+            var next = BarLayoutReorder.Swap(current);
+            if (next == current) return;
+            Set(next);
+            Changed?.Invoke();
         }
 
         public void SetChoices(IEnumerable<FeedCategory> categories)
