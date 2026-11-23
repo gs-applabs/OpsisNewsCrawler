@@ -539,7 +539,7 @@ public sealed class AppConfig
         NewsRefreshSeconds = RefreshIntervalSeconds;
         PerformanceMode = PerformanceClassifier.ModeText(PerformanceClassifier.ParseMode(PerformanceMode));
         NetworkCostMode = NetworkCostMode == "metered" ? "metered" : "normal";
-        UiComplexityMode = UiComplexity.Parse(UiComplexityMode);   // "auto" | "low" | "balanced" | "high"
+        UiComplexityMode = UiComplexity.ToText(UiComplexity.Parse(UiComplexityMode));   // "auto" | "low" | "balanced" | "high"
         MaxItemsPerFeed = Math.Clamp(MaxItemsPerFeed, 1, 50);
         NewsMaxAgeHours = Math.Clamp(NewsMaxAgeHours, 1, 720);
         MutedNewsKeywords = (MutedNewsKeywords ?? new()).Where(k => !string.IsNullOrWhiteSpace(k))
