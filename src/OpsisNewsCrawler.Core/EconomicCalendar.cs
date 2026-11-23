@@ -20,19 +20,30 @@ public static class EconomicCalendar
     /// <summary>Import fixed JSON data from a trusted file; no network or embedded scripts.</summary>
     public static IReadOnlyList<EconomicEvent> ImportJson(string json)
     {
-        if(json.Length>1_000_000)throw new InvalidDataException("Calendar exceeds 1 MB.");
-        var data=JsonSerializer.Deserialize<List<EconomicEvent>>(json) ?? new();
-        if(data.Count>2000)throw new InvalidDataException("Too many events.");
-        return data.Where(x=>x is not null && x.Id.Length is >0 and <=100 &&
-            x.Title.Length is >0 and <=300 && x.Impact is >=0 and <=3).Take(2000).ToArray();
+        ArgumentNullException.ThrowIfNull(json);
+        if (json.Length > 1_000_000) throw new InvalidDataException("Calendar exceeds 1 MB.");
+        // JSON may contain null objects/fields even when the C# record declares non-nullable strings.
+        // Ignore malformed entries rather than allowing a single untrusted entry to abort the import.
+        var data = JsonSerializer.Deserialize<List<EconomicEvent?>>(json,
+            new JsonSerializerOptions { MaxDepth = 32 }) ?? new();
+        if (data.Count > 2000) throw new InvalidDataException("Too many events.");
+        return data.Where(IsValid).Select(x => x!).ToArray();
     }
+
+    private static bool IsValid(EconomicEvent? entry) =>
+        entry is not null &&
+        !string.IsNullOrWhiteSpace(entry.Id) && entry.Id.Length <= 100 &&
+        !string.IsNullOrWhiteSpace(entry.Title) && entry.Title.Length <= 300 &&
+        !string.IsNullOrWhiteSpace(entry.Country) && entry.Country.Length <= 100 &&
+        !string.IsNullOrWhiteSpace(entry.Source) && entry.Source.Length <= 300 &&
+        entry.Impact is >= 0 and <= 3;
 
     public static string ExportIcs(IEnumerable<EconomicEvent> entries)
     {
         static string Clean(string s)=>s.Replace("\\","\\\\").Replace(";","\\;")
             .Replace(",","\\,").Replace("\r"," ").Replace("\n","\\n");
         var sb=new StringBuilder("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Opsis//Crawler//EN\r\nCALSCALE:GREGORIAN\r\n");
-        foreach(var x in entries.Take(1000))
+        foreach(var x in entries.Where(IsValid).Take(1000))
         {
             var id=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
                 Encoding.UTF8.GetBytes(x.Id)))[..20].ToLowerInvariant();
