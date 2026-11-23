@@ -375,7 +375,8 @@ public sealed partial class SettingsPanel : UserControl
             (Loc.T("pk.markets.flow"), BuildMarkets()),
             (Loc.T("pk.weather.flow"), BuildWeather()),
             (L("hazard.flow"), BuildHazards()),
-            (L("history.flow"), BuildHistory()));
+            (L("history.flow"), BuildHistory()),
+            (Loc.IsGreek ? "P2 · Έξυπνες ειδήσεις" : "P2 · News intelligence", BuildP2Insights()));
         var info = new List<(string, Control)>();
         if (showAboutTabs)
         {
@@ -1185,6 +1186,9 @@ public sealed partial class SettingsPanel : UserControl
         try
         {
             var c = host.Config;
+            workTopics = (c.TopicWatches ?? new()).Select(t=>new TopicWatch {
+                Name=t.Name, Terms=t.Terms.ToList(), Region=t.Region, Enabled=t.Enabled }).ToList();
+            RebuildTopics();
             var langs = Loc.Available();
             language.SelectSilently(Math.Max(0, langs.ToList().FindIndex(l => l.Code == Loc.Language)));
             perfMode.SelectSilently((int)PerformanceClassifier.ParseMode(c.PerformanceMode));
@@ -1618,7 +1622,9 @@ public sealed partial class SettingsPanel : UserControl
     private void ApplySettings()
     {
         var c = host.Config;
-        var mutedKeywords = mutedNewsKeywords.Value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).Take(100).ToList();
+        c.TopicWatches = workTopics.Select(t => new TopicWatch { Name=t.Name, Terms=t.Terms.ToList(),
+            Region=t.Region, Enabled=t.Enabled }).ToList();
+        var mutedKeywords = mutedNewsKeywords.Value.Split('; StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).Take(100).ToList();
         var newsSettingsChanged = c.NewsMaxAgeHours != newsMaxAge.Value || c.NewsSortNewestFirst != newsNewestFirst.Checked || c.StockNewsOnly != stockNewsOnly.Checked || !c.MutedNewsKeywords.SequenceEqual(mutedKeywords, StringComparer.OrdinalIgnoreCase);
         c.Language = Loc.Available().ElementAtOrDefault(Math.Max(0, language.SelectedIndex)).Code ?? c.Language;
         c.PerformanceMode = PerformanceClassifier.ModeText((PerformanceMode)Math.Clamp(perfMode.SelectedIndex, 0, 3));
