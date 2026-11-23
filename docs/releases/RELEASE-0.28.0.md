@@ -1,9 +1,9 @@
-# Opsis News Crawler 0.28.0 — P0 + P1 + P2
+# Opsis News Crawler 0.28.0 — P0 + P1 + P2 + P3 (staging)
 
 ## Ελληνικά
 
 **Έκδοση εφαρμογής:** 0.28.0. **Crawler plugin DLL AssemblyVersion και FileVersion:** 1.0.0.0.
-**Κοινή DLL συμβολαίου με Opsis/Χρονικολόγιο:** 0.8.0.0, διατηρείται για συμβατότητα ονόματος. **Προσοχή:** η κοινή DLL περιέχει νέες προαιρετικές κλάσεις στο P1, επομένως η ίδια φυσική έκδοση του αρχείου πρέπει να εγκαθίσταται στον host πριν ενεργοποιηθεί το νέο plugin.
+**Κοινή DLL συμβολαίου με Opsis/Χρονικολόγιο:** AssemblyVersion και FileVersion **1.0.0.0** στην P3. Πρόκειται για ασύμβατη αλλαγή ABI· ο host και οι δύο επεκτάσεις πρέπει να μεταγλωττιστούν/παραδοθούν με το ίδιο ακριβώς αρχείο DLL πριν από την ενεργοποίηση.
 
 ### Βελτιώσεις P0
 - Αξιόπιστες λήψεις RSS με όρια ταυτόχρονων αιτημάτων, πραγματικό περιορισμό bytes, backoff και αναλυτικά health metrics.
@@ -25,8 +25,18 @@
 - **Ειδοποιήσεις ποσοστιαίας ημερήσιας μεταβολής:** νέα επιλογή `Metric=changePercent`, παράλληλα με τα παλιά price alerts.
 - **Νέο P2 Insights Center** μέσα στην υπάρχουσα οικογένεια UI του Opsis. Δεν απαιτεί νέα προγράμματα/αυτόνομες υπηρεσίες.
 
+### Νέες λειτουργίες P3 (κλάδος ανάπτυξης)
+- **Οικονομικό ημερολόγιο:** χειροκίνητη εισαγωγή έγκυρων JSON εγγραφών και εξαγωγή ICS, χωρίς μη αδειοδοτημένες αυτοματοποιημένες λήψεις.
+- **Σύγκριση πηγών:** πολυπηγική επισκόπηση και ενδείξεις ανακλήσεων/διορθώσεων· όχι αυτόματη κρίση περί αλήθειας.
+- **Εβδομαδιαία HTML σύνοψη:** τοπική εξαγωγή με ασφαλή HTML κωδικοποίηση, χωρίς αυτόματη αποστολή email.
+- **Media Suite:** εξαγωγή πηγών σε M3U με ασφαλείς HTTPS συνδέσμους· η αναπαραγωγή εξαρτάται από τον τύπο/διαθεσιμότητα πηγής.
+- **Οικονομικές πηγές:** υποχρεωτική πολιτική ελάχιστου διαστήματος 15 λεπτών για προαιρετικούς παρόχους και σεβασμός περιορισμών 401/403/429.
+- **Κοινό ABI:** Crawler plugin και OpsisNewsCrawler.Plugin.Abstractions 1.0.0.0· ξεχωριστή έκδοση προϊόντος 0.28.0.
+
+**Προϋποθέσεις δημοσίευσης:** επιτυχημένο CI Crawler, πραγματική φόρτωση DLL στο Opsis, CI Χρονικολογίου, εγκατάσταση/απεγκατάσταση σε Windows με διατήρηση ρυθμίσεων και ολοκληρωμένος έλεγχος χειριστηρίων/επιδόσεων. Το PR παραμένει υπό δοκιμή.
+
 ### Ασφάλεια και όρια
-- **Η εγκατάσταση ως plugin στο Opsis απαιτεί συντονισμένη αναβάθμιση του host και του Χρονικολογίου**, ώστε να μοιράζονται το ίδιο ακριβώς DLL συμβολαίου 0.8.0.0. Μην αναμειγνύετε διαφορετικές εκδόσεις αρχείου μόνο επειδή έχουν ίδιο AssemblyVersion.
+- **Η εγκατάσταση ως plugin στο Opsis απαιτεί συντονισμένη αναβάθμιση του host και του Χρονικολογίου**, ώστε να μοιράζονται το ίδιο ακριβώς DLL συμβολαίου 1.0.0.0. Μην αναμειγνύετε διαφορετικές εκδόσεις αρχείου μόνο επειδή έχουν ίδιο AssemblyVersion.
 - Το P2 δεν κάνει ανεξάρτητη fact checking πιστοποίηση: η συγκέντρωση πηγών και το score δεν αποδεικνύουν αλήθεια ή εκδοτική ανεξαρτησία.
 - Όλα τα δεδομένα και εξαγωγές P2 είναι τοπικά. Η HTML εξαγωγή ενεργοποιείται χειροκίνητα.
 - Δεν προστίθενται νέοι συλλέκτες μη επαληθευμένων ή αδειοδοτημένων video streams.
@@ -35,4 +45,7 @@
 
 ## English
 
-Opsis News Crawler 0.28.0 packages P0 stability, P1 video/host UI, and P2 local intelligence features: private topic watchlists, source clustering, a merged suite timeline, safe offline HTML digests, optional portfolio transaction accounting, and percent-change price alerts. The crawler plugin DLL has assembly/file identity **1.0.0.0**, while the shared Opsis contract retains identity **0.8.0.0**. Cross-app deployment requires the **same binary** contract on the host and all plugins. Installer/portable/source files and SHA-256 hashes are generated and tested in the Windows release workflow. No claims of verified streaming rights, real-PC GPU tests or Authenticode signing.
+Opsis News Crawler 0.28.0 packages P0 stability, P1 video/host UI, and P2 local intelligence features: private topic watchlists, source clustering, a merged suite timeline, safe offline HTML digests, optional portfolio transaction accounting, and percent-change price alerts. The crawler plugin DLL has assembly/file identity **1.0.0.0**, and the shared Opsis contract now has identity **1.0.0.0** in P3 (breaking ABI). Cross-app deployment requires the **same binary** contract on the host and all plugins. Installer/portable/source files and SHA-256 hashes are generated and tested in the Windows release workflow. No claims of verified streaming rights, real-PC GPU tests or Authenticode signing.
+
+### P3 compatibility note (English)
+The P3 shared contract and Crawler plugin both use AssemblyVersion and FileVersion 1.0.0.0. Opsis and Chronikologio must be built against the exact same shared contract binary; upgrading only one plugin is unsupported. P3 adds local economic-calendar JSON/ICS handling, source-evidence review, offline weekly digests and optional Media Suite playlist export. This is a staging build until Windows host-load, installer and regression gates pass.
