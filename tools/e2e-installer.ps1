@@ -9,10 +9,11 @@
 #
 # Results: <Out>\report.md (also the job summary), the Inno logs, crawler.log, a screenshot. Exit code 1 on any failed check.
 param(
-    [Parameter(Mandatory)][ValidateSet('fresh', 'from-per-user', 'from-latest', 'update-helper')][string]$Scenario,
+    [Parameter(Mandatory)][ValidateSet('fresh', 'from-per-user', 'from-latest', 'update-helper', 'integrated')][string]$Scenario,
     [Parameter(Mandatory)][string]$NewSetup,
     [string]$Repository = 'gs-applabs/OpsisNewsCrawler',
     [string]$PerUserTag = 'v0.17.0',
+    [string]$ContractFile = '',
     [string]$Out = (Join-Path ([IO.Path]::GetTempPath()) 'opsis-e2e'),
     [switch]$IAmADisposableMachine
 )
@@ -65,6 +66,50 @@ function Expected-Version {
 
 $report.Add("# Installer end-to-end: $Scenario on $([Environment]::OSVersion.VersionString), $([Environment]::ProcessorCount) logical processors")
 $report.Add('')
+
+# ---- ABI-gated integrated plugin installation in a disposable Windows runner ------------------
+# Only install a real plugin after a matching host contract has been staged. This simulates
+# the host install directory; real Opsis DLL loading is separately tested in the Opsis CI.
+if ($Scenario -eq 'integrated') {
+    if (-not $ContractFile -or -not (Test-Path $ContractFile)) {
+        throw 'Integrated scenario requires -ContractFile pointing to the P3 DLL built by CI.'
+    }
+    $hostLibs = Join-Path $env:LOCALAPPDATA 'Programs\Opsis - Desktop Customization\libs'
+    $hostContract = Join-Path $hostLibs 'OpsisNewsCrawler.Plugin.Abstractions.dll'
+    $pluginRoot = Join-Path $Out 'isolated-opsis-plugins'
+    $pluginDir = Join-Path $pluginRoot 'Opsis - Desktop Customization'
+    New-Item -ItemType Directory -Force $hostLibs, $pluginRoot | Out-Null
+    Remove-Item $hostContract -Force -ErrorAction SilentlyContinue
+    $args = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/MODE=integrated',
+              "/PLUGINROOT=`"$pluginRoot`"", '/DEPS=none')
+    $denied = Run-Setup $NewSetup $args 'integrated-denied.log'
+    Check ($denied -ne 0) 'installer refuses integrated plugin deployment without host ABI 1.0.0.0'
+    Check (-not (Test-Path (Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'))) 'refused install did not write plugin DLL'
+    Copy-Item $ContractFile $hostContract -Force
+    $hostVersion = [Reflection.AssemblyName]::GetAssemblyName($hostContract).Version.ToString()
+    Check ($hostVersion -eq '1.0.0.0') "staged host ABI identity is $hostVersion"
+    $installed = Run-Setup $NewSetup $args 'integrated-installed.log'
+    Check ($installed -eq 0) "integrated installation succeeds against host ABI 1.0.0.0 (exit $installed)"
+    $dll = Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'
+    Check (Test-Path $dll) 'integrated setup installs the real Crawler plugin in Opsis plugin root'
+    if (Test-Path $dll) {
+        $abi = [Reflection.AssemblyName]::GetAssemblyName($dll).Version.ToString()
+        $file = [Diagnostics.FileVersionInfo]::GetVersionInfo($dll).FileVersion
+        Check ($abi -eq '1.0.0.0' -and $file -eq '1.0.0.0') "plugin DLL AssemblyVersion/FileVersion are $abi/$file"
+    }
+    Check (-not (Test-Path (Join-Path $pluginDir 'OpsisNewsCrawler.exe'))) 'integrated mode does not create a standalone executable'
+    $uninstaller = Join-Path $pluginDir 'unins000.exe'
+    Check (Test-Path $uninstaller) 'integrated installer writes the uninstaller'
+    if (Test-Path $uninstaller) {
+        $removed = Run-Setup $uninstaller @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') 'integrated-uninstall.log'
+        Check ($removed -eq 0) "integrated uninstaller exits successfully ($removed)"
+        Check (-not (Test-Path $dll)) 'uninstall removes the plugin DLL'
+    }
+    $report | Set-Content (Join-Path $Out 'report.md')
+    if ($env:GITHUB_STEP_SUMMARY) { $report | Add-Content $env:GITHUB_STEP_SUMMARY }
+    if ($failures -gt 0) { exit 1 }
+    exit 0
+}
 
 # ---- 1. the old version ----------------------------------------------------------------------------------------------------------------
 $oldIsPerUser = $false
