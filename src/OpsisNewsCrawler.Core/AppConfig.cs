@@ -109,6 +109,8 @@ public sealed class AppConfig
     public List<PortfolioPosition> Portfolio { get; set; } = new();
     /// <summary>Optional local transaction ledger; holdings remain authoritative until explicitly reconciled.</summary>
     public List<PortfolioTransaction> PortfolioTransactions { get; set; } = new();
+    /// <summary>Imported economic releases; offline copies with explicit source attribution.</summary>
+    public List<EconomicEvent> EconomicEvents { get; set; } = new();
     /// <summary>Saved local topic watchlists. No remote profiling.</summary>
     public List<TopicWatch> TopicWatches { get; set; } = new();
 
@@ -599,6 +601,9 @@ public sealed class AppConfig
         TopicWatches = (TopicWatches ?? new()).Where(x => x is not null && !string.IsNullOrWhiteSpace(x.Name))
             .Select(x => { x.Name=x.Name.Trim()[..Math.Min(80,x.Name.Trim().Length)]; x.Terms=(x.Terms ?? new()).Where(t=>t.Trim().Length>=3).Select(t=>t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList(); x.Region=(x.Region??"").Trim(); return x; })
             .Take(50).ToList();
+        EconomicEvents = (EconomicEvents ?? new()).Where(x => x is not null &&
+            !string.IsNullOrWhiteSpace(x.Title) && x.Id.Length is >0 and <=100 &&
+            x.Impact is >=0 and <=3).DistinctBy(x=>x.Id).OrderBy(x=>x.StartsAt).TakeLast(1000).ToList();
         PortfolioTransactions = (PortfolioTransactions ?? new()).Where(x => x is not null &&
             !string.IsNullOrWhiteSpace(x.InstrumentKey) && x.Units > 0 && x.Fees >= 0 && x.UnitPrice >= 0)
             .OrderBy(x=>x.When).TakeLast(5000).ToList();

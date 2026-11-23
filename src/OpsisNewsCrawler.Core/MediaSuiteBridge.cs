@@ -9,11 +9,7 @@ public static class MediaSuiteBridge
     {
         if(!Uri.TryCreate(asset.SourceUrl,UriKind.Absolute,out var uri))return false;
         if(uri.Scheme!=Uri.UriSchemeHttps || string.IsNullOrWhiteSpace(asset.DisplayTitle))return false;
-        var host=uri.Host.ToLowerInvariant();
-        if(host=="localhost"||host.EndsWith(".localhost")||host.EndsWith(".local")
-          ||System.Net.IPAddress.TryParse(host,out var address) &&
-             (System.Net.IPAddress.IsLoopback(address)||address.AddressFamily==System.Net.Sockets.AddressFamily.InterNetwork &&
-                (address.GetAddressBytes()[0] is 10 or 127 or 0)))return false;
+        if(!NetGuard.IsPublicHost(uri.Host)) return false;
         return asset.Mime is null or "image/jpeg" or "image/png" or "image/webp" or "video/mp4" or "text/html";
     }
 
