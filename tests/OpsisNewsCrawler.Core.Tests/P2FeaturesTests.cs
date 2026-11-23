@@ -1,5 +1,4 @@
 using OpsisNewsCrawler.Core;
-using OpsisNewsCrawler.Plugin.Abstractions;
 using Xunit;
 
 namespace OpsisNewsCrawler.Core.Tests;
@@ -33,7 +32,7 @@ public sealed class P2FeaturesTests
     }
     [Fact] public void TimelinePreservesAncientYearWithoutChangingTimestamp()
     {
-        var e = new SuiteEvent(SuiteEventKind.Calendar,"chronikologio","490","Battle",Day,HistoricalYear:-490);
+        var e = new TimelineEvent("490","Battle","Calendar",Day,-490,"chronikologio",null);
         var line=Assert.Single(SuiteTimeline.Build(Array.Empty<NewsItem>(),new[]{e}));
         Assert.Equal(-490,line.HistoricalYear);
         Assert.Equal(Day,line.At);
