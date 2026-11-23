@@ -269,11 +269,11 @@ public sealed class QuoteStore
                 candleJson = JsonSerializer.Serialize(candles.ToDictionary(kv => kv.Key,
                     kv => kv.Value.ToDictionary(d => d.Key, d => new[] { d.Value.Open, d.Value.High, d.Value.Low, d.Value.Close, d.Value.Exact ? 1m : 0m })));
             }
-            SafeFile.WriteAllText(path, json);
-            SafeFile.WriteAllText(candlePath, candleJson);
+            SafeFile.WriteAllTextIfChanged(path, json);
+            SafeFile.WriteAllTextIfChanged(candlePath, candleJson);
             string backfillJson;
             lock (gate) backfillJson = JsonSerializer.Serialize(backfill);
-            SafeFile.WriteAllText(backfillPath, backfillJson);
+            SafeFile.WriteAllTextIfChanged(backfillPath, backfillJson);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

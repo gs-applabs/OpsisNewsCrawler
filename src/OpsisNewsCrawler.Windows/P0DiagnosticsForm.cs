@@ -9,6 +9,8 @@ internal sealed class P0DiagnosticsForm : Form
 {
     [DllImport("user32.dll")] private static extern int GetGuiResources(IntPtr process, int flags);
     private readonly TickerHost host;
+    private TimeSpan previousCpu;
+    private long previousSample;
     private readonly System.Windows.Forms.Timer refresh = new() { Interval = 4000 };
     private readonly Label summary = new() { Dock = DockStyle.Top, Height = 58, AutoEllipsis = true };
     private readonly ListView rows = new() { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true };
@@ -55,8 +57,14 @@ internal sealed class P0DiagnosticsForm : Form
         int gdi = -1;
         try { gdi = GetGuiResources(process.Handle, 0); } catch (DllNotFoundException) { }
         var disk = DataCache.WriteDiagnostics;
+        var sample = Stopwatch.GetTimestamp();
+        var cpu = process.TotalProcessorTime;
+        var percent = previousSample <= 0 ? 0 : 100 * (cpu - previousCpu).TotalSeconds /
+            (Stopwatch.GetElapsedTime(previousSample, sample).TotalSeconds * Math.Max(1, Environment.ProcessorCount));
+        previousSample = sample;
+        previousCpu = cpu;
         summary.Text = Loc.IsGreek
-            ? $"RAM: {mem:N0} MB    GDI: {gdi}    Εγγραφές cache: {disk.Writes}    Εγγραφές που αποφεύχθηκαν: {disk.Skips}"
+            ? $"CPU: {percent:N1}%    RAM: {mem:N0} MB    GDI: {gdi}    Εγγραφές cache: {disk.Writes}    Εγγραφές που αποφεύχθηκαν: {disk.Skips}"
             : $"RAM: {mem:N0} MB    GDI: {gdi}    Cache writes: {disk.Writes}    Writes skipped: {disk.Skips}";
         var health = host.FeedHealth;
         rows.BeginUpdate();

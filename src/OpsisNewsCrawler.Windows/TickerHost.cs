@@ -1652,6 +1652,8 @@ public sealed partial class TickerHost : IDisposable
         disposed = true;
         Loc.Changed -= OnLanguageChanged;
         OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.Changed -= OnPluginFeedsChanged;
+        if (pluginFeedCacheInvalidator is not null)
+            OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.Changed -= pluginFeedCacheInvalidator;
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaysChanged;
         Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         cts.Cancel();

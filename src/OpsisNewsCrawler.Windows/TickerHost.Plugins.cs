@@ -8,6 +8,7 @@ public sealed partial class TickerHost
 {
     private readonly Dictionary<string, (DateTime Day, DateTime At, string Signature, IReadOnlyList<NewsItem> Items)> pluginFeedCache = new(StringComparer.OrdinalIgnoreCase);
     private bool pluginFeedCacheWired;
+    private Action? pluginFeedCacheInvalidator;
 
     /// <summary>
     /// The lines of a feed that a plugin registered. A rich feed (details per line) wins over a text feed of the same key. The result is kept for the day and for one minute at most
@@ -20,7 +21,12 @@ public sealed partial class TickerHost
         var text = rich is null ? OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.Find(key) : null;
         var feedKey = rich?.Key ?? text?.Key;
         if (feedKey is null || Config.DisabledPluginFeeds.Contains(feedKey, StringComparer.OrdinalIgnoreCase)) return Array.Empty<NewsItem>();
-        if (!pluginFeedCacheWired) { pluginFeedCacheWired = true; OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.Changed += () => { lock (pluginFeedCache) pluginFeedCache.Clear(); }; }
+        if (!pluginFeedCacheWired)
+        {
+            pluginFeedCacheWired = true;
+            pluginFeedCacheInvalidator = () => { lock (pluginFeedCache) pluginFeedCache.Clear(); };
+            OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.Changed += pluginFeedCacheInvalidator;
+        }
 
         var options = PluginFeedOptions.From(Config, Loc.Language);
         var signature = $"{options.MaxLines}|{options.Order}|{options.Country}|{options.Language}|{(rich is null ? "t" : "r")}";
