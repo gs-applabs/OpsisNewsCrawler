@@ -21,16 +21,27 @@ internal sealed class LivePreviewForm : Form
     private readonly FlatButton close = new();
     private readonly Label title = new() { AutoSize = false, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Label message = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Visible = false };
-    private readonly string url;
-    private readonly string name;
+    private string url;
+    private string name;
+    private readonly IReadOnlyList<LiveVideoChoice> channels;
+    private readonly ComboBox channelPicker = new()
+    {
+        Width = 180, DropDownStyle = ComboBoxStyle.DropDownList,
+        FlatStyle = FlatStyle.Flat, AccessibleName = "Live stream channel"
+    };
     private Rectangle normalBounds;
     private bool maximized;
     private bool playing = true;
 
     public LivePreviewForm(string name, string url, Rectangle anchorBar)
+        : this(new[] { new LiveVideoChoice(name, url, 0, "", Array.Empty<string>()) }, anchorBar) { }
+
+    public LivePreviewForm(IReadOnlyList<LiveVideoChoice> channels, Rectangle anchorBar)
     {
-        this.name = name;
-        this.url = url;
+        if (channels.Count == 0) throw new ArgumentException("No configured live streams", nameof(channels));
+        this.channels = channels;
+        name = channels[0].Name;
+        url = channels[0].Url;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         TopMost = true;
@@ -66,8 +77,12 @@ internal sealed class LivePreviewForm : Form
 
         title.Text = name;
         title.ForeColor = Theme.TextMuted;
+        channelPicker.Items.AddRange(channels.Select(c => (object)c.Name).ToArray());
+        channelPicker.SelectedIndex = 0;
+        channelPicker.SelectedIndexChanged += (_, _) => SwitchChannel(channelPicker.SelectedIndex);
+        channelPicker.Visible = channels.Count > 1;
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Padding = new Padding(0, 0, 8, 0) };
-        buttons.Controls.AddRange(new Control[] { playPause, maximize, close });
+        buttons.Controls.AddRange(new Control[] { channelPicker, playPause, maximize, close });
         toolbar.Controls.Add(buttons);
         title.Dock = DockStyle.Fill;
         title.Padding = new Padding(14, 0, 0, 0);
@@ -146,6 +161,19 @@ internal sealed class LivePreviewForm : Form
             message.Visible = true;
             message.BringToFront();
         }
+    }
+
+    private void SwitchChannel(int index)
+    {
+        if (index < 0 || index >= channels.Count || IsDisposed) return;
+        var chosen = channels[index];
+        name = chosen.Name;
+        url = chosen.Url;
+        Text = Loc.T("app.name") + " — " + name;
+        title.Text = name;
+        playing = true;
+        playPause.Text = "⏸";
+        if (web.CoreWebView2 is not null) web.CoreWebView2.Navigate(url);
     }
 
     private async Task TogglePlayAsync()

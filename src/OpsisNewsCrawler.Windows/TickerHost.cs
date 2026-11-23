@@ -47,6 +47,7 @@ public sealed partial class TickerHost : IDisposable
     private bool breakingActive;
     private DateTimeOffset breakingUntil;
     private LivePreviewForm? livePreview;
+    private string? breakingVideoContext;
 
     public AppConfig Config { get; }
 
@@ -1082,6 +1083,7 @@ public sealed partial class TickerHost : IDisposable
             .Select(a => a.Item with { Breaking = true, Why = BreakingWhy.Detailed(a, BreakingEngine.ParseSensitivity(Config.BreakingSensitivity)) }).ToList();
         if (urgent.Count == 0) return;
 
+        breakingVideoContext = urgent[0].Title;
         var isNew = urgent.Where(i => !readStore.IsRead("breaking:" + i.Url)).ToList();
         foreach (var i in isNew) readStore.MarkRead("breaking:" + i.Url); // remembered, so a restart does not replay the intro
         // Price and weather alerts have no link: they stay on the bar next to the urgent headlines.
@@ -1167,10 +1169,10 @@ public sealed partial class TickerHost : IDisposable
             CloseLivePreview();
             return;
         }
-        var feed = Config.LiveFeeds.FirstOrDefault(f => f.Enabled && Breaking.ToPlayableUrl(f.Url) is not null);
-        if (feed is null) return;
-        var playable = Breaking.ToPlayableUrl(feed.Url)!;
-        livePreview = new LivePreviewForm(string.IsNullOrWhiteSpace(feed.Name) ? new Uri(playable).Host : feed.Name, playable, Window.Bounds);
+        // The Live Video Hub is user-initiated, starts muted, and uses only configured channels.
+        var choices = LiveVideoPolicy.Select(Config.LiveFeeds, breakingVideoContext);
+        if (choices.Count == 0) return;
+        livePreview = new LivePreviewForm(choices, Window.Bounds);
         livePreview.FormClosed += (_, _) => livePreview = null;
         livePreview.Show();
     }
