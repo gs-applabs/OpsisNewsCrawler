@@ -14,6 +14,9 @@ public sealed class P2InsightsForm : Form
     private readonly FlatButton exportWeekly = new();
     private readonly FlatButton importCalendar = new();
     private readonly FlatButton exportCalendar = new();
+    private readonly FlatButton evidence = new();
+    private readonly FlatButton newTransaction = new();
+    private readonly FlatButton mediaPlaylist = new();
     private readonly FlatButton refresh = new();
     private readonly Label summary = new() { Dock=DockStyle.Bottom, Height=34, AutoEllipsis=true };
     private readonly ListView lines = new()
@@ -54,7 +57,15 @@ public sealed class P2InsightsForm : Form
         bar.WrapContents=true;
         bar.Height=105;
         bar.Controls.Add(views);bar.Controls.Add(refresh);bar.Controls.Add(export);
+        evidence.Text=Loc.IsGreek?"Σύγκριση πηγών":"Compare sources";
+        evidence.Click+=(_,_)=>CompareSelectedStory();
+        newTransaction.Text=Loc.IsGreek?"Νέα συναλλαγή":"Add trade";
+        newTransaction.Click+=(_,_)=>AddTransaction();
+        mediaPlaylist.Text=Loc.IsGreek?"Media Suite · M3U":"Media Suite · M3U";
+        mediaPlaylist.Click+=(_,_)=>ExportMediaPlaylist();
         bar.Controls.Add(exportWeekly);bar.Controls.Add(importCalendar);bar.Controls.Add(exportCalendar);
+        bar.Controls.Add(evidence);bar.Controls.Add(newTransaction);bar.Controls.Add(mediaPlaylist);
+        bar.Height=155;
         Controls.Add(lines);Controls.Add(summary);Controls.Add(bar);
         lines.DoubleClick+=(_,_)=>OpenSelected();
         lines.KeyDown+=(_,e)=>{if(e.KeyCode==Keys.Enter){OpenSelected();e.Handled=true;}};
@@ -127,6 +138,7 @@ public sealed class P2InsightsForm : Form
 
     private void OpenSelected()
     {
+        if(views.SelectedIndex==1){CompareSelectedStory();return;}
         var index=lines.SelectedIndices.Count>0?lines.SelectedIndices[0]:-1;
         if(index<0 || index>=visible.Count)return;
         var url=visible[index].Url;
@@ -149,6 +161,50 @@ public sealed class P2InsightsForm : Form
             NewsDigest.SaveHtml(save.FileName,host.RecentNews,
                 DateOnly.FromDateTime(DateTime.Today),Loc.IsGreek?"Ημερήσια σύνοψη":"Daily digest");
             summary.Text=save.FileName;
+        }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            MessageBox.Show(this,ex.Message,Text,MessageBoxButtons.OK,MessageBoxIcon.Error);
+        }
+    }
+
+    private void CompareSelectedStory()
+    {
+        var index=lines.SelectedIndices.Count>0?lines.SelectedIndices[0]:-1;
+        if(index<0||index>=visible.Count||views.SelectedIndex!=1)return;
+        var key=visible[index].Url;
+        var cluster=StoryExplorer.Cluster(host.RecentNews).FirstOrDefault(x=>x.Key==key);
+        if(cluster is null)return;
+        using var form=new P3EvidenceForm(cluster);
+        form.ShowDialog(this);
+    }
+
+    private void AddTransaction()
+    {
+        using var form=new P3TransactionForm(host);
+        if(form.ShowDialog(this)==DialogResult.OK)Reload();
+    }
+
+    private void ExportMediaPlaylist()
+    {
+        using var save=new SaveFileDialog
+        {
+            Title=Loc.IsGreek?"Εξαγωγή πηγών πολυμέσων για Media Suite":"Export media links for Media Suite",
+            Filter="M3U playlist (*.m3u)|*.m3u",DefaultExt="m3u",
+            FileName="OpsisMediaSuite-News.m3u"
+        };
+        if(save.ShowDialog(this)!=DialogResult.OK)return;
+        try
+        {
+            var media=host.RecentNews.Select(MediaSuiteBridge.FromNews)
+                .Where(x=>x is not null).Cast<MediaSuiteAsset>().ToList();
+            // Only streams explicitly selected in settings, never unauthorized rebroadcasts.
+            media.AddRange(host.Config.LiveFeeds.Where(x=>x.Enabled)
+                .Select(x=>new MediaSuiteAsset(x.Url,x.Name,"User configured",null))
+                .Where(MediaSuiteBridge.IsSafeRemoteAsset));
+            File.WriteAllText(save.FileName,MediaSuiteBridge.ExportM3u(media));
+            summary.Text=Loc.IsGreek?"Αποθηκεύτηκε λίστα συνδέσμων. Ανοίξτε την στο Media Suite."
+                :"Saved source playlist. Open it from Media Suite.";
         }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
