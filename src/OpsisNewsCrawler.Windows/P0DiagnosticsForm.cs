@@ -18,16 +18,16 @@ internal sealed class P0DiagnosticsForm : Form
     public P0DiagnosticsForm(TickerHost host)
     {
         this.host = host;
-        Text = Loc.IsGreek ? "Πηγές RSS • Υγεία και απόδοση" : "RSS feeds • Health and performance";
+        Text = Loc.T("diag.title");
         Size = new Size(950, 540);
         MinimumSize = new Size(640, 340);
         StartPosition = FormStartPosition.CenterParent;
         Font = new Font("Segoe UI", 9.5f);
-        rows.Columns.Add(Loc.IsGreek ? "Πηγή" : "Source", 340);
-        rows.Columns.Add(Loc.IsGreek ? "Τελευταία επιτυχία" : "Last success", 145);
-        rows.Columns.Add(Loc.IsGreek ? "Αποτυχίες" : "Failures", 75);
-        rows.Columns.Add(Loc.IsGreek ? "Επόμενη προσπάθεια" : "Next attempt", 145);
-        rows.Columns.Add(Loc.IsGreek ? "Σφάλμα" : "Error", 240);
+        rows.Columns.Add(Loc.T("diag.source"), 340);
+        rows.Columns.Add(Loc.T("diag.lastSuccess"), 145);
+        rows.Columns.Add(Loc.T("diag.failures"), 75);
+        rows.Columns.Add(Loc.T("diag.nextAttempt"), 145);
+        rows.Columns.Add(Loc.T("diag.error"), 240);
         Controls.Add(rows);
         Controls.Add(summary);
         Theme.Changed += OnThemeChanged;
@@ -63,9 +63,7 @@ internal sealed class P0DiagnosticsForm : Form
             (Stopwatch.GetElapsedTime(previousSample, sample).TotalSeconds * Math.Max(1, Environment.ProcessorCount));
         previousSample = sample;
         previousCpu = cpu;
-        summary.Text = Loc.IsGreek
-            ? $"CPU: {percent:N1}%    RAM: {mem:N0} MB    GDI: {gdi}    Εγγραφές: {disk.Writes}    Αποφυγή: {disk.Skips}    Ανανεώσεις: {host.RunningRefreshes}"
-            : $"CPU: {percent:N1}%    RAM: {mem:N0} MB    GDI: {gdi}    Cache writes: {disk.Writes}    Skips: {disk.Skips}    Active refreshes: {host.RunningRefreshes}";
+        summary.Text = Loc.T("diag.metrics", percent, mem, gdi, disk.Writes, disk.Skips, host.RunningRefreshes);
         var health = host.FeedHealth;
         rows.BeginUpdate();
         try

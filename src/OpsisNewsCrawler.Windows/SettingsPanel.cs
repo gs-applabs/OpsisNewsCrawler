@@ -562,7 +562,7 @@ public sealed partial class SettingsPanel : UserControl
         flow.Controls.Add(openLog);
         var diagnostics = new FlatButton
         {
-            Text = Loc.IsGreek ? "Υγεία RSS και διαγνωστικά απόδοσης" : "RSS health and performance diagnostics"
+            Text = Loc.T("diag.button")
         };
         diagnostics.Click += (_, _) =>
         {
