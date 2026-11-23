@@ -3,6 +3,15 @@
 The complete history (all versions, in Greek and English) is also inside the program: Settings → Information → History.
 Detailed notes per release: `docs/releases/RELEASE-<version>.md` and the GitHub releases.
 
+## 0.28.0 — 2026-11-23
+- **P0/P1/P2 integration:** RSS concurrency/backoff/size protection, low-write SSD cache, refresh lifecycle safeguards and process diagnostics; safe plugin metadata and event bus.
+- **Opsis UI:** three complexity levels (Simple, Advanced, Expert), drag-to-reorder bar halves (with keyboard/button fallback), Focus/Broadcast/High-Contrast visual presets, DPI and accessibility improvements, partial ticker drawing and adaptive text contrast.
+- **Breaking news video:** user-configured, event-aware Live Video Hub, muted YouTube playback and source selector. No automatic playback or undocumented rebroadcasts.
+- **Activity & timeline:** bounded local history (500 records), breaking/news/markets/weather/calendar source grouping, date filter, JSON export. Cached at most every five minutes and at shutdown; no cloud telemetry.
+- **Cross-app staging:** five optional Opsis desktop widgets, Chronikologio rich historical data (separate opt-in compatibility PRs). The new desktop widgets require the corresponding Opsis host update and the Chronikologio rich bridge requires a coordinated shared binary.
+- **Version identities:** the app/product is 0.28.0; `OpsisNewsCrawler.OpsisPlugin.dll` AssemblyVersion/FileVersion is **1.0.0.0**; the separately distributed shared `Plugin.Abstractions.dll` stays **0.8.0.0** for existing Opsis/Chronikologio binary compatibility. Do not replace the host's shared DLL independently.
+- **Verification scope:** automated tests and GitHub Windows builds are required; real multi-monitor and long-duration GDI/SSD soak testing remain a separate release gate.
+
 ## 0.24.1 — 2026-11-18
 - **Security and housekeeping.** CI workflows run with a read-only token (`permissions: contents: read`); the Leaflet 1.9.4 files on the map pages carry SRI hashes and `crossorigin`; the GitHub account was renamed to `gs-applabs` (URLs, RepositoryUrl, Company, Publisher, Copyright, User-Agent, README, installer, update URLs) and the trusted-URL checks of the update and trust code accept both the new and the old name; consistency tests. New `docs/INSTRUCTIONS-REVIEW.md` (which coordinator instruction items apply to the Crawler, with status). The e2e script waits for the performance tier line instead of a fixed sleep.
 - **Second weather source: MET Norway** (free, no key, worldwide, CC BY 4.0). Open-Meteo stays the first source (one request for all places); the places it does not answer for (or all of them when it is down) are asked from MET Norway, at most 8 per refresh, with an identifying User-Agent, coordinates rounded to 2 decimals, no new request before `Expires` and `If-Modified-Since` for repeats. Codes are mapped to the same icons and intensities; day or night comes from the position of the sun (no network). 24 tests (mock server, offline, bad JSON, expiry, symbols, sun).
