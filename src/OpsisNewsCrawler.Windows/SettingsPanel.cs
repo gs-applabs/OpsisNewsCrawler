@@ -635,6 +635,9 @@ public sealed partial class SettingsPanel : UserControl
             dialog.ShowDialog(this);
         };
         flow.Controls.Add(diagnostics);
+        var activity = new FlatButton { Text = L("p2.activity.open") };
+        activity.Click += (_, _) => host.ShowActivityCenter();
+        flow.Controls.Add(activity);
         return page;
     }
 

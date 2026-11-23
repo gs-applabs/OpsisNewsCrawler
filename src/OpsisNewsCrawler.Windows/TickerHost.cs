@@ -48,6 +48,8 @@ public sealed partial class TickerHost : IDisposable
     private bool breakingActive;
     private DateTimeOffset breakingUntil;
     private LivePreviewForm? livePreview;
+    private readonly ActivityJournal activityJournal = ActivityJournal.Shared;
+    private ActivityCenterForm? activityCenter;
     private string? breakingVideoContext;
 
     public AppConfig Config { get; }
@@ -813,6 +815,7 @@ public sealed partial class TickerHost : IDisposable
     public void Stop()
     {
         started = false;
+        activityJournal.Flush();
         // Plugin unload must stop *all* periodic work, not just the visible news bars.
         performanceTimer.Stop();
         updateTimer.Stop();
@@ -1262,6 +1265,20 @@ public sealed partial class TickerHost : IDisposable
         portfolio.Show();
     }
 
+    /// <summary>P2: view all recent events in one persisted local, date-grouped timeline.</summary>
+    public void ShowActivityCenter()
+    {
+        if (disposed) return;
+        if (activityCenter is { IsDisposed: false })
+        {
+            activityCenter.Activate();
+            return;
+        }
+        activityCenter = new ActivityCenterForm(activityJournal);
+        activityCenter.FormClosed += (_, _) => activityCenter = null;
+        activityCenter.Show();
+    }
+
     private AnalysisForm? analysis;
 
     /// <summary>Opens the market-analysis window (candles, back-test, fear &amp; greed, assistant); one at a time.</summary>
@@ -1322,6 +1339,9 @@ public sealed partial class TickerHost : IDisposable
     public void Dispose()
     {
         if (disposed) return;
+        activityJournal.Flush();
+        activityCenter?.Close();
+        activityCenter = null;
         disposed = true;
         Loc.Changed -= OnLanguageChanged;
         OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.Changed -= OnPluginFeedsChanged;
