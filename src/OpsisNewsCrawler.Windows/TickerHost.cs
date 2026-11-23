@@ -792,6 +792,9 @@ public sealed partial class TickerHost : IDisposable
     public void Stop()
     {
         started = false;
+        // Plugin unload must stop *all* periodic work, not just the visible news bars.
+        performanceTimer.Stop();
+        updateTimer.Stop();
         snoozeTimer.Stop();
         snoozed = false;
         breakingTimer.Stop();
@@ -802,6 +805,8 @@ public sealed partial class TickerHost : IDisposable
         hazardDetail = null;
         refreshTimer.Stop();
         quoteTimer.Stop();
+        weatherTimer.Stop();
+        hazardTimer.Stop();
         alertTimer.Stop();
         Window.StopTicker();
         SecondWindow?.StopTicker();
