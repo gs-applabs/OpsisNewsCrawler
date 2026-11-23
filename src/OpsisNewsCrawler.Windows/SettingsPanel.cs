@@ -279,6 +279,17 @@ public sealed partial class SettingsPanel : UserControl
         base.Dispose(disposing);
     }
 
+    private void RefreshOverview()
+    {
+        if (IsDisposed || overviewStatus is null || overviewStatus.IsDisposed) return;
+        var sources = host.FeedHealth;
+        var ok = sources.Count(h => h.ConsecutiveFailures == 0 && h.LastOk is not null);
+        var disk = DataCache.WriteDiagnostics;
+        overviewStatus.Text = Loc.T("dash.metrics",
+            host.RecentNews.Count, ok, sources.Count, host.Performance.Tier, host.RunningRefreshes,
+            disk.Writes, disk.Skips, host.CurrentEnergyBudget.Multiplier);
+    }
+
     private void OnThemeChanged()
     {
         if (IsDisposed) return;
@@ -527,6 +538,26 @@ public sealed partial class SettingsPanel : UserControl
         perfFlow.Controls.Add(perfInfo);
         perfCard.Controls.Add(perfFlow);
         flow.Controls.Add(perfCard);
+
+        // P1 energy budget: explicit metered mode; no unreliable automatic billing inference.
+        networkCost = new FlatComboBox { Width = 260 };
+        networkCost.SetItems(new[] { L("energy.normal"), L("energy.metered") }, 0);
+        flow.Controls.Add(Row(L("energy.label"), networkCost, 300));
+
+        // Shared Opsis.UI FlatCard styling; does not replace existing navigation or introduce new UI conventions.
+        var dashboardCard = new FlatCard(L("dash.title"));
+        var dashboardFlow = new FlowLayoutPanel
+        {
+            AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false
+        };
+        overviewStatus = new Label { AutoSize = true, MaximumSize = new Size(770, 0), Tag = "muted", UseMnemonic = false };
+        dashboardFlow.Controls.Add(overviewStatus);
+        var details = new FlatButton { Text = L("diag.button") };
+        details.Click += (_, _) => { using var dialog = new P0DiagnosticsForm(host); dialog.ShowDialog(this); };
+        dashboardFlow.Controls.Add(details);
+        dashboardCard.Controls.Add(dashboardFlow);
+        flow.Controls.Add(dashboardCard);
+        RefreshOverview();
         if (performanceInfoHandler is not null) host.PerformanceChanged -= performanceInfoHandler;
         performanceInfoHandler = () =>
         {
