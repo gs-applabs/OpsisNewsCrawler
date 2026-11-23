@@ -15,7 +15,7 @@ internal sealed class ArticlePreviewForm : Form
     private const int CardWidth = 400;
     private const int Pad = 14;
     private const int ImageHeight = 170;
-    private const int MaxSummaryLines = 6;
+    private const int MaxSummaryLines = 9;
     private const int MaxImageBytes = 4 * 1024 * 1024;
     private const int MaxCachedImages = 24;
 
@@ -87,8 +87,11 @@ internal sealed class ArticlePreviewForm : Form
             : " · " + newItem.PublishedAt.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture);
         meta = newItem.Source + time;
         body = newItem.Summary is { Length: > 0 } s && !s.StartsWith(newItem.Title, StringComparison.OrdinalIgnoreCase) ? s : "";
-        // why the program thinks this is urgent ("3 sources in 4 min · official warning")
+        // Explain the heuristic decision and explicitly distinguish additional editorial
+        // groups from mirrored syndication. This is not a claim that a story is true.
         if (newItem.Why is { Length: > 0 } why) body = Loc.T("why.prefix", why) + (body.Length > 0 ? "\n" + body : "");
+        var evidence = ArticleEvidenceFormatter.Summary(newItem, Loc.IsGreek);
+        if (!string.IsNullOrEmpty(evidence)) body = evidence + (body.Length > 0 ? "\n" + body : "");
 
         if (!string.IsNullOrEmpty(newItem.ImageUrl))
         {
