@@ -6,6 +6,10 @@ using Xunit;
 
 namespace OpsisNewsCrawler.Plugin.Tests;
 
+[CollectionDefinition("p0-gdi-soak", DisableParallelization = true)]
+public sealed class P0GdiSoakCollection { }
+
+[Collection("p0-gdi-soak")]
 public sealed class P0GdiSoakTests
 {
     [DllImport("user32.dll")] private static extern int GetGuiResources(IntPtr hProcess, int flags);
@@ -19,6 +23,14 @@ public sealed class P0GdiSoakTests
             try
             {
                 using var process = Process.GetCurrentProcess();
+                // Warm up the WinForms/GDI+ static caches before measuring steady-state use.
+                using (var warm = new TickerCanvas { Size = new Size(850, 48) })
+                {
+                    warm.SetItems(new[] { new NewsItem("Warmup", "https://example.org", "Test", DateTimeOffset.UtcNow) });
+                    using var image = warm.RenderFrame();
+                }
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
                 var before = GetGuiResources(process.Handle, 0);
                 for (var round = 0; round < 20; round++)
                 {
@@ -38,7 +50,7 @@ public sealed class P0GdiSoakTests
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
                 var after = GetGuiResources(process.Handle, 0);
-                Assert.InRange(after - before, -50, 35); // allow one-time GDI/WinForms static cache allocation
+                Assert.InRange(after - before, -50, 35); // warm caches + nonparallel collection avoid process-global interference
             }
             catch (Exception ex) { error = ex; }
         });

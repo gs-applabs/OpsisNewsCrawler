@@ -24,6 +24,9 @@ public sealed class RssNewsProvider : IDisposable
     private int peakRequests;
     /// <summary>Peak concurrent feed downloads since construction, for diagnostics.</summary>
     public int PeakConcurrentRequests => Volatile.Read(ref peakRequests);
+    private long downloadedBytes;
+    /// <summary>Approximate successful RSS bytes received by this instance during its lifetime.</summary>
+    public long DownloadedBytes => Interlocked.Read(ref downloadedBytes);
     private const int MaxTitleLength = 200;
     private const int MaxSummaryLength = 400;
 
@@ -204,6 +207,7 @@ public sealed class RssNewsProvider : IDisposable
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentLength is > MaxFeedBytes) return new FeedTestResult(false, 0, null, "feed too large");
             var bytes = await ReadBoundedAsync(await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false), MaxFeedBytes, ct).ConfigureAwait(false);
+            Interlocked.Add(ref downloadedBytes, bytes.LongLength);
             var items = Parse(bytes, "", 50);
             return items.Count == 0
                 ? new FeedTestResult(false, 0, null, "no stories found")
@@ -253,6 +257,7 @@ public sealed class RssNewsProvider : IDisposable
             if (response.Content.Headers.ContentLength is > MaxFeedBytes)
                 throw new InvalidDataException("feed exceeds the 5 MB size limit");
             var bytes = await ReadBoundedAsync(await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false), MaxFeedBytes, ct).ConfigureAwait(false);
+            Interlocked.Add(ref downloadedBytes, bytes.LongLength);
 
             var parsed = Parse(bytes, source.Name, Math.Max(maxItems, CachedItemsPerFeed));
             state.ETag = response.Headers.ETag?.ToString();
@@ -320,8 +325,8 @@ public sealed class RssNewsProvider : IDisposable
             if (string.IsNullOrEmpty(title) || link is null) continue;
 
             if (title.Length > MaxTitleLength) title = title[..MaxTitleLength].TrimEnd() + "…";
-            var date = ParseDate(ChildValue(entry, "pubDate") ?? ChildValue(entry, "published")
-                                 ?? ChildValue(entry, "updated") ?? ChildValue(entry, "date"));
+            var date = NewsDatePolicy.Normalize(ParseDate(ChildValue(entry, "pubDate") ?? ChildValue(entry, "published")
+                                 ?? ChildValue(entry, "updated") ?? ChildValue(entry, "date")), DateTimeOffset.UtcNow);
             var summary = ExtractSummary(entry, title);
             var image = ExtractImage(entry);
             items.Add(new NewsItem(title, link, sourceName, date ?? DateTimeOffset.MinValue, summary, image));

@@ -1,4 +1,5 @@
 using OpsisNewsCrawler.Core;
+using OpsisNewsCrawler.Plugin.Abstractions;
 using System.Diagnostics;
 
 namespace OpsisNewsCrawler.Windows;
@@ -47,8 +48,21 @@ public sealed partial class TickerHost : IDisposable
     private bool breakingActive;
     private DateTimeOffset breakingUntil;
     private LivePreviewForm? livePreview;
+    private string? breakingVideoContext;
 
     public AppConfig Config { get; }
+
+    /// <summary>One in-memory-only snapshot for a host desktop widget; no network requests.</summary>
+    public IReadOnlyList<NewsItem> WidgetSnapshot(string widget) => widget switch
+    {
+        "news" => allItems.Where(x => x.Kind == NewsItemKind.News).Take(12).ToArray(),
+        "markets" => stockItems.Where(x => x.Kind == NewsItemKind.Quote).Take(12).ToArray(),
+        "weather" => WeatherForDisplay().Where(x => x.Kind == NewsItemKind.Weather).Take(8).ToArray(),
+        "breaking" => breakingItems.Take(10).ToArray(),
+        "history" => OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.AllRich().FirstOrDefault() is { } rich
+            ? PluginFeedForDisplay(rich.Key).Take(12).ToArray() : Array.Empty<NewsItem>(),
+        _ => Array.Empty<NewsItem>()
+    };
 
     /// <summary>Scroll state of the main bar.</summary>
     public TickerState State { get; } = new();
@@ -58,6 +72,8 @@ public sealed partial class TickerHost : IDisposable
 
     /// <summary>Number of periodic refresh operations currently executing.</summary>
     public int RunningRefreshes => refreshScheduler.RunningCount;
+    /// <summary>Successful RSS payload bytes; local process counter (not an upload).</summary>
+    public long NetworkReceivedBytes => news.DownloadedBytes + extraNewsProvider.DownloadedBytes;
 
     /// <summary>The main bar.</summary>
     public TickerWindow Window { get; }
@@ -675,13 +691,17 @@ public sealed partial class TickerHost : IDisposable
     public event Action? PerformanceChanged;
 
     /// <summary>The timers of the refreshes follow the user's intervals times the factor of the tier (2 on a low PC, 1 otherwise).</summary>
+    public EnergyRefreshBudget CurrentEnergyBudget =>
+        EnergyRefreshBudget.For(performance.Specs, Config.NetworkCostMode == "metered", PerformanceProfile.Current.Tier);
+
     private void ApplyRefreshIntervals()
     {
         var p = PerformanceProfile.Current;
-        refreshTimer.Interval = p.Scaled(Config.RefreshIntervalSeconds) * 1000;
-        quoteTimer.Interval = p.Scaled(GetQuoteRefreshIntervalMilliseconds() / 1000) * 1000;
-        weatherTimer.Interval = p.Scaled(15 * 60) * 1000;
-        hazardTimer.Interval = p.Scaled(Math.Max(1, Config.HazardRefreshMinutes) * 60) * 1000;
+        var budget = CurrentEnergyBudget;
+        refreshTimer.Interval = budget.RefreshMs(p.Scaled(Config.RefreshIntervalSeconds));
+        quoteTimer.Interval = budget.RefreshMs(p.Scaled(GetQuoteRefreshIntervalMilliseconds() / 1000));
+        weatherTimer.Interval = budget.RefreshMs(p.Scaled(15 * 60));
+        hazardTimer.Interval = budget.RefreshMs(p.Scaled(Math.Max(1, Config.HazardRefreshMinutes) * 60));
     }
 
     public void Start()
@@ -712,7 +732,8 @@ public sealed partial class TickerHost : IDisposable
         refreshTimer.Start();
         quoteTimer.Start();
         weatherTimer.Start();
-        hazardTimer.Interval = PerformanceProfile.Current.Scaled(Config.HazardRefreshMinutes * 60) * 1000;
+        hazardTimer.Interval = CurrentEnergyBudget.RefreshMs(
+            PerformanceProfile.Current.Scaled(Config.HazardRefreshMinutes * 60));
         hazardTimer.Start();
         alertTimer.Start();
         breakingTimer.Start();
@@ -1079,9 +1100,13 @@ public sealed partial class TickerHost : IDisposable
         var candidates = items.Where(i => !NewsKeywordFilter.IsMuted(i, Config.MutedNewsKeywords)).ToList();
         var urgent = engine.Urgent(candidates, hazardEvents, DateTimeOffset.Now)
             .Where(a => !readStore.IsRead(a.Item.Url))
-            .Select(a => a.Item with { Breaking = true, Why = BreakingWhy.Text(a.Reasons) }).ToList();
+            .Select(a => a.Item with { Breaking = true, Why = BreakingWhy.Detailed(a, BreakingEngine.ParseSensitivity(Config.BreakingSensitivity)) }).ToList();
         if (urgent.Count == 0) return;
 
+        breakingVideoContext = urgent[0].Title;
+        foreach (var item in urgent.Take(6))
+            SuiteEventHub.Publish(new SuiteEvent(SuiteEventKind.Breaking, "crawler", item.Url,
+                item.Title, item.PublishedAt, item.Url, item.Why));
         var isNew = urgent.Where(i => !readStore.IsRead("breaking:" + i.Url)).ToList();
         foreach (var i in isNew) readStore.MarkRead("breaking:" + i.Url); // remembered, so a restart does not replay the intro
         // Price and weather alerts have no link: they stay on the bar next to the urgent headlines.
@@ -1167,10 +1192,10 @@ public sealed partial class TickerHost : IDisposable
             CloseLivePreview();
             return;
         }
-        var feed = Config.LiveFeeds.FirstOrDefault(f => f.Enabled && Breaking.ToPlayableUrl(f.Url) is not null);
-        if (feed is null) return;
-        var playable = Breaking.ToPlayableUrl(feed.Url)!;
-        livePreview = new LivePreviewForm(string.IsNullOrWhiteSpace(feed.Name) ? new Uri(playable).Host : feed.Name, playable, Window.Bounds);
+        // The Live Video Hub is user-initiated, starts muted, and uses only configured channels.
+        var choices = LiveVideoPolicy.Select(Config.LiveFeeds, breakingVideoContext);
+        if (choices.Count == 0) return;
+        livePreview = new LivePreviewForm(choices, Window.Bounds);
         livePreview.FormClosed += (_, _) => livePreview = null;
         livePreview.Show();
     }

@@ -725,5 +725,10 @@
   "diag.failures": "Fehler",
   "diag.nextAttempt": "Nächster Versuch",
   "diag.error": "Fehlermeldung",
-  "diag.metrics": "CPU: {0:N1}% • RAM: {1:N0} MB • GDI: {2} • Schreibvorgänge: {3} • Übersprungen: {4} • Aktualisierungen: {5}"
+  "diag.metrics": "CPU: {0:N1}% • RAM: {1:N0} MB • GDI: {2} • Schreibvorgänge: {3} • Übersprungen: {4} • Aktualisierungen: {5}",
+  "energy.normal": "Normale Verbindung",
+  "energy.metered": "Getaktete Verbindung (Daten sparen)",
+  "energy.label": "Verbindungskosten",
+  "dash.title": "Einstellungsübersicht",
+  "dash.metrics": "Nachrichten: {0} · RSS OK: {1}/{2} · Profil: {3} · Aufträge: {4} · Cache-Schreibvorgänge: {5} (gespart {6}) · Energiefaktor: ×{7:N2}"
 }

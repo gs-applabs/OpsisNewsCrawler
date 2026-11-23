@@ -725,5 +725,10 @@
   "diag.failures": "失败次数",
   "diag.nextAttempt": "下次尝试",
   "diag.error": "错误",
-  "diag.metrics": "CPU: {0:N1}% • 内存: {1:N0} MB • GDI: {2} • 写入: {3} • 已避免: {4} • 刷新: {5}"
+  "diag.metrics": "CPU: {0:N1}% • 内存: {1:N0} MB • GDI: {2} • 写入: {3} • 已避免: {4} • 刷新: {5}",
+  "energy.normal": "普通连接",
+  "energy.metered": "按流量计费连接 (节省数据)",
+  "energy.label": "连接费用",
+  "dash.title": "设置概览",
+  "dash.metrics": "新闻: {0} · 正常 RSS: {1}/{2} · 模式: {3} · 任务: {4} · 缓存写入: {5} (避免 {6}) · 节能系数: ×{7:N2}"
 }

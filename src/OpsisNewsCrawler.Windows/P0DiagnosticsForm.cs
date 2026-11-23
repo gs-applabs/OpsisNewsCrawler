@@ -11,6 +11,7 @@ internal sealed class P0DiagnosticsForm : Form
     private readonly TickerHost host;
     private TimeSpan previousCpu;
     private long previousSample;
+    private long previousFrames;
     private readonly System.Windows.Forms.Timer refresh = new() { Interval = 4000 };
     private readonly Label summary = new() { Dock = DockStyle.Top, Height = 58, AutoEllipsis = true };
     private readonly ListView rows = new() { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true };
@@ -61,9 +62,14 @@ internal sealed class P0DiagnosticsForm : Form
         var cpu = process.TotalProcessorTime;
         var percent = previousSample <= 0 ? 0 : 100 * (cpu - previousCpu).TotalSeconds /
             (Stopwatch.GetElapsedTime(previousSample, sample).TotalSeconds * Math.Max(1, Environment.ProcessorCount));
+        var frames = host.Window.RenderedFrames;
+        var seconds = previousSample <= 0 ? 0.0 : Stopwatch.GetElapsedTime(previousSample, sample).TotalSeconds;
+        var fps = seconds > 0 ? Math.Max(0, frames - previousFrames) / seconds : 0;
+        previousFrames = frames;
         previousSample = sample;
         previousCpu = cpu;
-        summary.Text = Loc.T("diag.metrics", percent, mem, gdi, disk.Writes, disk.Skips, host.RunningRefreshes);
+        summary.Text = Loc.T("diag.metrics", percent, mem, gdi, disk.Writes, disk.Skips, host.RunningRefreshes)
+            + $" • FPS: {fps:N1} • RSS: {host.NetworkReceivedBytes / 1024.0:N0} KiB";
         var health = host.FeedHealth;
         rows.BeginUpdate();
         try

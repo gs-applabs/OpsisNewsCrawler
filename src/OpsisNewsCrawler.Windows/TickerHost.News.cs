@@ -1,4 +1,5 @@
 using OpsisNewsCrawler.Core;
+using OpsisNewsCrawler.Plugin.Abstractions;
 using System.Diagnostics;
 
 namespace OpsisNewsCrawler.Windows;
@@ -81,6 +82,9 @@ public sealed partial class TickerHost
                     newsFailedFeeds = new();
                     DataCache.Save("news-" + category, allItems);
                     DetectBreaking(allItems);
+                    foreach (var item in allItems.Where(i => i.Kind == NewsItemKind.News).Take(20))
+                        SuiteEventHub.Publish(new SuiteEvent(SuiteEventKind.News, "crawler", item.Url,
+                            item.Title, item.PublishedAt, item.Url, item.Summary));
                 }
                 else
                 {
