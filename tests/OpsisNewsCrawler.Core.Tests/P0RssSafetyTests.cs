@@ -94,6 +94,24 @@ public sealed class P0RssSafetyTests
     }
 
     [Fact]
+    public async Task BadUrlCannotAbortOtherValidFeeds()
+    {
+        using var handler = new CountingHandler(p => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(Rss)
+        }, pause: 1);
+        using var provider = new RssNewsProvider(handler);
+        var found = await provider.FetchAsync(new[]
+        {
+            new FeedSource("Bad", "file:///etc/hosts"),
+            new FeedSource("Good", "https://rss.example.org/ok")
+        }, 2);
+        Assert.Single(found);
+        Assert.Equal("Good", found[0].Source);
+        Assert.Contains("Bad", provider.LastFailedFeeds);
+    }
+
+    [Fact]
     public async Task RetryAfterHonouredAndCoolingDownSkipsImmediateRefetch()
     {
         using var handler = new CountingHandler(_ =>

@@ -64,8 +64,8 @@ internal sealed class P0DiagnosticsForm : Form
         previousSample = sample;
         previousCpu = cpu;
         summary.Text = Loc.IsGreek
-            ? $"CPU: {percent:N1}%    RAM: {mem:N0} MB    GDI: {gdi}    Εγγραφές cache: {disk.Writes}    Εγγραφές που αποφεύχθηκαν: {disk.Skips}"
-            : $"RAM: {mem:N0} MB    GDI: {gdi}    Cache writes: {disk.Writes}    Writes skipped: {disk.Skips}";
+            ? $"CPU: {percent:N1}%    RAM: {mem:N0} MB    GDI: {gdi}    Εγγραφές: {disk.Writes}    Αποφυγή: {disk.Skips}    Ανανεώσεις: {host.RunningRefreshes}"
+            : $"CPU: {percent:N1}%    RAM: {mem:N0} MB    GDI: {gdi}    Cache writes: {disk.Writes}    Skips: {disk.Skips}    Active refreshes: {host.RunningRefreshes}";
         var health = host.FeedHealth;
         rows.BeginUpdate();
         try

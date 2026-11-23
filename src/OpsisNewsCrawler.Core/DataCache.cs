@@ -67,7 +67,18 @@ public static class DataCache
         try
         {
             var path = PathOf(name);
-            return File.Exists(path) ? JsonSerializer.Deserialize<Cached<T>>(File.ReadAllText(path)) : null;
+            if (!File.Exists(path)) return null;
+            var result = JsonSerializer.Deserialize<Cached<T>>(File.ReadAllText(path));
+            if (result is not null)
+            {
+                // Seed the fingerprint from the persisted cache at startup: the first unchanged
+                // fetch after restarting the app will not rewrite the SSD.
+                var payload = JsonSerializer.Serialize(result.Data);
+                var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(payload)));
+                lock (WriteGate) WrittenHashes[path] = hash;
+            }
+            return result;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
         {
