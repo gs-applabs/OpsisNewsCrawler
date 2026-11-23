@@ -265,7 +265,7 @@ public sealed class RssNewsProvider : IDisposable
         {
             throw;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or XmlException or IOException or InvalidDataException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or XmlException or IOException or InvalidDataException or UriFormatException or ArgumentException or InvalidOperationException)
         {
             System.Diagnostics.Debug.WriteLine($"OpsisNewsCrawler: feed '{source.Name}' failed: {ex.Message}");
             RecordFailure(source.Name);
