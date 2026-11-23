@@ -1,9 +1,9 @@
 name: Package and verify Opsis News Crawler 0.28.0
 on:
   push:
-    branches: ['release/p2-v0.28.0-*']
+    branches: ['release/p2-v0.28.0-*', 'release/p3-v0.28.0-*']
   pull_request:
-    branches: ['feat/p1-opsis-integration-live-video-20261123']
+    branches: ['feat/p1-opsis-integration-live-video-20261123', 'release/p2-v0.28.0-20261123']
   workflow_dispatch:
 
 permissions:
@@ -51,7 +51,7 @@ jobs:
           if ($abi -ne '1.0.0.0') { throw "wrong plugin assembly version $abi" }
           $contract = 'Output/stage/plugins/Opsis - Desktop Customization/OpsisNewsCrawler.Plugin.Abstractions.dll'
           $shared = [Reflection.AssemblyName]::GetAssemblyName((Resolve-Path $contract)).Version.ToString()
-          if ($shared -ne '0.8.0.0') { throw "unexpected shared contract identity $shared" }
+          if ($shared -ne '1.0.0.0') { throw "unexpected shared contract identity $shared" }
       - uses: actions/upload-artifact@v4
         with:
           name: OpsisNewsCrawler-0.28.0-candidate
@@ -66,20 +66,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [fresh, update-helper]
+        scenario: [fresh, update-helper, integrated]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: OpsisNewsCrawler-0.28.0-candidate
           path: package
+      - uses: actions/setup-dotnet@v4
+        if: matrix.scenario == 'integrated'
+        with:
+          dotnet-version: 10.0.x
+      - name: Build the exact P3 host ABI for integrated installer gate
+        if: matrix.scenario == 'integrated'
+        shell: pwsh
+        run: |
+          dotnet build src/OpsisNewsCrawler.Plugin.Abstractions/OpsisNewsCrawler.Plugin.Abstractions.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot stage P3 contract for integrated install' }
       - name: Test real setup install/update/uninstall in Windows VM
         shell: pwsh
-        run: ./tools/e2e-installer.ps1 -Scenario '${{ matrix.scenario }}' -NewSetup "$PWD/package/OpsisNewsCrawler-Setup.exe" -Repository '${{ github.repository }}' -Out "$env:RUNNER_TEMP/e2e"
+        run: ./tools/e2e-installer.ps1 -Scenario '${{ matrix.scenario }}' -NewSetup "$PWD/package/OpsisNewsCrawler-Setup.exe" -Repository '${{ github.repository }}' -Out "$env:RUNNER_TEMP/e2e" -ContractFile "$PWD/src/OpsisNewsCrawler.Plugin.Abstractions/bin/Release/net10.0-windows/OpsisNewsCrawler.Plugin.Abstractions.dll"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: p2-e2e-${{ matrix.scenario }}
+          name: p3-e2e-${{ matrix.scenario }}
           path: ${{ runner.temp }}/e2e
           if-no-files-found: ignore
           retention-days: 14

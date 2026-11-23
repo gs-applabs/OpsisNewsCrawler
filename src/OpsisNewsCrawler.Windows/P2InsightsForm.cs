@@ -11,6 +11,12 @@ public sealed class P2InsightsForm : Form
     private readonly TickerHost host;
     private readonly FlatComboBox views = new() { Width=300 };
     private readonly FlatButton export = new();
+    private readonly FlatButton exportWeekly = new();
+    private readonly FlatButton importCalendar = new();
+    private readonly FlatButton exportCalendar = new();
+    private readonly FlatButton evidence = new();
+    private readonly FlatButton newTransaction = new();
+    private readonly FlatButton mediaPlaylist = new();
     private readonly FlatButton refresh = new();
     private readonly Label summary = new() { Dock=DockStyle.Bottom, Height=34, AutoEllipsis=true };
     private readonly ListView lines = new()
@@ -35,14 +41,31 @@ public sealed class P2InsightsForm : Form
         lines.AccessibleName=Loc.IsGreek ? "Ροή πληροφοριών" : "Intelligence feed";
         var bar=new FlowLayoutPanel { Dock=DockStyle.Top, Height=54,FlowDirection=FlowDirection.LeftToRight,WrapContents=false,Padding=new Padding(10,8,8,0)};
         views.SetItems(Loc.IsGreek ?
-            new[]{"Χρονολόγιο","Ομάδες ειδήσεων","Παρακολούθηση θεμάτων","Συναλλαγές χαρτοφυλακίου"}
-            :new[]{"Timeline","Story clusters","Topic watchlist","Portfolio transactions"},0);
+            new[]{"Χρονολόγιο","Ομάδες ειδήσεων","Παρακολούθηση θεμάτων","Συναλλαγές χαρτοφυλακίου","Οικονομικό ημερολόγιο"}
+            :new[]{"Timeline","Story clusters","Topic watchlist","Portfolio transactions","Economic calendar"},0);
         views.SelectedIndexChanged+=(_,_)=>Reload();
         refresh.Text=Loc.IsGreek?"Ανανέωση προβολής":"Refresh view";
         refresh.Click+=(_,_)=>Reload();
         export.Text=Loc.IsGreek?"Εξαγωγή HTML ημέρας":"Export daily HTML";
         export.Click+=(_,_)=>ExportDigest();
+        exportWeekly.Text=Loc.IsGreek?"Εβδομάδα HTML":"Weekly HTML";
+        exportWeekly.Click+=(_,_)=>ExportWeeklyDigest();
+        importCalendar.Text=Loc.IsGreek?"Εισαγωγή ημερολογίου":"Import calendar";
+        importCalendar.Click+=(_,_)=>ImportCalendar();
+        exportCalendar.Text="ICS";
+        exportCalendar.Click+=(_,_)=>ExportCalendar();
+        bar.WrapContents=true;
+        bar.Height=105;
         bar.Controls.Add(views);bar.Controls.Add(refresh);bar.Controls.Add(export);
+        evidence.Text=Loc.IsGreek?"Σύγκριση πηγών":"Compare sources";
+        evidence.Click+=(_,_)=>CompareSelectedStory();
+        newTransaction.Text=Loc.IsGreek?"Νέα συναλλαγή":"Add trade";
+        newTransaction.Click+=(_,_)=>AddTransaction();
+        mediaPlaylist.Text=Loc.IsGreek?"Media Suite · M3U":"Media Suite · M3U";
+        mediaPlaylist.Click+=(_,_)=>ExportMediaPlaylist();
+        bar.Controls.Add(exportWeekly);bar.Controls.Add(importCalendar);bar.Controls.Add(exportCalendar);
+        bar.Controls.Add(evidence);bar.Controls.Add(newTransaction);bar.Controls.Add(mediaPlaylist);
+        bar.Height=155;
         Controls.Add(lines);Controls.Add(summary);Controls.Add(bar);
         lines.DoubleClick+=(_,_)=>OpenSelected();
         lines.KeyDown+=(_,e)=>{if(e.KeyCode==Keys.Enter){OpenSelected();e.Handled=true;}};
@@ -73,6 +96,10 @@ public sealed class P2InsightsForm : Form
             case 2:
                 foreach(var m in TopicMatcher.Find(news,host.Config.TopicWatches))
                     visible.Add(($"{m.Topic.Name} · {m.Item.Title}",$"{m.Score}/100 · {m.Item.Source}",m.Item.Url));
+                break;
+            case 4:
+                foreach(var entry in EconomicCalendar.Upcoming(host.Config.EconomicEvents,DateTimeOffset.Now,90))
+                    visible.Add((entry.Title,$"{entry.StartsAt:dd/MM/yyyy HH:mm} · {entry.Country} · {entry.Source} · impact {entry.Impact}",entry.Url));
                 break;
             case 3:
                 foreach(var group in host.Config.PortfolioTransactions.GroupBy(x=>x.InstrumentKey).Take(100))
@@ -111,6 +138,7 @@ public sealed class P2InsightsForm : Form
 
     private void OpenSelected()
     {
+        if(views.SelectedIndex==1){CompareSelectedStory();return;}
         var index=lines.SelectedIndices.Count>0?lines.SelectedIndices[0]:-1;
         if(index<0 || index>=visible.Count)return;
         var url=visible[index].Url;
@@ -132,6 +160,113 @@ public sealed class P2InsightsForm : Form
         {
             NewsDigest.SaveHtml(save.FileName,host.RecentNews,
                 DateOnly.FromDateTime(DateTime.Today),Loc.IsGreek?"Ημερήσια σύνοψη":"Daily digest");
+            summary.Text=save.FileName;
+        }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            MessageBox.Show(this,ex.Message,Text,MessageBoxButtons.OK,MessageBoxIcon.Error);
+        }
+    }
+
+    private void CompareSelectedStory()
+    {
+        var index=lines.SelectedIndices.Count>0?lines.SelectedIndices[0]:-1;
+        if(index<0||index>=visible.Count||views.SelectedIndex!=1)return;
+        var key=visible[index].Url;
+        var cluster=StoryExplorer.Cluster(host.RecentNews).FirstOrDefault(x=>x.Key==key);
+        if(cluster is null)return;
+        using var form=new P3EvidenceForm(cluster);
+        form.ShowDialog(this);
+    }
+
+    private void AddTransaction()
+    {
+        using var form=new P3TransactionForm(host);
+        if(form.ShowDialog(this)==DialogResult.OK)Reload();
+    }
+
+    private void ExportMediaPlaylist()
+    {
+        using var save=new SaveFileDialog
+        {
+            Title=Loc.IsGreek?"Εξαγωγή πηγών πολυμέσων για Media Suite":"Export media links for Media Suite",
+            Filter="M3U playlist (*.m3u)|*.m3u",DefaultExt="m3u",
+            FileName="OpsisMediaSuite-News.m3u"
+        };
+        if(save.ShowDialog(this)!=DialogResult.OK)return;
+        try
+        {
+            var media=host.RecentNews.Select(MediaSuiteBridge.FromNews)
+                .Where(x=>x is not null).Cast<MediaSuiteAsset>().ToList();
+            // Only streams explicitly selected in settings, never unauthorized rebroadcasts.
+            media.AddRange(host.Config.LiveFeeds.Where(x=>x.Enabled)
+                .Select(x=>new MediaSuiteAsset(x.Url,x.Name,"User configured",null))
+                .Where(MediaSuiteBridge.IsSafeRemoteAsset));
+            File.WriteAllText(save.FileName,MediaSuiteBridge.ExportM3u(media));
+            summary.Text=Loc.IsGreek?"Αποθηκεύτηκε λίστα συνδέσμων. Ανοίξτε την στο Media Suite."
+                :"Saved source playlist. Open it from Media Suite.";
+        }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            MessageBox.Show(this,ex.Message,Text,MessageBoxButtons.OK,MessageBoxIcon.Error);
+        }
+    }
+
+    private void ExportWeeklyDigest()
+    {
+        using var save=new SaveFileDialog
+        {
+            Title=Loc.IsGreek?"Εβδομαδιαία σύνοψη":"Weekly digest",
+            Filter="HTML (*.html)|*.html",DefaultExt="html",
+            FileName="OpsisWeekly-"+DateTime.Today.ToString("yyyyMMdd")+".html"
+        };
+        if(save.ShowDialog(this)!=DialogResult.OK)return;
+        try
+        {
+            var html=WeeklyDigest.Html(host.RecentNews,DateOnly.FromDateTime(DateTime.Today),
+                Loc.IsGreek?"Εβδομαδιαία σύνοψη":"Weekly digest");
+            File.WriteAllText(save.FileName,html);
+            summary.Text=save.FileName;
+        }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            MessageBox.Show(this,ex.Message,Text,MessageBoxButtons.OK,MessageBoxIcon.Error);
+        }
+    }
+
+    private void ImportCalendar()
+    {
+        using var open=new OpenFileDialog {Filter="JSON (*.json)|*.json",Title=Loc.IsGreek?
+            "Εισαγωγή οικονομικού ημερολογίου από αξιόπιστο αρχείο":"Import economic calendar from trusted file"};
+        if(open.ShowDialog(this)!=DialogResult.OK)return;
+        try
+        {
+            var info=new FileInfo(open.FileName);
+            if(info.Length>1_000_000)throw new InvalidDataException("Calendar exceeds 1 MB.");
+            var imported=EconomicCalendar.ImportJson(File.ReadAllText(open.FileName));
+            var existing=host.Config.EconomicEvents;
+            // Duplicates are replaced by stable ID; imported data never triggers automatic downloads.
+            host.Config.EconomicEvents=existing.Concat(imported).GroupBy(x=>x.Id,StringComparer.OrdinalIgnoreCase)
+                .Select(g=>g.Last()).OrderBy(x=>x.StartsAt).TakeLast(1000).ToList();
+            host.SaveConfig(); views.SelectedIndex=4;Reload();
+            summary.Text=Loc.IsGreek?$"Εισαγωγή: {imported.Count} γεγονότα":$"Imported {imported.Count} calendar events";
+        }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
+        {
+            MessageBox.Show(this,ex.Message,Text,MessageBoxButtons.OK,MessageBoxIcon.Warning);
+        }
+    }
+
+    private void ExportCalendar()
+    {
+        using var save=new SaveFileDialog {Filter="iCalendar (*.ics)|*.ics",DefaultExt="ics",
+            FileName="OpsisEconomicCalendar.ics"};
+        if(save.ShowDialog(this)!=DialogResult.OK)return;
+        try
+        {
+            File.WriteAllText(save.FileName,
+                EconomicCalendar.ExportIcs(EconomicCalendar.Upcoming(host.Config.EconomicEvents,
+                    DateTimeOffset.Now,90)));
             summary.Text=save.FileName;
         }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException)

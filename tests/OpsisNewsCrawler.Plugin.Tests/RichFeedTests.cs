@@ -130,7 +130,7 @@ public class RichFeedTests
         Assert.NotNull(typeof(PluginFeeds).GetMethod("Register", new[] { typeof(PluginFeed) }));
         Assert.NotNull(typeof(PluginFeeds).GetMethod("RegisterRich", new[] { typeof(PluginRichFeed) }));
         // the rich types live in their own classes, so a plugin that does not use them never loads them
-        Assert.Equal(new Version(0, 8, 0, 0), typeof(PluginRichFeed).Assembly.GetName().Version);
+        Assert.Equal(new Version(1, 0, 0, 0), typeof(PluginRichFeed).Assembly.GetName().Version);
         Assert.DoesNotContain(typeof(PluginFeedItem).GetProperties(), p => p.Name is "EntryId" or "Summary" or "HistoricalYear");
     }
 

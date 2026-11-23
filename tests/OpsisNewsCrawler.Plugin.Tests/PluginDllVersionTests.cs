@@ -17,9 +17,9 @@ public sealed class PluginDllVersionTests
     }
 
     [Fact]
-    public void SharedContractStaysBackwardCompatible()
+    public void SharedContractVersionIsCoordinated1_0_0_0()
     {
         var contract = typeof(OpsisNewsCrawler.Plugin.Abstractions.IOpsisNewsCrawlerPlugin).Assembly;
-        Assert.Equal(new Version(0, 8, 0, 0), contract.GetName().Version);
+        Assert.Equal(new Version(1, 0, 0, 0), contract.GetName().Version);
     }
 }

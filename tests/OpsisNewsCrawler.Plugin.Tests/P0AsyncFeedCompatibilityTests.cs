@@ -56,7 +56,7 @@ public sealed class P0AsyncFeedCompatibilityTests
     [Fact]
     public async Task LegacyFeedSignaturesAndAssemblyIdentityRemainUnchanged()
     {
-        Assert.Equal(new Version(0, 8, 0, 0), typeof(PluginFeeds).Assembly.GetName().Version);
+        Assert.Equal(new Version(1, 0, 0, 0), typeof(PluginFeeds).Assembly.GetName().Version);
         Assert.NotNull(typeof(PluginFeed).GetConstructor(new[]
         {
             typeof(string), typeof(string), typeof(string), typeof(Func<IReadOnlyList<PluginFeedItem>>)

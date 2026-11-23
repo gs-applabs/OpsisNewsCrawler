@@ -30,8 +30,8 @@ public class ContractTests
             t.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly).Select(Describe))));
 
     [Fact]
-    public void TheContractKeepsTheFrozenAssemblyVersion() =>
-        Assert.Equal(new Version(0, 8, 0, 0), typeof(PluginFeeds).Assembly.GetName().Version);
+    public void TheContractUsesCoordinatedAssemblyVersion1() =>
+        Assert.Equal(new Version(1, 0, 0, 0), typeof(PluginFeeds).Assembly.GetName().Version);
 
     [Fact]
     public void EveryPublicSignatureOfThePluginsContractIsInOurContract()
@@ -42,7 +42,9 @@ public class ContractTests
         foreach (var line in lines)
         {
             var bar = line.IndexOf('|');
-            var type = line[..bar]; var member = line[(bar + 1)..];
+            var type = line[..bar]; var member = line[(bar + 1)..]
+                .Replace("OpsisNewsCrawler.Plugin.Abstractions, Version=0.8.0.0",
+                         "OpsisNewsCrawler.Plugin.Abstractions, Version=1.0.0.0", StringComparison.Ordinal);
             Assert.True(ours.ContainsKey(type), "missing type " + type);
             if (member.Length > 0) Assert.True(ours[type].Contains(member), $"{type}: signature {member} is not in our contract");
         }
