@@ -45,7 +45,7 @@ public static class PriceAlertCheck
         var hits = new List<(PriceAlert, MarketQuote)>();
         foreach (var alert in alerts)
         {
-            if (!alert.Enabled || alert.Threshold <= 0) continue;
+            if (!alert.Enabled || (alert.Metric == "changePercent" ? alert.Threshold is < -100 or > 100 : alert.Threshold <= 0)) continue;
             MarketQuote? quote = null;
             foreach (var (instrument, candidate) in prices)
                 if (alert.Matches(instrument)) { quote = candidate; break; }

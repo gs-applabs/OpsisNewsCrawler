@@ -129,6 +129,7 @@ public sealed partial class SettingsPanel : UserControl
     private FlatList alertList = null!;
     private FlatComboBox alertInstrument = null!;
     private FlatComboBox alertDirection = null!;
+    private FlatComboBox alertMetric = null!;
     private FlatText alertThreshold = null!;
     private readonly Dictionary<QuoteSource, FlatList> watchLists = new();
     private FlatComboBox marketCombo = null!;

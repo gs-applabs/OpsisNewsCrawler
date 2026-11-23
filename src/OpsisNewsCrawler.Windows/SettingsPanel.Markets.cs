@@ -142,13 +142,15 @@ public sealed partial class SettingsPanel
         alertInstrument = new FlatComboBox { Width = 250 };
         alertDirection = new FlatComboBox { Width = 80 };
         alertDirection.SetItems(new[] { "≥", "≤" }, 0);
+        alertMetric = new FlatComboBox { Width = 150 };
+        alertMetric.SetItems(Loc.IsGreek ? new[] { "Τιμή", "Μεταβολή %" } : new[] { "Price", "Change %" }, 0);
         alertThreshold = new FlatText { Width = 100 };
         var addAlert = new FlatButton { Text = L("btn.new") };
         addAlert.Click += (_, _) => AddAlert();
         var removeAlert = new FlatButton { Text = L("btn.delete") };
         removeAlert.Click += (_, _) => RemoveAlert();
         var alertRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        alertRow.Controls.AddRange(new Control[] { alertInstrument, alertDirection, alertThreshold, addAlert, removeAlert });
+        alertRow.Controls.AddRange(new Control[] { alertInstrument, alertMetric, alertDirection, alertThreshold, addAlert, removeAlert });
         alertFlow.Controls.Add(alertRow);
         alertCard.Controls.Add(alertFlow);
         flow.Controls.Add(alertCard);
@@ -182,7 +184,7 @@ public sealed partial class SettingsPanel
         if (alertList is null || alertList.IsDisposed) return;
         alertList.ClearRows();
         foreach (var a in workAlerts)
-            alertList.AddRow($"{a.Label}  {(a.Above ? "≥" : "≤")}  {a.Threshold.ToString("0.00##", System.Globalization.CultureInfo.CurrentCulture)}", a.Enabled);
+            alertList.AddRow($"{a.Label}  {(a.Above ? "≥" : "≤")}  {a.Threshold.ToString("0.00##", System.Globalization.CultureInfo.CurrentCulture)}{(a.Metric == "changePercent" ? "%" : "")}", a.Enabled);
     }
 
     private void AddAlert()
@@ -191,7 +193,8 @@ public sealed partial class SettingsPanel
         var index = alertInstrument.SelectedIndex;
         if (index < 0 || index >= alertChoices.Count) return;
         var text = (alertThreshold.Value ?? "").Trim().Replace(',', '.');
-        if (!decimal.TryParse(text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var limit) || limit <= 0)
+        if (!decimal.TryParse(text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var limit)
+            || (alertMetric.SelectedIndex == 0 ? limit <= 0 : limit is < -100 or > 100))
         {
             SetStatus(Loc.T("pk.enter.a.valid.limit"));
             return;
@@ -201,7 +204,8 @@ public sealed partial class SettingsPanel
         {
             Source = inst.Source, Code = inst.Code, Market = inst.Market,
             Label = string.IsNullOrEmpty(inst.Symbol) ? inst.DisplayName(Loc.IsGreek) : inst.Symbol,
-            Above = alertDirection.SelectedIndex != 1, Threshold = limit, Enabled = true
+            Above = alertDirection.SelectedIndex != 1, Threshold = limit, Enabled = true,
+            Metric = alertMetric.SelectedIndex == 1 ? "changePercent" : "price"
         });
         alertThreshold.Value = "";
         ShowAlerts();

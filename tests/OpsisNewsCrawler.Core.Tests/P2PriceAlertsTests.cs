@@ -16,5 +16,12 @@ public sealed class P2PriceAlertsTests
         PriceAlertCheck.Evaluate(new[]{rule},new[]{(instrument,blank with{ChangePercent=2m})});
         Assert.Single(PriceAlertCheck.Evaluate(new[]{rule},new[]{(instrument,up)}));
         Assert.Equal("changePercent",rule.Clone().Metric);
+        var negative=new PriceAlert {Source=instrument.Source,Code=instrument.Code,
+            Metric="changePercent",Threshold=-5,Above=false};
+        var down=blank with { ChangePercent=-6m };
+        Assert.Single(PriceAlertCheck.Evaluate(new[]{negative},new[]{(instrument,down)}));
+        var config=new AppConfig { PriceAlerts=new(){negative.Clone()} };
+        config.Normalize();
+        Assert.Single(config.PriceAlerts);
     }
 }

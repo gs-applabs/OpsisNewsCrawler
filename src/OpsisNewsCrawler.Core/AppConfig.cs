@@ -593,7 +593,8 @@ public sealed class AppConfig
         QuoteRefreshSeconds = Math.Clamp(QuoteRefreshSeconds, 30, 3600);
         Portfolio = (Portfolio ?? new()).Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Code) && p.Quantity > 0 && p.AvgCost >= 0)
             .Select(p => { p.Currency = string.IsNullOrWhiteSpace(p.Currency) ? "EUR" : p.Currency.Trim().ToUpperInvariant(); p.Market ??= ""; return p; }).Take(500).ToList();
-        PriceAlerts = (PriceAlerts ?? new()).Where(x => x is not null && !string.IsNullOrWhiteSpace(x.Code) && x.Threshold > 0)
+        PriceAlerts = (PriceAlerts ?? new()).Where(x => x is not null && !string.IsNullOrWhiteSpace(x.Code) &&
+                (x.Metric == "changePercent" ? x.Threshold is >= -100 and <= 100 : x.Threshold > 0))
             .Select(x => { x.Metric = x.Metric == "changePercent" ? "changePercent" : "price"; return x; }).Take(200).ToList();
         TopicWatches = (TopicWatches ?? new()).Where(x => x is not null && !string.IsNullOrWhiteSpace(x.Name))
             .Select(x => { x.Name=x.Name.Trim()[..Math.Min(80,x.Name.Trim().Length)]; x.Terms=(x.Terms ?? new()).Where(t=>t.Trim().Length>=3).Select(t=>t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList(); x.Region=(x.Region??"").Trim(); return x; })
