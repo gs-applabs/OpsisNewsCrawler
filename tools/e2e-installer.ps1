@@ -213,6 +213,17 @@ foreach ($tier in @('', 'Low', 'High')) {
         $text = if (Test-Path $rep) { Get-Content $rep -Raw } else { '' }
         $clean = if ($kind -eq 'audit-settings') { $text -match '0 change nothing, 0 not shown again' -and $text -match 'keyboard checks failed: 0' -and $text -notmatch '(?m)^ERROR' }
                  else { $text -match 'nothing sticks out' }
+        if (-not $clean) {
+            Write-Host "::group::DIAGNOSTIC $kind tier=$tier exit=$($p.ExitCode)"
+            Write-Host "Report exists: $(Test-Path $rep); characters: $($text.Length)"
+            if ($text) { Write-Host ($text.Substring(0, [Math]::Min(6000, $text.Length))) }
+            else { Write-Host 'Report file is absent or empty: possible command-line/config/installed runtime issue.' }
+            if (Test-Path $log) {
+                Write-Host 'Recent process log lines:'
+                Get-Content $log -Tail 35 | Out-Host
+            }
+            Write-Host "::endgroup::"
+        }
         Check $clean "$kind with tier '$(if ($tier) { $tier } else { 'detected' })' reports nothing wrong (exit code $($p.ExitCode))"
         if ($clean -and $p.ExitCode -ne 0) { Write-Host "::warning::$kind ($tier) wrote a clean report but ended with exit code $($p.ExitCode)" }
     }
