@@ -33,4 +33,31 @@ public sealed class P3ServicesTests
         Assert.False(MediaSuiteBridge.IsSafeRemoteAsset(new MediaSuiteAsset("https://127.0.0.1/internal","x",null,null)));
         Assert.True(MediaSuiteBridge.IsSafeRemoteAsset(new MediaSuiteAsset("https://example.org/img.png","x","Publisher","image/png")));
     }
+
+    [Fact] public void CalendarImportRejectsNullAndMalformedRecordsWithoutCrashing()
+    {
+        const string json = """
+          [
+            null,
+            {"Id":null,"Title":"No id","Country":"GR","Source":"Office","StartsAt":"2026-11-24T12:00:00+00:00"},
+            {"Id":"2","Title":null,"Country":"GR","Source":"Office","StartsAt":"2026-11-24T12:00:00+00:00"},
+            {"Id":"3","Title":" ","Country":"GR","Source":"Office","StartsAt":"2026-11-24T12:00:00+00:00"},
+            {"Id":"ok","Title":"GDP","Country":"GR","Source":"Office","StartsAt":"2026-11-24T12:00:00+00:00"}
+          ]
+          """;
+        var imported = EconomicCalendar.ImportJson(json);
+        Assert.Equal("ok", Assert.Single(imported).Id);
+        Assert.Contains("SUMMARY:GDP", EconomicCalendar.ExportIcs(imported));
+    }
+
+    [Fact] public void CalendarIcsSkipsInvalidRecords()
+    {
+        var events = new[] {
+            new EconomicEvent("good", "GDP", "GR", Now, "Source"),
+            new EconomicEvent("", "Should not export", "GR", Now, "Source")
+        };
+        var ics = EconomicCalendar.ExportIcs(events);
+        Assert.Contains("SUMMARY:GDP", ics);
+        Assert.DoesNotContain("Should not export", ics);
+    }
 }
