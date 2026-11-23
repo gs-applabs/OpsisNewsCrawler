@@ -139,10 +139,10 @@ public sealed partial class SettingsPanel
             if (index >= 0 && index < workAlerts.Count) workAlerts[index].Enabled = isChecked;
         };
         alertFlow.Controls.Add(alertList);
-        alertInstrument = new FlatComboBox { Width = 250 };
+        alertInstrument = new FlatComboBox { Width = 220 };
         alertDirection = new FlatComboBox { Width = 80 };
         alertDirection.SetItems(new[] { "≥", "≤" }, 0);
-        alertMetric = new FlatComboBox { Width = 150 };
+        alertMetric = new FlatComboBox { Width = 130 };
         alertMetric.SetItems(Loc.IsGreek ? new[] { "Τιμή", "Μεταβολή %" } : new[] { "Price", "Change %" }, 0);
         alertThreshold = new FlatText { Width = 100 };
         var addAlert = new FlatButton { Text = L("btn.new") };
