@@ -677,9 +677,10 @@ begin
   Result := '';
   if IsIntegrated() and not CompatibleOpsisContract() then
   begin
-    Result := 'Opsis host plugin contract 1.0.0.0 is required before integrated installation.' +
-              #13#10 + 'Απαιτείται ενημέρωση του Opsis με το κοινό συμβόλαιο 1.0.0.0 πριν από την ενσωμάτωση.' +
-              #13#10 + 'The standalone installation mode is still available.';
+    // Keep #13#10 away from a line-start: Inno Setup ISPP otherwise treats it as a directive.
+    Result := 'Opsis host plugin contract 1.0.0.0 is required before integrated installation.';
+    Result := Result + #13#10 + 'Απαιτείται ενημέρωση του Opsis με το κοινό συμβόλαιο 1.0.0.0 πριν από την ενσωμάτωση.';
+    Result := Result + #13#10 + 'The standalone installation mode is still available.';
     Exit;
   end;
   Left := RemovePerUserInstall;
