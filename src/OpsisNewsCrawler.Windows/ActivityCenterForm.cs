@@ -150,7 +150,7 @@ internal sealed class ActivityCenterForm : Form
         try
         {
             // Only the displayed filter is exported; no background sharing or upload.
-            SafeFile.WriteAllText(chooser.FileName, JsonSerializer.Serialize(VisibleEvents(),
+            File.WriteAllText(chooser.FileName, JsonSerializer.Serialize(VisibleEvents(),
                 new JsonSerializerOptions { WriteIndented = true }));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
