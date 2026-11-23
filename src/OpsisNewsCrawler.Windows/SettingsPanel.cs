@@ -29,6 +29,11 @@ public sealed partial class SettingsPanel : UserControl
     private FlatComboBox language = null!;
     private FlatComboBox perfMode = null!;
     private FlatComboBox networkCost = null!;
+    private FlatComboBox uiComplexity = null!;
+    private Control speedAdvancedCard = null!;
+    private Control performanceAdvancedCard = null!;
+    private Control networkAdvancedRow = null!;
+    private Control backupExpertCard = null!;
     private Label overviewStatus = null!;
     private readonly System.Windows.Forms.Timer overviewTimer = new() { Interval = 5000 };
     private Label perfInfo = null!;
@@ -279,6 +284,18 @@ public sealed partial class SettingsPanel : UserControl
         base.Dispose(disposing);
     }
 
+    private void ApplyUiComplexity()
+    {
+        if (uiComplexity is null || uiComplexity.IsDisposed) return;
+        var level = UiComplexity.Parse(UiComplexity.ToText(uiComplexity.SelectedIndex));
+        var advanced = level >= 1;
+        var expert = level >= 2;
+        if (speedAdvancedCard is { IsDisposed: false }) speedAdvancedCard.Visible = advanced;
+        if (performanceAdvancedCard is { IsDisposed: false }) performanceAdvancedCard.Visible = advanced;
+        if (networkAdvancedRow is { IsDisposed: false }) networkAdvancedRow.Visible = advanced;
+        if (backupExpertCard is { IsDisposed: false }) backupExpertCard.Visible = expert;
+    }
+
     private void RefreshOverview()
     {
         if (IsDisposed || overviewStatus is null || overviewStatus.IsDisposed) return;
@@ -477,6 +494,11 @@ public sealed partial class SettingsPanel : UserControl
     {
         var page = NewPage(out var flow);
 
+        uiComplexity = new FlatComboBox { Width = 260 };
+        uiComplexity.SetItems(new[] { L("p2.ui.simple"), L("p2.ui.advanced"), L("p2.ui.expert") }, 2);
+        uiComplexity.SelectedIndexChanged += (_, _) => { if (!loading) ApplyUiComplexity(); };
+        flow.Controls.Add(Row(L("p2.ui.level"), uiComplexity));
+
         language = new FlatComboBox { Width = 260 };
         var langs = Loc.Available();
         language.SetItems(langs.Select(l => l.Native), 0);
@@ -525,6 +547,7 @@ public sealed partial class SettingsPanel : UserControl
         speedFlow.Controls.Add(Row(L("speed.monitors"), speedMonitor, 340));
         speedFlow.Controls.Add(Row(L("speed.monitorsB"), speedMonitorB, 340));
         speedCard.Controls.Add(speedFlow);
+        speedAdvancedCard = speedCard;
         flow.Controls.Add(speedCard);
 
         // Performance: Automatic follows the PC (what was detected is shown); the others force a tier.
@@ -537,12 +560,14 @@ public sealed partial class SettingsPanel : UserControl
         perfInfo = new Label { AutoSize = true, MaximumSize = new Size(700, 0), Tag = "muted", Margin = new Padding(0, 2, 0, 6), UseMnemonic = false };
         perfFlow.Controls.Add(perfInfo);
         perfCard.Controls.Add(perfFlow);
+        performanceAdvancedCard = perfCard;
         flow.Controls.Add(perfCard);
 
         // P1 energy budget: explicit metered mode; no unreliable automatic billing inference.
         networkCost = new FlatComboBox { Width = 260 };
         networkCost.SetItems(new[] { L("energy.normal"), L("energy.metered") }, 0);
-        flow.Controls.Add(Row(L("energy.label"), networkCost, 300));
+        networkAdvancedRow = Row(L("energy.label"), networkCost, 300);
+        flow.Controls.Add(networkAdvancedRow);
 
         // Shared Opsis.UI FlatCard styling; does not replace existing navigation or introduce new UI conventions.
         var dashboardCard = new FlatCard(L("dash.title"));
@@ -578,6 +603,7 @@ public sealed partial class SettingsPanel : UserControl
         backupFlow.Controls.Add(exportButton);
         backupFlow.Controls.Add(importButton);
         backupCard.Controls.Add(backupFlow);
+        backupExpertCard = backupCard;
         flow.Controls.Add(backupCard);
 
         hoverPause = new FlatToggle { RowWidth = 600, Text = L("chk.hoverPause") };
@@ -1188,6 +1214,8 @@ public sealed partial class SettingsPanel : UserControl
             var langs = Loc.Available();
             language.SelectSilently(Math.Max(0, langs.ToList().FindIndex(l => l.Code == Loc.Language)));
             perfMode.SelectSilently((int)PerformanceClassifier.ParseMode(c.PerformanceMode));
+            uiComplexity.SelectSilently(UiComplexity.Parse(c.UiComplexityMode));
+            ApplyUiComplexity();
             networkCost.SelectSilently(c.NetworkCostMode == "metered" ? 1 : 0);
             UpdatePerformanceInfo();
             refresh.SetValueSilently(c.RefreshIntervalSeconds);
@@ -1623,6 +1651,7 @@ public sealed partial class SettingsPanel : UserControl
         c.Language = Loc.Available().ElementAtOrDefault(Math.Max(0, language.SelectedIndex)).Code ?? c.Language;
         c.PerformanceMode = PerformanceClassifier.ModeText((PerformanceMode)Math.Clamp(perfMode.SelectedIndex, 0, 3));
         c.NetworkCostMode = networkCost.SelectedIndex == 1 ? "metered" : "normal";
+        c.UiComplexityMode = UiComplexity.ToText(uiComplexity.SelectedIndex);
         c.NewsRefreshSeconds = refresh.Value;
         c.ScrollSpeed = speed.Value;
         c.MainSpeedB = AppConfig.CleanSpeed(speedMainB.Value); c.SecondSpeed = AppConfig.CleanSpeed(speedSecond.Value); c.SecondSpeedB = AppConfig.CleanSpeed(speedSecondB.Value);
