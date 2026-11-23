@@ -292,6 +292,9 @@ public sealed class RssNewsProvider : IDisposable
 
     public static List<NewsItem> Parse(byte[] xml, string sourceName, int maxItems)
     {
+        ArgumentNullException.ThrowIfNull(xml);
+        if (xml.LongLength > MaxFeedBytes) throw new InvalidDataException("RSS payload exceeds the 5 MB limit");
+        if (maxItems <= 0) return new List<NewsItem>();
         var settings = new XmlReaderSettings
         {
             DtdProcessing = DtdProcessing.Ignore,
