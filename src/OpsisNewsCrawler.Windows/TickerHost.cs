@@ -1,4 +1,7 @@
 using OpsisNewsCrawler.Core;
+using SuiteEventHub = OpsisNewsCrawler.Core.SuiteEventHub;
+using SuiteEvent = OpsisNewsCrawler.Core.SuiteEvent;
+using SuiteEventKind = OpsisNewsCrawler.Core.SuiteEventKind;
 using OpsisNewsCrawler.Plugin.Abstractions;
 using System.Diagnostics;
 
