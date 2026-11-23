@@ -28,6 +28,9 @@ public sealed partial class SettingsPanel : UserControl
     // General
     private FlatComboBox language = null!;
     private FlatComboBox perfMode = null!;
+    private FlatComboBox networkCost = null!;
+    private Label overviewStatus = null!;
+    private readonly System.Windows.Forms.Timer overviewTimer = new() { Interval = 5000 };
     private Label perfInfo = null!;
     private FlatComboBox category = null!;
     private FlatNumber refresh = null!;
@@ -232,7 +235,8 @@ public sealed partial class SettingsPanel : UserControl
         Loc.Changed += OnLanguageChanged;
         previewTimer.Tick += (_, _) => UpdatePreview();
         Build();
-        if (Visible && IsHandleCreated) previewTimer.Start();
+        overviewTimer.Tick += (_, _) => RefreshOverview();
+        if (Visible && IsHandleCreated) { previewTimer.Start(); overviewTimer.Start(); }
     }
 
     protected override void OnVisibleChanged(EventArgs e)
@@ -242,11 +246,13 @@ public sealed partial class SettingsPanel : UserControl
         if (Visible)
         {
             previewTimer.Start();
+            overviewTimer.Start();
             if (sourceStatus is { IsDisposed: false }) sourceTimer.Start();
         }
         else
         {
             previewTimer.Stop();
+            overviewTimer.Stop();
             sourceTimer.Stop();
         }
     }
@@ -257,6 +263,8 @@ public sealed partial class SettingsPanel : UserControl
         {
             previewTimer.Stop();
             if (performanceInfoHandler is not null) host.PerformanceChanged -= performanceInfoHandler;
+            overviewTimer.Stop();
+            overviewTimer.Dispose();
             previewTimer.Dispose();
             sourceTimer.Dispose();
             historyRetry.Dispose();
@@ -1149,6 +1157,7 @@ public sealed partial class SettingsPanel : UserControl
             var langs = Loc.Available();
             language.SelectSilently(Math.Max(0, langs.ToList().FindIndex(l => l.Code == Loc.Language)));
             perfMode.SelectSilently((int)PerformanceClassifier.ParseMode(c.PerformanceMode));
+            networkCost.SelectSilently(c.NetworkCostMode == "metered" ? 1 : 0);
             UpdatePerformanceInfo();
             refresh.SetValueSilently(c.RefreshIntervalSeconds);
             speed.SetValueSilently(c.ScrollSpeed);
@@ -1582,6 +1591,7 @@ public sealed partial class SettingsPanel : UserControl
         var newsSettingsChanged = c.NewsMaxAgeHours != newsMaxAge.Value || c.NewsSortNewestFirst != newsNewestFirst.Checked || c.StockNewsOnly != stockNewsOnly.Checked || !c.MutedNewsKeywords.SequenceEqual(mutedKeywords, StringComparer.OrdinalIgnoreCase);
         c.Language = Loc.Available().ElementAtOrDefault(Math.Max(0, language.SelectedIndex)).Code ?? c.Language;
         c.PerformanceMode = PerformanceClassifier.ModeText((PerformanceMode)Math.Clamp(perfMode.SelectedIndex, 0, 3));
+        c.NetworkCostMode = networkCost.SelectedIndex == 1 ? "metered" : "normal";
         c.NewsRefreshSeconds = refresh.Value;
         c.ScrollSpeed = speed.Value;
         c.MainSpeedB = AppConfig.CleanSpeed(speedMainB.Value); c.SecondSpeed = AppConfig.CleanSpeed(speedSecond.Value); c.SecondSpeedB = AppConfig.CleanSpeed(speedSecondB.Value);

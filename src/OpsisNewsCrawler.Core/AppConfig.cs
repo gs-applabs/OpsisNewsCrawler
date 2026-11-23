@@ -163,6 +163,10 @@ public sealed class AppConfig
     /// <summary>"auto" (follow the detected hardware), "low", "balanced" or "high" (force a tier). Inside Opsis, "auto" follows the tier Opsis reports.</summary>
     public string PerformanceMode { get; set; } = "auto";
 
+    /// <summary>"normal" = regular data plan; "metered" = prefer lower network usage.
+    /// Explicit choice because legacy desktop Win32 APIs cannot reliably tell which plans are billed.</summary>
+    public string NetworkCostMode { get; set; } = "normal";
+
     /// <summary>When the user was last asked about an older per-user copy that is still installed next to this machine-wide one (asked again after a week).</summary>
     public DateTimeOffset? DuplicateInstallAskedAt { get; set; }
 
@@ -530,7 +534,8 @@ public sealed class AppConfig
     {
         if (UpdateLogicVersion < 1) { CheckForUpdates = true; UpdateLogicVersion = 1; }
         NewsRefreshSeconds = RefreshIntervalSeconds;
-        PerformanceMode = PerformanceClassifier.ModeText(PerformanceClassifier.ParseMode(PerformanceMode));   // "auto" | "low" | "balanced" | "high"
+        PerformanceMode = PerformanceClassifier.ModeText(PerformanceClassifier.ParseMode(PerformanceMode));
+        NetworkCostMode = NetworkCostMode == "metered" ? "metered" : "normal";   // "auto" | "low" | "balanced" | "high"
         MaxItemsPerFeed = Math.Clamp(MaxItemsPerFeed, 1, 50);
         NewsMaxAgeHours = Math.Clamp(NewsMaxAgeHours, 1, 720);
         MutedNewsKeywords = (MutedNewsKeywords ?? new()).Where(k => !string.IsNullOrWhiteSpace(k))

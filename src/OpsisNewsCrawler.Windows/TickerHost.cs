@@ -689,13 +689,17 @@ public sealed partial class TickerHost : IDisposable
     public event Action? PerformanceChanged;
 
     /// <summary>The timers of the refreshes follow the user's intervals times the factor of the tier (2 on a low PC, 1 otherwise).</summary>
+    public EnergyRefreshBudget CurrentEnergyBudget =>
+        EnergyRefreshBudget.For(performance.Specs, Config.NetworkCostMode == "metered", PerformanceProfile.Current.Tier);
+
     private void ApplyRefreshIntervals()
     {
         var p = PerformanceProfile.Current;
-        refreshTimer.Interval = p.Scaled(Config.RefreshIntervalSeconds) * 1000;
-        quoteTimer.Interval = p.Scaled(GetQuoteRefreshIntervalMilliseconds() / 1000) * 1000;
-        weatherTimer.Interval = p.Scaled(15 * 60) * 1000;
-        hazardTimer.Interval = p.Scaled(Math.Max(1, Config.HazardRefreshMinutes) * 60) * 1000;
+        var budget = CurrentEnergyBudget;
+        refreshTimer.Interval = budget.RefreshMs(p.Scaled(Config.RefreshIntervalSeconds));
+        quoteTimer.Interval = budget.RefreshMs(p.Scaled(GetQuoteRefreshIntervalMilliseconds() / 1000));
+        weatherTimer.Interval = budget.RefreshMs(p.Scaled(15 * 60));
+        hazardTimer.Interval = budget.RefreshMs(p.Scaled(Math.Max(1, Config.HazardRefreshMinutes) * 60));
     }
 
     public void Start()
@@ -726,7 +730,8 @@ public sealed partial class TickerHost : IDisposable
         refreshTimer.Start();
         quoteTimer.Start();
         weatherTimer.Start();
-        hazardTimer.Interval = PerformanceProfile.Current.Scaled(Config.HazardRefreshMinutes * 60) * 1000;
+        hazardTimer.Interval = CurrentEnergyBudget.RefreshMs(
+            PerformanceProfile.Current.Scaled(Config.HazardRefreshMinutes * 60));
         hazardTimer.Start();
         alertTimer.Start();
         breakingTimer.Start();
