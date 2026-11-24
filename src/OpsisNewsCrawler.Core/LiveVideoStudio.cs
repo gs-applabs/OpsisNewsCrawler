@@ -27,12 +27,24 @@ public static class LiveVideoStudio
         };
     }
 
+    public const int MaxFeeds = 64;
+
+    public static bool CanAdd(IEnumerable<LiveFeed> existing, string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url) || url.Length > 2048) return false;
+        var playable = Breaking.ToPlayableUrl(url.Trim());
+        if (playable is null) return false;
+        var feeds = existing.Take(MaxFeeds + 1).ToList();
+        return feeds.Count < MaxFeeds && !feeds.Any(f => string.Equals(
+            Breaking.ToPlayableUrl(f.Url), playable, StringComparison.OrdinalIgnoreCase));
+    }
+
     public static List<LiveFeed> CleanAll(IEnumerable<LiveFeed>? raw)
     {
         return (raw ?? Enumerable.Empty<LiveFeed>())
             .Where(f => f is not null && f.Url is { Length: > 0 and <= 2048 } &&
                 Breaking.ToPlayableUrl(f.Url) is not null)
             .DistinctBy(f => Breaking.ToPlayableUrl(f.Url), StringComparer.OrdinalIgnoreCase)
-            .Take(64).Select(Clean).ToList();
+            .Take(MaxFeeds).Select(Clean).ToList();
     }
 }

@@ -1,5 +1,10 @@
 # Changelog
 
+### P1 editorial controls and live catalogue refinement (2026-11-24)
+
+- Existing Breaking Evidence Inspector gains source-group filters and descending priority ranking without a second scoring engine. Existing Live Video Hub supports a user-entered sample headline for offline ranking; blank retains the current breaking context. Reject duplicate or oversized catalogue entries before adding, with a 64-source limit and no new player, network request or persistent settings file. Windows validation deferred.
+
+
 ### Suite ownership / Chronikologio feed routing (2026-11-24)
 
 - Fixed the On This Day widget: select the verified Chronikologio feed key `san-simera`, accepting both rich and legacy text registration, instead of picking the first unrelated rich feed. Refresh on existing PluginFeeds.Changed; unsubscribe on disposal. No second history database, calendar engine or polling service.

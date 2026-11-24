@@ -9,11 +9,20 @@ public sealed partial class SettingsPanel
     private FlatList breakingEvidenceList = null!;
     private Label breakingEvidenceDetails = null!;
     private List<BreakingAssessment> breakingEvidenceRows = new();
+    private FlatComboBox? evidenceFilter;
+    private FlatText? livePreviewContext;
 
     private void RefreshBreakingEvidence()
     {
         if (breakingEvidenceList is null || breakingEvidenceList.IsDisposed) return;
-        breakingEvidenceRows = host.BreakingEvidence.Take(30).ToList();
+        var rows = host.BreakingEvidence.AsEnumerable();
+        rows = evidenceFilter?.SelectedIndex switch
+        {
+            1 => rows.Where(a => a.Publishers >= 2),
+            2 => rows.Where(a => a.Publishers < 2),
+            _ => rows
+        };
+        breakingEvidenceRows = rows.OrderByDescending(a => a.Score).Take(30).ToList();
         breakingEvidenceList.ClearRows();
         foreach (var a in breakingEvidenceRows)
         {
@@ -91,6 +100,10 @@ public sealed partial class SettingsPanel
         evidenceFlow.Controls.Add(Note(Loc.IsGreek
             ? "Ο δείκτης 0–100 είναι εκτίμηση προτεραιότητας, ΟΧΙ πιθανότητα αλήθειας ή ανεξάρτητη επαλήθευση."
             : "The 0–100 score ranks priority. It is NOT a truth probability or independent fact-check.", 680));
+        evidenceFilter = new FlatComboBox { Width = 300 };
+        evidenceFilter.SetItems(Loc.IsGreek ? new[] { "Όλες οι αξιολογήσεις", "Δύο ή περισσότερες ομάδες πηγών", "Λιγότερες από δύο ομάδες πηγών" }
+            : new[] { "All assessments", "Two or more source groups", "Fewer than two source groups" }, 0);
+        evidenceFlow.Controls.Add(Row(Loc.IsGreek ? "Φίλτρο τεκμηρίωσης" : "Evidence filter", evidenceFilter, 230));
         breakingEvidenceList = new FlatList { Width = 640, Height = 150 };
         evidenceFlow.Controls.Add(breakingEvidenceList);
         var evidenceButtons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
@@ -135,6 +148,8 @@ public sealed partial class SettingsPanel
         liveRegion.TextValueChanged += (_, _) => CommitSelectedLiveMetadata();
         liveKeywords.TextValueChanged += (_, _) => CommitSelectedLiveMetadata();
 
+        livePreviewContext = new FlatText { Width = 440 };
+        inner.Controls.Add(Row(Loc.IsGreek ? "Δοκιμαστικός τίτλος (προαιρετικά)" : "Sample headline (optional)", livePreviewContext, 230));
         var previewPriority = new FlatButton { Text = Loc.IsGreek ? "Προεπισκόπηση κατάταξης live" : "Preview live ranking" };
         previewPriority.Click += (_, _) => PreviewLiveRanking();
         inner.Controls.Add(previewPriority);
@@ -209,7 +224,9 @@ public sealed partial class SettingsPanel
     private void PreviewLiveRanking()
     {
         CommitSelectedLiveMetadata();
-        var ordered = LiveVideoPolicy.Select(workLive, host.BreakingVideoContext);
+        var sample = livePreviewContext?.Value?.Trim();
+        if (sample is { Length: > 500 }) sample = sample[..500];
+        var ordered = LiveVideoPolicy.Select(workLive, string.IsNullOrWhiteSpace(sample) ? host.BreakingVideoContext : sample);
         liveStatus.Text = ordered.Count == 0
             ? (Loc.IsGreek ? "Δεν υπάρχουν έγκυρες ενεργές ροές." : "No valid enabled streams.")
             : string.Join("  ·  ", ordered.Take(3).Select((x, i) => $"{i + 1}. {x.Name}"));
@@ -227,7 +244,12 @@ public sealed partial class SettingsPanel
             liveStatus.Text = L("msg.badLive");
             return;
         }
-        workLive.Add(new LiveFeed(name, url));
+        if (!LiveVideoStudio.CanAdd(workLive, url))
+        {
+            liveStatus.Text = Loc.IsGreek ? "Η ροή υπάρχει ήδη ή συμπληρώθηκε το όριο των 64 ροών." : "Duplicate stream or 64-stream limit reached.";
+            return;
+        }
+        workLive.Add(LiveVideoStudio.Clean(new LiveFeed(name, url)));
         RebuildLiveList();
         addLiveBox.Value = "";
         liveStatus.Text = "";
