@@ -169,7 +169,7 @@ public sealed partial class TickerHost
                     }
                 }
                 foreach (var item in WeatherForDisplay().Where(x => x.Kind == NewsItemKind.Weather).Take(15))
-                    SuiteEventHub.Publish(new SuiteEvent(SuiteEventKind.Weather, "crawler", item.Key ?? item.Title,
+                    PublishSuiteEvent(new SuiteEvent(SuiteEventKind.Weather, "crawler", item.Key ?? item.Title,
                         item.Title, item.PublishedAt, item.Url, item.Summary));
                 PushAll();
                 UpdateMiniWeather();

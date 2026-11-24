@@ -42,6 +42,10 @@ public sealed partial class TickerHost : IDisposable
     private bool disposed;
     private bool started;
     private int startEpoch; // discard delayed checks from a stopped session
+    private CrawlerEventDispatch? suiteDispatcher;
+
+    private void PublishSuiteEvent(SuiteEvent message) =>
+        suiteDispatcher?.TryPublish(message);
 
     // breaking news
     private readonly System.Windows.Forms.Timer breakingTimer = new() { Interval = 5000 };
@@ -727,6 +731,7 @@ public sealed partial class TickerHost : IDisposable
         if (HostedByOpsis && HostSafeMode) return;
         started = true;
         unchecked { startEpoch++; }
+        suiteDispatcher ??= new CrawlerEventDispatch(SuiteEventHub.Publish);
         EvaluatePerformance();
         performanceTimer.Tick -= OnPerformanceTimer;
         performanceTimer.Tick += OnPerformanceTimer;
@@ -834,6 +839,8 @@ public sealed partial class TickerHost : IDisposable
         if (disposed || !started) return;
         started = false;
         unchecked { startEpoch++; }
+        suiteDispatcher?.Dispose();
+        suiteDispatcher = null;
         // Plugin unload must stop *all* periodic work, not just the visible news bars.
         performanceTimer.Stop();
         updateTimer.Stop();
@@ -1127,7 +1134,7 @@ public sealed partial class TickerHost : IDisposable
 
         breakingVideoContext = urgent[0].Title;
         foreach (var item in urgent.Take(6))
-            SuiteEventHub.Publish(new SuiteEvent(SuiteEventKind.Breaking, "crawler", item.Url,
+            PublishSuiteEvent(new SuiteEvent(SuiteEventKind.Breaking, "crawler", item.Url,
                 item.Title, item.PublishedAt, item.Url, item.Why));
         var isNew = urgent.Where(i => !readStore.IsRead("breaking:" + i.Url)).ToList();
         foreach (var i in isNew) readStore.MarkRead("breaking:" + i.Url); // remembered, so a restart does not replay the intro
@@ -1347,6 +1354,8 @@ public sealed partial class TickerHost : IDisposable
     {
         if (disposed) return;
         disposed = true;
+        suiteDispatcher?.Dispose();
+        suiteDispatcher = null;
         Loc.Changed -= OnLanguageChanged;
         OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.Changed -= OnPluginFeedsChanged;
         if (pluginFeedCacheInvalidator is not null)
