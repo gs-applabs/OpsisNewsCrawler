@@ -840,6 +840,15 @@ var
   Left: String;
 begin
   Result := '';
+  // Opsis.exe uses this exact mutex (see Opsis 2.8 src/Program.cs).
+  // Never overwrite its loaded plugin DLLs while the host is running.
+  if IsIntegrated() and CheckForMutexes('Local\Opsis.SingleInstance') then
+  begin
+    Result := 'Opsis is running. Close Opsis completely before installing or updating the News Crawler plugin.';
+    Result := Result + #13#10 + 'Ο Opsis εκτελείται. Κλείστε τον πλήρως πριν την εγκατάσταση ή αναβάθμιση του plugin.';
+    Result := Result + #13#10 + 'No files were changed. The standalone installation is unaffected.';
+    Exit;
+  end;
   if IsIntegrated() and not CompatibleOpsisContract() then
   begin
     // Keep #13#10 away from a line-start: Inno Setup ISPP otherwise treats it as a directive.
