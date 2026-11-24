@@ -1425,6 +1425,7 @@ public sealed partial class SettingsPanel : UserControl
                     {
                         controls.Layout.SelectSilently(0);
                         controls.Count.SetValueSilently(12);
+                        if (kind == "news") newsWidgetCategory?.SelectSilently(0);
                         if (widgetFontScale.TryGetValue(kind, out var fontScale))
                             fontScale.SetValueSilently(100);
                         controls.Source.Checked = false;
@@ -1781,6 +1782,7 @@ public sealed partial class SettingsPanel : UserControl
         host.SetBarsEnabled(barsEnabled.Checked);
         if (!host.HostedByOpsis) StartupRegistration.Set(startWithWindows.Checked);
         host.SetCategory(chosen);
+        host.NewsWidgetCategoryChanged();
         if ((feedsChanged || newsSettingsChanged) && string.Equals(chosen, previousActive, StringComparison.OrdinalIgnoreCase)) host.ReloadNews();
         host.SaveConfig();
         hasUnsavedChanges = false;

@@ -17,6 +17,9 @@ public sealed class WidgetStudioProfile
     /// Opsis-provided accent when running as a trusted plugin. Standalone uses
     /// the local accent, without opening another settings file or process.</summary>
     public string AccentMode { get; set; } = "theme";
+    /// <summary>Existing user-configured RSS category ID. Empty means the
+    /// active ticker category. This is NOT IP, GPS or inferred geolocation.</summary>
+    public string NewsCategoryId { get; set; } = "";
 }
 
 public static class WidgetStudio
@@ -31,7 +34,8 @@ public static class WidgetStudio
         FontScalePercent = Math.Clamp(raw?.FontScalePercent ?? 100, 80, 160),
         ShowSource = raw?.ShowSource ?? false,
         ShowTime = raw?.ShowTime ?? false,
-        AccentMode = raw?.AccentMode == "host" ? "host" : "theme"
+        AccentMode = raw?.AccentMode == "host" ? "host" : "theme",
+        NewsCategoryId = CleanCategoryId(raw?.NewsCategoryId)
     };
 
     public static Dictionary<string, WidgetStudioProfile> CleanAll(
@@ -47,12 +51,22 @@ public static class WidgetStudio
             {
                 var clean = Clean(candidate.Value);
                 if (key == "history") clean.ShowTime = false; // historical year != publication time
+                if (key != "news") clean.NewsCategoryId = "";
                 if (!CanUseGallery(key) && clean.Layout == "gallery") clean.Layout = "headlines";
                 if (key != "markets" && clean.Layout == "market-cards") clean.Layout = "headlines";
                 result[key] = clean;
             }
         }
         return result;
+    }
+
+    public static string CleanCategoryId(string? categoryId)
+    {
+        if (string.IsNullOrWhiteSpace(categoryId)) return "";
+        var text = categoryId.Trim();
+        return text.Length is >= 1 and <= 64 &&
+            text.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
+            ? text : "";
     }
 
     public static bool CanUseGallery(string kind) =>

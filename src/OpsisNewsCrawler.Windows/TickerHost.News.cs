@@ -32,6 +32,15 @@ public sealed partial class TickerHost
                         DataCache.Save("news-" + category, extraNews[category]);
                     }
                     else extraNewsFailed[category] = failedFeeds;
+                    if (newsWidgetUsers > 0 && string.Equals(
+                        WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId,
+                        category, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Refresh the visible News widget through the same bounded
+                        // event pipeline already used for active RSS news.
+                        PublishSuiteEvent(new SuiteEvent(SuiteEventKind.News, "crawler",
+                            "widget-category:" + category, category, DateTimeOffset.UtcNow));
+                    }
                     PushAll();
                 }
                 if (Window.IsHandleCreated && Window.InvokeRequired) Window.Invoke(new Action(Apply)); else Apply();

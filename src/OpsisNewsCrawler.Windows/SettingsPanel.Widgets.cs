@@ -10,6 +10,8 @@ public sealed partial class SettingsPanel
         new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, FlatNumber> widgetFontScale =
         new(StringComparer.OrdinalIgnoreCase);
+    private FlatComboBox? newsWidgetCategory;
+    private List<string> newsWidgetCategoryIds = new();
 
     private Control BuildWidgetStudio()
     {
@@ -43,6 +45,8 @@ public sealed partial class SettingsPanel
         widgetEditors.Clear();
         widgetAccentOptions.Clear();
         widgetFontScale.Clear();
+        newsWidgetCategory = null;
+        newsWidgetCategoryIds.Clear();
         foreach (var kind in WidgetStudio.Kinds)
         {
             var card = new FlatCard(WidgetStudio.Title(kind, Loc.IsGreek))
@@ -54,6 +58,28 @@ public sealed partial class SettingsPanel
                 AutoSize = true, FlowDirection = FlowDirection.TopDown,
                 WrapContents = false
             };
+            if (kind == "news")
+            {
+                newsWidgetCategory = new FlatComboBox { Width = 260 };
+                var categories = host.Config.Categories
+                    .Where(c => WidgetStudio.CleanCategoryId(c.Id).Length > 0)
+                    .GroupBy(c => c.Id, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.First()).ToList();
+                newsWidgetCategoryIds = new List<string> { "" };
+                newsWidgetCategoryIds.AddRange(categories.Select(c => c.Id));
+                newsWidgetCategory.SetItems(
+                    (new[] { Loc.IsGreek ? "Ενεργή κατηγορία μπάρας" : "Active ticker category" })
+                        .Concat(categories.Select(c => Loc.IsGreek ? c.NameEl : c.NameEn)),
+                    0);
+                options.Controls.Add(Row(
+                    Loc.IsGreek ? "Κατηγορία πηγών ειδήσεων" : "News source category",
+                    newsWidgetCategory, 230));
+                options.Controls.Add(Note(
+                    Loc.IsGreek
+                        ? "Χρησιμοποιεί τις υπάρχουσες κατηγορίες RSS, όπως Ελλάδα και Διεθνή. Δεν εντοπίζει αυτόματα την τοποθεσία σου."
+                        : "Uses your existing RSS categories, such as Greece and International. No location or IP detection.",
+                    600));
+            }
             var layout = new FlatComboBox { Width = 260 };
             var offersGallery = WidgetStudio.CanUseGallery(kind);
             var offersMarketCards = WidgetStudio.CanUseMarketCards(kind);
@@ -114,6 +140,8 @@ public sealed partial class SettingsPanel
                 fontScale.SetValueSilently(p.FontScalePercent);
             controls.Source.Checked = p.ShowSource;
             controls.Time.Checked = p.ShowTime;
+            if (kind == "news" && newsWidgetCategory is not null)
+                newsWidgetCategory.SelectSilently(0); // apply preset: active category
             if (widgetAccentOptions.TryGetValue(kind, out var accent))
                 accent.Checked = p.AccentMode == "host";
         }
@@ -136,6 +164,12 @@ public sealed partial class SettingsPanel
                 fontScale.SetValueSilently(profile.FontScalePercent);
             controls.Source.Checked = profile.ShowSource;
             controls.Time.Checked = profile.ShowTime;
+            if (kind == "news" && newsWidgetCategory is not null)
+            {
+                var index = newsWidgetCategoryIds.FindIndex(id => string.Equals(
+                    id, profile.NewsCategoryId, StringComparison.OrdinalIgnoreCase));
+                newsWidgetCategory.SelectSilently(index < 0 ? 0 : index);
+            }
             if (widgetAccentOptions.TryGetValue(kind, out var accent))
                 accent.Checked = profile.AccentMode == "host";
         }
@@ -161,7 +195,11 @@ public sealed partial class SettingsPanel
                 ShowSource = controls.Source.Checked,
                 ShowTime = controls.Time.Checked,
                 AccentMode = widgetAccentOptions.TryGetValue(kind, out var accent) &&
-                    accent.Checked ? "host" : "theme"
+                    accent.Checked ? "host" : "theme",
+                NewsCategoryId = kind == "news" && newsWidgetCategory is not null &&
+                    newsWidgetCategory.SelectedIndex >= 0 &&
+                    newsWidgetCategory.SelectedIndex < newsWidgetCategoryIds.Count
+                    ? newsWidgetCategoryIds[newsWidgetCategory.SelectedIndex] : ""
             });
         }
         return selected;

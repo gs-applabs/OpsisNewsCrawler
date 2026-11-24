@@ -40,6 +40,13 @@ public sealed class P1WidgetStudioTests
         Assert.Equal(80, WidgetStudio.Clean(new WidgetStudioProfile { FontScalePercent = 1 }).FontScalePercent);
         Assert.Equal(160, WidgetStudio.Clean(new WidgetStudioProfile { FontScalePercent = 999 }).FontScalePercent);
         Assert.Equal(100, WidgetStudio.Clean(null).FontScalePercent);
+        Assert.Equal("", WidgetStudio.CleanCategoryId("../Athens"));
+        Assert.Equal("", WidgetStudio.CleanCategoryId(new string('g', 80)));
+        Assert.Equal("Greece", WidgetStudio.CleanCategoryId(" Greece "));
+        Assert.Equal("", WidgetStudio.CleanAll(new Dictionary<string, WidgetStudioProfile>
+        {
+            ["weather"] = new() { NewsCategoryId = "Greece" }
+        })["weather"].NewsCategoryId);
     }
 
     [Fact]

@@ -28,6 +28,7 @@ public sealed class CrawlerWidgetPanel : UserControl
         AccessibleRole = AccessibleRole.StaticText
     };
     private string gallerySignature = "";
+    private bool newsVisibilityRegistered;
     private Font? scaledFont;
     private int appliedFontScale = -1;
     private readonly List<NewsItem> visible = new();
@@ -76,7 +77,11 @@ public sealed class CrawlerWidgetPanel : UserControl
     {
         base.OnHandleCreated(e);
         RefreshSafe();
-        if (Visible) timer.Start();
+        if (Visible)
+        {
+            timer.Start();
+            UpdateNewsWidgetVisibility();
+        }
     }
 
     protected override void OnVisibleChanged(EventArgs e)
@@ -85,6 +90,16 @@ public sealed class CrawlerWidgetPanel : UserControl
         if (IsDisposed) return;
         if (Visible && IsHandleCreated) { timer.Start(); RefreshSafe(); }
         else timer.Stop();
+        UpdateNewsWidgetVisibility();
+    }
+
+    private void UpdateNewsWidgetVisibility()
+    {
+        if (kind != "news") return;
+        var shouldRegister = !IsDisposed && Visible && IsHandleCreated;
+        if (newsVisibilityRegistered == shouldRegister) return;
+        newsVisibilityRegistered = shouldRegister;
+        host.SetNewsWidgetVisible(shouldRegister);
     }
 
     private void ApplyTheme()
@@ -308,6 +323,11 @@ public sealed class CrawlerWidgetPanel : UserControl
         if (disposing)
         {
             timer.Stop(); timer.Dispose();
+            if (newsVisibilityRegistered)
+            {
+                newsVisibilityRegistered = false;
+                host.SetNewsWidgetVisible(false);
+            }
             eventSubscription.Dispose();
             Theme.Changed -= ApplyTheme;
             Theme.HostAccentChanged -= ApplyTheme;

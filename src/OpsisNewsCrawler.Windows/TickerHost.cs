@@ -42,6 +42,7 @@ public sealed partial class TickerHost : IDisposable
     private bool disposed;
     private bool started;
     private int startEpoch; // discard delayed checks from a stopped session
+    private int newsWidgetUsers; // visible instances only, including across monitors
     private CancellationTokenSource? sessionCts;
     private CancellationToken SessionToken => sessionCts?.Token ?? lifetimeToken;
     private CrawlerEventDispatch? suiteDispatcher;
@@ -62,7 +63,7 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>One in-memory-only snapshot for a host desktop widget; no network requests.</summary>
     public IReadOnlyList<NewsItem> WidgetSnapshot(string widget) => widget switch
     {
-        "news" => allItems.Where(x => x.Kind == NewsItemKind.News).Take(30).ToArray(),
+        "news" => NewsWidgetSnapshot(),
         "markets" => stockItems.Where(x => x.Kind == NewsItemKind.Quote).Take(30).ToArray(),
         "weather" => WeatherForDisplay().Where(x => x.Kind == NewsItemKind.Weather).Take(30).ToArray(),
         "breaking" => breakingItems.Take(30).ToArray(),
@@ -743,6 +744,9 @@ public sealed partial class TickerHost : IDisposable
         performanceTimer.Start();
         PushAll();
         if (Config.BarsEnabled) StartBars();
+        // Widgets without ticker bars can still request one existing RSS category
+        // only while their News widget is visible.
+        if (newsWidgetUsers > 0 && !Config.BarsEnabled) NewsWidgetCategoryChanged();
         _ = FirstUpdateCheckAsync(startEpoch);
         updateTimer.Tick -= OnUpdateTimer;
         updateTimer.Tick += OnUpdateTimer;
@@ -967,10 +971,48 @@ public sealed partial class TickerHost : IDisposable
 
     private bool IsActiveCategory(string? id) => string.IsNullOrWhiteSpace(id) || string.Equals(id, Config.ActiveCategory, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>News categories other than the active one that some bar shows (a half of a split bar, or a whole bar).</summary>
-    private List<string> ExtraNewsCategories() => AllBarSlots().SelectMany(slots => slots.All())
-        .Where(slot => slot.Kind == SlotKind.News && !IsActiveCategory(slot.Category))
-        .Select(slot => slot.Category!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    /// <summary>The existing category RSS provider is shared by bars and
+    /// visible News widgets. No separate feed engine or background daemon.</summary>
+    private List<string> ExtraNewsCategories()
+    {
+        var categories = AllBarSlots().SelectMany(slots => slots.All())
+            .Where(slot => slot.Kind == SlotKind.News && !IsActiveCategory(slot.Category))
+            .Select(slot => slot.Category!).ToList();
+        var widgetCategory = WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId;
+        if (newsWidgetUsers > 0 && widgetCategory.Length > 0 &&
+            Config.FindCategory(widgetCategory) is not null && !IsActiveCategory(widgetCategory))
+            categories.Add(widgetCategory);
+        return categories.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private IReadOnlyList<NewsItem> NewsWidgetSnapshot()
+    {
+        var category = WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId;
+        if (category.Length == 0 || IsActiveCategory(category) || Config.FindCategory(category) is null)
+            return allItems.Where(x => x.Kind == NewsItemKind.News).Take(30).ToArray();
+        // Cached or already-requested category, no network I/O in the snapshot.
+        return CategoryNewsForDisplay(category).Where(x => x.Kind == NewsItemKind.News)
+            .Take(30).ToArray();
+    }
+
+    /// <summary>Called only on UI thread when the already-registered News
+    /// widget becomes visible or hidden. Refresh uses the existing provider.</summary>
+    public void SetNewsWidgetVisible(bool visible)
+    {
+        if (disposed) return;
+        newsWidgetUsers = visible ? Math.Min(64, newsWidgetUsers + 1)
+            : Math.Max(0, newsWidgetUsers - 1);
+        if (visible && newsWidgetUsers == 1) NewsWidgetCategoryChanged();
+    }
+
+    public void NewsWidgetCategoryChanged()
+    {
+        if (disposed || !started || newsWidgetUsers == 0) return;
+        var category = WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId;
+        if (category.Length == 0 || Config.FindCategory(category) is null ||
+            IsActiveCategory(category)) return;
+        _ = RefreshExtraNewsAsync();
+    }
 
     // ---- no internet / a provider is down: the last stored data plus a message ----------------
 

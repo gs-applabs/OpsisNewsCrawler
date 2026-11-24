@@ -655,6 +655,9 @@ public sealed class AppConfig
         WeatherFields = (WeatherFields ?? new()).Select(f => (f ?? "").Trim().ToLowerInvariant())
             .Where(f => f is "wind" or "humidity" or "feels" or "rain" or "cloud" or "pressure" or "gusts").Distinct().ToList();
         WidgetProfiles = WidgetStudio.CleanAll(WidgetProfiles);
+        if (WidgetProfiles.TryGetValue("news", out var newsWidget) &&
+            newsWidget.NewsCategoryId.Length > 0 && FindCategory(newsWidget.NewsCategoryId) is null)
+            newsWidget.NewsCategoryId = ""; // deleted RSS category, revert to active
         Feeds = new(); // migrated; not written back
     }
 }
