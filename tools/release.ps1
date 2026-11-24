@@ -17,7 +17,7 @@ dotnet publish src\OpsisNewsCrawler.App\OpsisNewsCrawler.App.csproj -c Release -
 if ($LASTEXITCODE -ne 0) { throw "publish failed" }
 
 # The plugin folder is MIRRORED (stale files removed) from the build output; robocopy needs backslash paths.
-$pluginSrc = "$r\src\OpsisNewsCrawler.OpsisPlugin\bin\Release\net10.0-windows10.0.19041.0"
+$pluginSrc = "$r\src\OpsisNewsCrawler.OpsisPlugin\bin\Release\net11.0-windows10.0.19041.0"
 $pluginDst = "$stage\plugins\Opsis - Desktop Customization"
 robocopy $pluginSrc $pluginDst /MIR /NFL /NDL /NJH /NJS | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "copying the plugin failed (robocopy $LASTEXITCODE)" }
@@ -34,12 +34,28 @@ if (Get-ChildItem $pluginDst -Filter "*MotionDesk*" -ErrorAction SilentlyContinu
 # Guard: the plugin contract keeps the assembly version of the copy that Opsis has loaded (otherwise the plugin cannot bind to it).
 $contract = [Reflection.AssemblyName]::GetAssemblyName("$pluginDst\OpsisNewsCrawler.Plugin.Abstractions.dll").Version
 # The Opsis project folder is a sibling of this one (currently still named MotionDeskStudio on disk; "Opsis" is tried first).
-$opsisCopy = @("$r\..\Opsis\libs", "$r\..\MotionDeskStudio\libs") | ForEach-Object { Join-Path $_ "OpsisNewsCrawler.Plugin.Abstractions.dll" } | Where-Object { Test-Path $_ } | Select-Object -First 1
+$opsisCopy = @("$r\..\Opsis\lib", "$r\..\Opsis\libs", "$r\..\MotionDeskStudio\libs") | ForEach-Object { Join-Path $_ "OpsisNewsCrawler.Plugin.Abstractions.dll" } | Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($opsisCopy) {
   $opsisVersion = [Reflection.AssemblyName]::GetAssemblyName($opsisCopy).Version
   if ($contract -ne $opsisVersion) { throw "plugin contract is $contract but the copy in Opsis\libs is $opsisVersion" }
 }
 "contract version: $contract"
+# Opsis 2.8.x shares Opsis.UI from its default AssemblyLoadContext. The plugin
+# must ship the exact DLL to avoid an older UI implementation at runtime.
+$ui = "$pluginDst\Opsis.UI.dll"
+if (-not (Test-Path $ui)) { throw "Missing Opsis.UI.dll in plugin payload" }
+$uiAssembly = [Reflection.AssemblyName]::GetAssemblyName($ui).Version.ToString()
+$uiVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($ui).FileVersion
+if ($uiAssembly -ne '0.1.0.0' -or $uiVersion -ne '0.6.0.0') {
+  throw "Opsis.UI mismatch: AssemblyVersion=$uiAssembly, FileVersion=$uiVersion (expected 0.1.0.0 / 0.6.0.0)"
+}
+$opsisUi = @("$r\..\Opsis\lib\Opsis.UI.dll", "$r\..\Opsis\libs\Opsis.UI.dll") | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($opsisUi) {
+  $expectedHash = (Get-FileHash $opsisUi -Algorithm SHA256).Hash
+  $actualHash = (Get-FileHash $ui -Algorithm SHA256).Hash
+  if ($expectedHash -ne $actualHash) { throw 'Opsis.UI.dll differs from the sibling Opsis 2.8 host - stage a matching DLL before packaging.' }
+}
+"Opsis.UI: $uiAssembly / file $uiVersion"
 
 # Any installed Inno Setup (5, 6, 7...): the newest real install folder wins (the ISCC.exe on the PATH is, on a CI runner, a shim of an older version); the PATH is the last resort.
 $iscc = @("$env:LOCALAPPDATA\Programs", $env:ProgramFiles, ${env:ProgramFiles(x86)}) |
@@ -59,7 +75,7 @@ $h = (Get-FileHash "$r\Output\OpsisNewsCrawler-Setup.exe" -Algorithm SHA256).Has
 [IO.File]::WriteAllText("$r\Output\OpsisNewsCrawler-Setup.exe.sha256", "$h  OpsisNewsCrawler-Setup.exe`n")
 "setup: $r\Output\OpsisNewsCrawler-Setup.exe  sha256 $h"
 
-# Portable zip: the same files as the installer's program folder without the Opsis plugin copy (needs the .NET 10 Desktop Runtime).
+# Portable zip: the same files as the installer's program folder without the Opsis plugin copy (needs the .NET 11 Desktop Runtime).
 $ver = (Get-Item "$stage\OpsisNewsCrawler.exe").VersionInfo.ProductVersion.Split('+')[0]
 $portable = "$r\Output\OpsisNewsCrawler-$ver-portable.zip"
 if (Test-Path $portable) { Remove-Item $portable -Force }

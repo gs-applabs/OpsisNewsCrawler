@@ -5,7 +5,7 @@ using OpsisNewsCrawler.Core;
 namespace OpsisNewsCrawler.Windows;
 
 /// <summary>
-/// The components the program needs next to itself: the .NET 10 Desktop Runtime (it is running, so it is there) and the Microsoft Edge
+/// The components the program needs next to itself: the .NET 11 Desktop Runtime (it is running, so it is there) and the Microsoft Edge
 /// WebView2 Runtime (live video preview, weather map). Detection, and installing a missing one from Microsoft after checking its signature.
 /// </summary>
 internal static class Dependencies
