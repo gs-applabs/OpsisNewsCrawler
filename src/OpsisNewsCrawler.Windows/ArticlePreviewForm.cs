@@ -54,7 +54,7 @@ internal sealed class ArticlePreviewForm : Form
 
     private static HttpClient CreateClient()
     {
-        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = MaxImageBytes };
+        var client = new HttpClient(new OpsisNewsCrawler.Core.RedirectGuardHandler()) { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = MaxImageBytes };
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; OpsisNewsCrawler/0.6)");
         return client;
     }

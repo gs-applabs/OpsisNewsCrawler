@@ -74,3 +74,20 @@ public sealed class AuditNetworkTests
     public void IpAddressesAreClassifiedIncludingEmbeddedIPv4(string ip, bool isPublic) =>
         Assert.Equal(isPublic, NetGuard.IsPublicHost(ip.Contains(':') ? "[" + ip + "]" : ip));
 }
+
+public sealed class AuditPriceAlertTests
+{
+    [Fact]
+    public void ZeroOrNegativePriceNeverFiresOrRearmsAPriceRule()
+    {
+        var instrument = new QuoteInstrument(QuoteSource.Yahoo, "ABC", "ABC", "A", "A", "€", enabled: true);
+        var rule = new PriceAlert { Source = instrument.Source, Code = instrument.Code, Metric = "price", Threshold = 10, Above = false };
+        var bad = new MarketQuote("ABC", "A", 0m, null, DateTimeOffset.UtcNow);
+        Assert.Empty(PriceAlertCheck.Evaluate(new[] { rule }, new[] { (instrument, bad) }));
+        Assert.Empty(PriceAlertCheck.Evaluate(new[] { rule }, new[] { (instrument, bad with { Price = -3m }) }));
+        Assert.Single(PriceAlertCheck.Evaluate(new[] { rule }, new[] { (instrument, bad with { Price = 9m }) }));
+        Assert.True(rule.Fired);
+        Assert.Empty(PriceAlertCheck.Evaluate(new[] { rule }, new[] { (instrument, bad) }));
+        Assert.True(rule.Fired);   // a bad value did not re-arm it
+    }
+}

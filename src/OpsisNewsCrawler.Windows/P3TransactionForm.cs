@@ -81,7 +81,12 @@ public sealed class P3TransactionForm : Form
                 string.Equals(x.Currency?.Trim(),cur,StringComparison.OrdinalIgnoreCase)).ToList();
             PortfolioLedger.Calculate(existing.Append(entry));
             host.Config.PortfolioTransactions.Add(entry);
-            host.SaveConfig();
+            if(!host.TrySaveConfig())
+            {
+                host.Config.PortfolioTransactions.Remove(entry);
+                status.Text=Loc.IsGreek?"Η αποθήκευση απέτυχε· η συναλλαγή δεν προστέθηκε.":"Saving failed; the transaction was not added.";
+                return;
+            }
             DialogResult=DialogResult.OK;
             Close();
         }

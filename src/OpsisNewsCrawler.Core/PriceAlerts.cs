@@ -60,6 +60,7 @@ public static class PriceAlertCheck
 
             var observed = alert.Metric == "changePercent" ? quote.ChangePercent : quote.Price;
             if (observed is null) continue; // missing data must not re-arm an already fired rule
+            if (alert.Metric != "changePercent" && observed.Value <= 0) continue; // a zero or negative price is bad data: it must neither fire a "below" rule nor re-arm one
             var passed = alert.Above ? observed.Value >= alert.Threshold : observed.Value <= alert.Threshold;
             if (passed && !alert.Fired)
             {

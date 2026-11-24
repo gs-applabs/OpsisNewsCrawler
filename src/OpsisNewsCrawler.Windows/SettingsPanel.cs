@@ -1080,8 +1080,9 @@ public sealed partial class SettingsPanel : UserControl
         {
             return;
         }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or System.Text.Json.JsonException or FormatException or InvalidOperationException)
+        catch (Exception ex)   // async void: anything else would end the program
         {
+            Log.Write($"catalog download failed: {ex.GetType().Name}: {ex.Message}");
             list = Array.Empty<QuoteInstrument>(); // shown as "could not be downloaded"
         }
         if (IsDisposed) return;
