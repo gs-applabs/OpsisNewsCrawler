@@ -96,7 +96,7 @@ public sealed partial class TickerHost
     // Bound only by Opsis 2.8's trusted PluginHost. It uses the *host-owned*
     // WeatherHub/cache for selected cities and never hands the user's location
     // to an external process or writes an extra cache file for successful results.
-    internal Func<double, double, Task<string>>? HostWeatherProvider { get; set; }
+    public Func<double, double, Task<string>>? HostWeatherProvider { get; set; }
 
     private async Task<IReadOnlyList<WeatherReading>> TryHostWeatherAsync(IReadOnlyList<string> ids)
     {
