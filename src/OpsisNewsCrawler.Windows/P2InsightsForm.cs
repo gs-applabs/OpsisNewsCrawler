@@ -153,17 +153,20 @@ public sealed class P2InsightsForm : Form
                     visible.Add((entry.Title,$"{entry.StartsAt.ToLocalTime():dd/MM/yyyy HH:mm} · {entry.Country} · {entry.Source} · {entry.Impact}/3 · A: {entry.Actual??"—"} / F: {entry.Forecast??"—"} / P: {entry.Previous??"—"}",entry.Url));
                 break;
             case 3:
-                foreach(var group in host.Config.PortfolioTransactions.GroupBy(x=>x.InstrumentKey).Take(100))
+                foreach(var group in host.Config.PortfolioTransactions.GroupBy(x=>(Instrument:(x.InstrumentKey??"").Trim().ToUpperInvariant(), Currency:(x.Currency??"").Trim().ToUpperInvariant())).Take(100))
                 {
                     try
                     {
                         var result=PortfolioLedger.Calculate(group);
-                        visible.Add((group.Key,
-                            $"{result.Units:0.####} units · cost {result.CostBasis:0.00} · realized {result.RealizedPnl:0.00} · dividends {result.Dividends:0.00}",null));
+                        var label=$"{group.Key.Instrument} · {group.Key.Currency}";
+                        var avg=result.AverageUnitCost?.ToString("0.####")??"—";
+                        visible.Add((label,Loc.IsGreek
+                            ? $"{result.Units:0.####} μον. · κόστος {result.CostBasis:0.00} · μ.ό. {avg} · κέρδη {result.RealizedPnl:0.00} · μερίσματα {result.Dividends:0.00} · καθαρά {result.NetRealizedIncome:0.00} · προμήθειες {result.Fees:0.00}"
+                            : $"{result.Units:0.####} units · cost {result.CostBasis:0.00} · avg {avg} · realized {result.RealizedPnl:0.00} · dividends {result.Dividends:0.00} · net {result.NetRealizedIncome:0.00} · fees {result.Fees:0.00}",null));
                     }
-                    catch(InvalidOperationException)
+                    catch(Exception ex) when(ex is InvalidOperationException or ArgumentException or OverflowException)
                     {
-                        visible.Add((group.Key,Loc.IsGreek?"Μη συνεπές ιστορικό συναλλαγών":"Inconsistent transaction ledger",null));
+                        visible.Add(($"{group.Key.Instrument} · {group.Key.Currency}",Loc.IsGreek?"Μη συνεπές ιστορικό συναλλαγών":"Inconsistent transaction ledger",null));
                     }
                 }
                 break;
