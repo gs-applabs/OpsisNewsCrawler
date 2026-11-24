@@ -64,7 +64,7 @@ jobs:
           name: OpsisNewsCrawler-0.28.0-candidate
           path: release/0.28.0-assets/*
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7
 
   isolated-install:
     needs: build-release

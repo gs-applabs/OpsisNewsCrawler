@@ -5,6 +5,9 @@ on:
   pull_request:
     branches: ['release/p3-v0.28.0-contract1-20261123', 'feat/net11-opsis-280-ui6-compat']
   workflow_dispatch:
+concurrency:
+  group: crawler-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -75,4 +78,4 @@ jobs:
           name: crawler-028-net11-opsis-280-compatible-plugin
           path: published-crawler/
           if-no-files-found: error
-          retention-days: 21
+          retention-days: 7
