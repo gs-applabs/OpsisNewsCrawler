@@ -66,6 +66,7 @@ public sealed class CrawlerWidgetPanel : UserControl
         Theme.HostAccentChanged += ApplyTheme;
         if (kind == "news") host.NewsWidgetUpdated += RequestRefresh;
         Loc.Changed += RefreshSafe;
+        if (kind == "history") PluginFeeds.Changed += RequestRefresh;
         timer.Tick += (_, _) =>
         {
             if (kind == "news") host.NewsWidgetCategoryChanged();
@@ -394,6 +395,7 @@ public sealed class CrawlerWidgetPanel : UserControl
             Theme.HostAccentChanged -= ApplyTheme;
             if (kind == "news") host.NewsWidgetUpdated -= RequestRefresh;
             Loc.Changed -= RefreshSafe;
+            if (kind == "history") PluginFeeds.Changed -= RequestRefresh;
             ClearGallery();
             scaledFont = null;
         }

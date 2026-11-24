@@ -1,5 +1,11 @@
 # Changelog
 
+### Suite ownership / Chronikologio feed routing (2026-11-24)
+
+- Fixed the On This Day widget: select the verified Chronikologio feed key `san-simera`, accepting both rich and legacy text registration, instead of picking the first unrelated rich feed. Refresh on existing PluginFeeds.Changed; unsubscribe on disposal. No second history database, calendar engine or polling service.
+- Suite ownership policy: Opsis owns performance dashboard, monitor placement, shell and hosted palette; Opsis.UI owns shared controls; WeatherHub supplies hosted weather with standalone fallback; Chronikologio owns calendar/history; Media Suite owns general media processing; GearWin owns system repair and system backups. Crawler owns news/market ingestion, editorial alerts and feed presentation. Do not duplicate these services; feature-specific rollback and standalone fallbacks remain permitted. Windows validation deferred.
+
+
 ### P1 accessibility refinement (2026-11-24)
 
 - Existing widgets respect Windows High Contrast colors and use a contrast-safe fallback for normal theme text; card height scales with font size and monitor DPI. Preserve selected list item during refresh; sanitize plain-text headline rows using the existing bounded sanitizer.

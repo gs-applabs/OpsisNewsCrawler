@@ -73,8 +73,8 @@ public sealed partial class TickerHost : IDisposable
         "markets" => stockItems.Where(x => x.Kind == NewsItemKind.Quote).Take(30).ToArray(),
         "weather" => WeatherForDisplay().Where(x => x.Kind == NewsItemKind.Weather).Take(30).ToArray(),
         "breaking" => breakingItems.Take(30).ToArray(),
-        "history" => OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.AllRich().FirstOrDefault() is { } rich
-            ? PluginFeedForDisplay(rich.Key).Take(30).ToArray() : Array.Empty<NewsItem>(),
+        "history" => PluginFeeds.FindRich("san-simera") is not null || PluginFeeds.Find("san-simera") is not null
+            ? PluginFeedForDisplay("san-simera").Take(30).ToArray() : Array.Empty<NewsItem>(),
         _ => Array.Empty<NewsItem>()
     };
 
