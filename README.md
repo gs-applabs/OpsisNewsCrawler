@@ -47,6 +47,8 @@
 
 **Νέο στην 0.15.0:** οδηγός καλωσορίσματος και παράθυρο «Η οικογένεια Opsis» με κινούμενο εικονίδιο (εφημερίδα, μπάλα, ασπίδα, οικονομία, καιρός, φυσικές καταστροφές), ειδοποίηση νέας έκδοσης μία φορά ανά έκδοση, ορθογώνιο εικονίδιο, θέματα Opsis, σωστή ανίχνευση της μπάρας εργασιών με αυτόματη απόκρυψη, πλήρης υποστήριξη πληκτρολογίου στα στοιχεία ελέγχου. Όλο το ιστορικό: [`CHANGELOG.md`](CHANGELOG.md).
 
+**P1 (υπό ανάπτυξη, όχι ακόμη δημοσιευμένο):** Στις Ρυθμίσεις → Στούντιο widgets επιλέγεις για τα πέντε υπάρχοντα widgets τύπο προβολής, έως 30 εγγραφές, μέγεθος κειμένου 80–160%, στοιχεία πηγής/ώρας και προαιρετικό χρώμα έμφασης Opsis. Για Ειδήσεις, Έκτακτες και Σαν Σήμερα διατίθεται η προβολή καρτών **Newsroom Gallery**. Υπάρχουν πέντε προφίλ με ένα κλικ· το **Easy Read** χρησιμοποιεί μεγαλύτερα γράμματα. Οι αποθηκευμένες θέσεις στην επιφάνεια εργασίας εξακολουθούν να ανήκουν στο Opsis.
+
 ### Στιγμιότυπα οθόνης
 
 Σκούρο και φωτεινό θέμα (όλα: [`docs/screenshots`](docs/screenshots)).
@@ -141,6 +143,8 @@ A scrolling news, market-price and weather bar for the Windows desktop — above
 **New in 0.16.0:** **natural disasters** (earthquakes, fires, floods, storms, volcanoes from USGS, EMSC, GDACS, NASA EONET; the same earthquake from several organisations shows the average magnitude and the range), **weather for any place** (name, postcode or coordinates), the animated icon shows the current weather and the highest active alert, mouse wheel, oil and gas from Yahoo futures (optional).
 
 **New in 0.15.0:** welcome guide and "The Opsis family" window with the animated icon (newspaper, ball, shield, economy, weather, natural disasters), one update notice per version, rectangular icon, Opsis themes, correct auto-hide taskbar detection, full keyboard support in the custom controls. Full history: [`CHANGELOG.md`](CHANGELOG.md).
+
+**P1 (development preview, not yet released):** Settings → Widget Studio customizes the five existing Opsis widgets: layout, up to 30 rows, 80–160% text size, optional publisher/timestamp and host accent. News, Breaking and On This Day support opt-in **Newsroom Gallery** cards. Five one-click settings presets include a larger-text Easy Read mode; Opsis remains responsible for monitor placement and widget lifecycle.
 
 ### Screenshots
 
