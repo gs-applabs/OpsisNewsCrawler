@@ -10,6 +10,7 @@ public sealed class WidgetStudioProfile
 {
     public string Layout { get; set; } = "headlines"; // headlines or context
     public int MaxItems { get; set; } = 12;
+    public int FontScalePercent { get; set; } = 100;
     public bool ShowSource { get; set; }
     public bool ShowTime { get; set; }
     /// <summary>"theme" is the existing Crawler palette; "host" is the
@@ -27,6 +28,7 @@ public static class WidgetStudio
     {
         Layout = raw?.Layout is "context" or "gallery" ? raw.Layout : "headlines",
         MaxItems = Math.Clamp(raw?.MaxItems ?? 12, 3, 30),
+        FontScalePercent = Math.Clamp(raw?.FontScalePercent ?? 100, 80, 160),
         ShowSource = raw?.ShowSource ?? false,
         ShowTime = raw?.ShowTime ?? false,
         AccentMode = raw?.AccentMode == "host" ? "host" : "theme"

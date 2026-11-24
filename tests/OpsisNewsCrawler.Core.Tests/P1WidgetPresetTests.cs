@@ -35,6 +35,8 @@ public sealed class P1WidgetPresetTests
         var another = WidgetStudioPresets.Create("newsroom");
         Assert.Equal(12, another["news"].MaxItems);
         var original = new AppConfig();
+        Assert.All(WidgetStudioPresets.Create("readable").Values,
+            p => Assert.Equal(135, p.FontScalePercent));
         Assert.Empty(original.WidgetProfiles); // opt-in, default UI unchanged
     }
 

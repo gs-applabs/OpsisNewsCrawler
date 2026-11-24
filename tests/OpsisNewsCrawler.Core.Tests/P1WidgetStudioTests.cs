@@ -37,6 +37,9 @@ public sealed class P1WidgetStudioTests
         Assert.Equal("theme", WidgetStudio.Resolve(null, "news").AccentMode);
         Assert.Equal("theme", WidgetStudio.Clean(new WidgetStudioProfile { AccentMode = "../../../opsys" }).AccentMode);
         Assert.Equal("host", WidgetStudio.Clean(new WidgetStudioProfile { AccentMode = "host" }).AccentMode);
+        Assert.Equal(80, WidgetStudio.Clean(new WidgetStudioProfile { FontScalePercent = 1 }).FontScalePercent);
+        Assert.Equal(160, WidgetStudio.Clean(new WidgetStudioProfile { FontScalePercent = 999 }).FontScalePercent);
+        Assert.Equal(100, WidgetStudio.Clean(null).FontScalePercent);
     }
 
     [Fact]

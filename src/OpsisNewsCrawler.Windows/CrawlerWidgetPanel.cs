@@ -28,6 +28,8 @@ public sealed class CrawlerWidgetPanel : UserControl
         AccessibleRole = AccessibleRole.StaticText
     };
     private string gallerySignature = "";
+    private Font? scaledFont;
+    private int appliedFontScale = -1;
     private readonly List<NewsItem> visible = new();
     private int refreshQueued;
     private readonly IDisposable eventSubscription;
@@ -136,6 +138,7 @@ public sealed class CrawlerWidgetPanel : UserControl
             return;
         }
         var profile = WidgetStudio.Resolve(host.Config.WidgetProfiles, kind);
+        ApplyFontScale(profile.FontScalePercent);
         var galleryMode = profile.Layout == "gallery" && WidgetStudio.CanUseGallery(kind);
         items.Visible = !galleryMode;
         gallery.Visible = galleryMode;
@@ -164,6 +167,24 @@ public sealed class CrawlerWidgetPanel : UserControl
                 : string.Join(". ", visible.Take(3).Select(x => x.Title));
         }
         finally { items.EndUpdate(); }
+    }
+
+    private void ApplyFontScale(int percent)
+    {
+        var safePercent = Math.Clamp(percent, 80, 160);
+        if (appliedFontScale == safePercent) return;
+        var size = Math.Clamp(9.5f * safePercent / 100f, 8f, 16f);
+        var next = new Font("Segoe UI", size, FontStyle.Regular, GraphicsUnit.Point);
+        var prior = scaledFont;
+        scaledFont = next;
+        appliedFontScale = safePercent;
+        // One font object owned by this panel; existing cards inherit
+        // gallery.Font, avoiding a new GDI font per item or timer tick.
+        gallery.Font = next;
+        items.Font = next;
+        heading.Font = next;
+        prior?.Dispose();
+        ResizeGalleryCards();
     }
 
     private void RefreshGallery(WidgetStudioProfile profile)
@@ -274,6 +295,8 @@ public sealed class CrawlerWidgetPanel : UserControl
         {
             timer.Stop(); timer.Dispose();
             ClearGallery();
+            scaledFont?.Dispose();
+            scaledFont = null;
             eventSubscription.Dispose();
             Theme.Changed -= ApplyTheme;
             Theme.HostAccentChanged -= ApplyTheme;

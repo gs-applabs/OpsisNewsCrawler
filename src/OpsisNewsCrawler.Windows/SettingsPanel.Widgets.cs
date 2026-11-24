@@ -8,6 +8,8 @@ public sealed partial class SettingsPanel
 {
     private readonly Dictionary<string, FlatCheckBox> widgetAccentOptions =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, FlatNumber> widgetFontScale =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private Control BuildWidgetStudio()
     {
@@ -40,6 +42,7 @@ public sealed partial class SettingsPanel
         flow.Controls.Add(Row(Loc.IsGreek ? "Έτοιμα προφίλ" : "Ready-made profiles", presetRow, 230));
         widgetEditors.Clear();
         widgetAccentOptions.Clear();
+        widgetFontScale.Clear();
         foreach (var kind in WidgetStudio.Kinds)
         {
             var card = new FlatCard(WidgetStudio.Title(kind, Loc.IsGreek))
@@ -73,6 +76,11 @@ public sealed partial class SettingsPanel
             };
             options.Controls.Add(Row(Loc.IsGreek ? "Διάταξη" : "Layout", layout, 230));
             options.Controls.Add(Row(Loc.IsGreek ? "Μέγιστες εγγραφές" : "Maximum rows", count, 230));
+            var fontScale = new FlatNumber();
+            fontScale.Configure(80, 160, 5);
+            options.Controls.Add(Row(Loc.IsGreek ? "Μέγεθος γραμμάτων (%)" : "Text size (%)",
+                fontScale, 230));
+            widgetFontScale[kind] = fontScale;
             options.Controls.Add(showSource);
             options.Controls.Add(showTime);
             var hostAccent = new FlatToggle
@@ -97,6 +105,8 @@ public sealed partial class SettingsPanel
             var p = profiles[kind];
             controls.Layout.SelectSilently(p.Layout switch { "context" => 1, "gallery" => 2, _ => 0 });
             controls.Count.SetValueSilently(p.MaxItems);
+            if (widgetFontScale.TryGetValue(kind, out var fontScale))
+                fontScale.SetValueSilently(p.FontScalePercent);
             controls.Source.Checked = p.ShowSource;
             controls.Time.Checked = p.ShowTime;
             if (widgetAccentOptions.TryGetValue(kind, out var accent))
@@ -111,6 +121,8 @@ public sealed partial class SettingsPanel
             var profile = WidgetStudio.Resolve(host.Config.WidgetProfiles, kind);
             controls.Layout.SelectSilently(profile.Layout switch { "context" => 1, "gallery" when WidgetStudio.CanUseGallery(kind) => 2, _ => 0 });
             controls.Count.SetValueSilently(profile.MaxItems);
+            if (widgetFontScale.TryGetValue(kind, out var fontScale))
+                fontScale.SetValueSilently(profile.FontScalePercent);
             controls.Source.Checked = profile.ShowSource;
             controls.Time.Checked = profile.ShowTime;
             if (widgetAccentOptions.TryGetValue(kind, out var accent))
@@ -132,6 +144,8 @@ public sealed partial class SettingsPanel
                     _ => "headlines"
                 },
                 MaxItems = controls.Count.Value,
+                FontScalePercent = widgetFontScale.TryGetValue(kind, out var fontScale)
+                    ? fontScale.Value : 100,
                 ShowSource = controls.Source.Checked,
                 ShowTime = controls.Time.Checked,
                 AccentMode = widgetAccentOptions.TryGetValue(kind, out var accent) &&

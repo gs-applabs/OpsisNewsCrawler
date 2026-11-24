@@ -1425,6 +1425,8 @@ public sealed partial class SettingsPanel : UserControl
                     {
                         controls.Layout.SelectSilently(0);
                         controls.Count.SetValueSilently(12);
+                        if (widgetFontScale.TryGetValue(kind, out var fontScale))
+                            fontScale.SetValueSilently(100);
                         controls.Source.Checked = false;
                         controls.Time.Checked = false;
                         if (widgetAccentOptions.TryGetValue(kind, out var accent))

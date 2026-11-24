@@ -31,11 +31,13 @@ public static class WidgetStudioPresets
             throw new ArgumentException("Unknown widget profile", nameof(key));
         var profiles = WidgetStudio.Kinds.ToDictionary(
             k => k, _ => new WidgetStudioProfile(), StringComparer.OrdinalIgnoreCase);
-        void Set(string kind, string layout, int max, bool source = false, bool time = false)
+        void Set(string kind, string layout, int max, bool source = false, bool time = false,
+            int font = 100)
         {
             profiles[kind] = new WidgetStudioProfile
             {
-                Layout = layout, MaxItems = max, ShowSource = source, ShowTime = time
+                Layout = layout, MaxItems = max, ShowSource = source, ShowTime = time,
+                FontScalePercent = font
             };
         }
         switch (key.ToLowerInvariant())
@@ -64,11 +66,11 @@ public static class WidgetStudioPresets
                 Set("weather", "context", 8, source: true);
                 break;
             case "readable":
-                Set("news", "gallery", 5, source: true);
-                Set("breaking", "gallery", 5, source: true);
-                Set("history", "gallery", 5, source: true);
-                Set("markets", "context", 5, source: false);
-                Set("weather", "context", 5);
+                Set("news", "gallery", 5, source: true, font: 135);
+                Set("breaking", "gallery", 5, source: true, font: 135);
+                Set("history", "gallery", 5, source: true, font: 135);
+                Set("markets", "context", 5, source: false, font: 135);
+                Set("weather", "context", 5, font: 135);
                 break;
         }
         return WidgetStudio.CleanAll(profiles);
