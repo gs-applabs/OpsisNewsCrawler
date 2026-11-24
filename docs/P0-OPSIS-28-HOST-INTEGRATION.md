@@ -18,3 +18,13 @@
 - Windows CI, GPU, multi-monitor/DPI and installer checks must pass before release.
 
 This is a first P0 implementation, NOT a declaration that all P0 is complete.
+
+## Read-only compatibility preflight (Q01)
+
+Before activating an existing Opsis 2.8.x installation, run:
+
+```powershell
+pwsh ./tools/verify-opsis-host-p0.ps1 -HostFolder 'C:\Program Files\Opsis' -PluginFolder 'C:\Program Files\Opsis\plugins\OpsisNewsCrawler' -ChronikologioFolder 'C:\Program Files\Opsis\plugins\Chronikologio'
+```
+
+Adjust paths to the actual installation. The Chronikologio parameter is optional. The script performs **only read operations** and rejects mismatched contract or UI6 DLL hashes, the wrong ABI or unsupported Opsis major version. It is not a substitute for VM installer/rollback testing.
