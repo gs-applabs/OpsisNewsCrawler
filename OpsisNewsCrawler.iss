@@ -421,6 +421,8 @@ var
   OpsisVersion: String;
   OpsisFound: Boolean;
   InfoAdded: Boolean;
+  P0BackupPending: String;
+  P0BackupPrepared: Boolean;
 
 // ---- finding Opsis -------------------------------------------------------------------------
 
@@ -703,6 +705,96 @@ begin
     GetSHA256OfFile(ExpandConstant('{tmp}\crawler-ui-check.dll'))) = 0;
 end;
 
+// P0 rollback snapshot: the last working plugin only, outside the plugin folder.
+// Never back up settings, follow junctions/symlinks, or overwrite a pending
+// snapshot from a setup that may have been interrupted.
+function CopyP0PluginTree(const Source, Target: String): Boolean;
+var
+  Found: TFindRec;
+  FromPath, ToPath: String;
+begin
+  Result := ForceDirectories(Target);
+  if not Result then Exit;
+  if not FindFirst(AddBackslash(Source) + '*', Found) then Exit;
+  try
+    repeat
+      if (Found.Name <> '.') and (Found.Name <> '..') then
+      begin
+        // Inno constants are Win32 file attributes. Refuse links to avoid
+        // copying files outside the selected Opsis plugin directory.
+        if (Found.Attributes and FILE_ATTRIBUTE_REPARSE_POINT) <> 0 then
+        begin
+          Result := False;
+          Exit;
+        end;
+        FromPath := AddBackslash(Source) + Found.Name;
+        ToPath := AddBackslash(Target) + Found.Name;
+        if (Found.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+        begin
+          if not CopyP0PluginTree(FromPath, ToPath) then
+          begin
+            Result := False;
+            Exit;
+          end;
+        end
+        else if not FileCopy(FromPath, ToPath, True) then
+        begin
+          Result := False;
+          Exit;
+        end;
+      end;
+    until not FindNext(Found);
+  finally
+    FindClose(Found);
+  end;
+end;
+
+function PrepareP0Rollback(): String;
+var
+  Source, Root: String;
+begin
+  Result := '';
+  P0BackupPrepared := False;
+  if not IsIntegrated() then Exit;
+  Source := WizardDirValue();
+  if not FileExists(AddBackslash(Source) + 'OpsisNewsCrawler.OpsisPlugin.dll') then Exit;
+  Root := ExpandConstant('{commonappdata}\Opsis\CrawlerRollback');
+  P0BackupPending := AddBackslash(Root) + 'pending';
+  if DirExists(P0BackupPending) then
+  begin
+    Result := 'An unfinished Crawler rollback snapshot already exists: ' + P0BackupPending;
+    Result := Result + #13#10 + 'Recover it or move it aside before retrying the update.';
+    Exit;
+  end;
+  if not CopyP0PluginTree(Source, P0BackupPending) then
+  begin
+    // A partial snapshot is never treated as a valid restoration source.
+    if DirExists(P0BackupPending) then DelTree(P0BackupPending, True, True, True);
+    Result := 'The previous Crawler plugin could not be backed up safely. Installation was stopped.';
+    Exit;
+  end;
+  P0BackupPrepared := True;
+  Log('P0: backed up the existing Crawler plugin before replacing any files');
+end;
+
+procedure CommitP0Rollback();
+var
+  Previous: String;
+begin
+  if not P0BackupPrepared then Exit;
+  Previous := ExpandConstant('{commonappdata}\Opsis\CrawlerRollback\previous');
+  // Retain a single completed rollback. An interrupted backup is preserved
+  // separately, so recovery can proceed without replacing the last good one.
+  if DirExists(Previous) then
+    if not DelTree(Previous, True, True, True) then
+    begin
+      Log('P0: previous snapshot could not be pruned; the new backup remains in pending');
+      Exit;
+    end;
+  if not RenameFile(P0BackupPending, Previous) then
+    Log('P0: pending backup remains available; rename to previous failed');
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Left: String;
@@ -723,6 +815,10 @@ begin
     Result := Result + #13#10 + 'The standalone installation mode remains available.';
     Exit;
   end;
+  // Run the rollback snapshot only after ABI/UI6 checks succeeded.
+  // A failure aborts setup before any Crawler files are replaced.
+  Result := PrepareP0Rollback();
+  if Result <> '' then Exit;
   Left := RemovePerUserInstall;
   if Left <> '' then
     Result := CustomMessage('OldInstallRemains') + #13#10 + Left;
@@ -747,6 +843,7 @@ begin
   end;
   if CurStep = ssPostInstall then
   begin
+    if IsIntegrated() then CommitP0Rollback();
     // read once by the app at its next start (AppConfig.ApplyFirstRun). A fresh installation carries the choices of the wizard; an update
     // (a config.json exists) never overwrites the user's language and bar, it only carries the "start with Windows" wish over.
     Dir := ExpandConstant('{userappdata}\OpsisNewsCrawler');
