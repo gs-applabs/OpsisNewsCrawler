@@ -76,6 +76,9 @@ if ($Scenario -eq 'integrated') {
     }
     $hostLibs = Join-Path $env:LOCALAPPDATA 'Programs\Opsis - Desktop Customization\libs'
     $hostContract = Join-Path $hostLibs 'OpsisNewsCrawler.Plugin.Abstractions.dll'
+    $hostUi = Join-Path $hostLibs 'Opsis.UI.dll'
+    $uiSource = Join-Path (Split-Path -Parent $PSScriptRoot) 'libs\Opsis.UI.dll'
+    if (-not (Test-Path $uiSource)) { throw 'Missing UI6 payload used by the P0 preflight.' }
     $pluginRoot = Join-Path $Out 'isolated-opsis-plugins'
     $pluginDir = Join-Path $pluginRoot 'Opsis - Desktop Customization'
     New-Item -ItemType Directory -Force $hostLibs, $pluginRoot | Out-Null
@@ -86,9 +89,59 @@ if ($Scenario -eq 'integrated') {
     Check ($denied -ne 0) 'installer refuses integrated plugin deployment without host ABI 1.0.0.0'
     Check (-not (Test-Path (Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'))) 'refused install did not write plugin DLL'
     Copy-Item $ContractFile $hostContract -Force
+    Copy-Item $uiSource $hostUi -Force
+    # The Opsis 2.8 host holds Local\Opsis.SingleInstance while running.
+    # Integrated setup must not write DLLs before it has exited.
+    $hostMutex = [Threading.Mutex]::new($false, 'Local\Opsis.SingleInstance')
+    try {
+        $runningHost = Run-Setup $NewSetup $setupArgs 'integrated-host-running-denied.log'
+        Check ($runningHost -ne 0) 'integrated setup refuses live Opsis host mutex'
+        Check (-not (Test-Path (Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'))) 'live host rejection changed no Crawler files'
+    } finally {
+        $hostMutex.Dispose()
+    }
+    # A DLL may claim the right FileVersion while its bytes differ.
+    # The integrated installer must reject that case before copying anything.
+    $modified = [IO.File]::ReadAllBytes($hostUi)
+    $modified[$modified.Length - 1] = $modified[$modified.Length - 1] -bxor 1
+    [IO.File]::WriteAllBytes($hostUi, $modified)
+    $mismatch = Run-Setup $NewSetup $setupArgs 'integrated-ui-hash-denied.log'
+    Check ($mismatch -ne 0) 'integrated installer rejects mismatched Opsis.UI SHA256'
+    Check (-not (Test-Path (Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'))) 'UI6 SHA mismatch did not deploy the plugin'
+    Copy-Item $uiSource $hostUi -Force
+    # A separately installed Chronikologio with the wrong ABI bytes must not
+    # be damaged by attempting an integrated Crawler update.
+    $chronDir = Join-Path $env:APPDATA 'Opsis\plugins\Chronikologio'
+    New-Item -ItemType Directory -Force $chronDir | Out-Null
+    Set-Content (Join-Path $chronDir 'Chronikologio.OpsisPlugin.dll') 'CI-only stub plugin' -Encoding utf8
+    $chronContract = Join-Path $chronDir 'OpsisNewsCrawler.Plugin.Abstractions.dll'
+    Copy-Item $hostContract $chronContract -Force
+    $modified = [IO.File]::ReadAllBytes($chronContract)
+    $modified[$modified.Length - 1] = $modified[$modified.Length - 1] -bxor 1
+    [IO.File]::WriteAllBytes($chronContract, $modified)
+    $chronDenied = Run-Setup $NewSetup $setupArgs 'integrated-chron-abi-denied.log'
+    Check ($chronDenied -ne 0) 'integrated setup refuses the wrong Chronikologio shared ABI'
+    Check (-not (Test-Path (Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'))) 'incompatible Chronikologio did not cause Crawler replacement'
+    Remove-Item $chronDir -Recurse -Force
+
     $hostVersion = [Reflection.AssemblyName]::GetAssemblyName($hostContract).Version.ToString()
     Check ($hostVersion -eq '1.0.0.0') "staged host ABI identity is $hostVersion"
+    # Existing installed plugin is replaced; P0 must back it up *before* copying
+    # anything. This is a data-only fixture under the runner's isolated root.
+    New-Item -ItemType Directory -Force $pluginDir | Out-Null
+    $oldPlugin = Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'
+    Set-Content -LiteralPath $oldPlugin -Value 'pre-p0-plugin-fixture' -Encoding utf8
+    Copy-Item $hostContract (Join-Path $pluginDir 'OpsisNewsCrawler.Plugin.Abstractions.dll') -Force
+    Copy-Item $hostUi (Join-Path $pluginDir 'Opsis.UI.dll') -Force
+    $rollbackRoot = Join-Path $env:ProgramData 'Opsis\CrawlerRollback'
+    if (Test-Path (Join-Path $rollbackRoot 'pending')) {
+        throw 'Disposable runner should not have an unfinished rollback snapshot'
+    }
     $installed = Run-Setup $NewSetup $setupArgs 'integrated-installed.log'
+    $previous = Join-Path $rollbackRoot 'previous'
+    Check (Test-Path (Join-Path $previous '.backup-complete')) 'integrated upgrade has a completed rollback snapshot'
+    Check ((Test-Path (Join-Path $previous 'OpsisNewsCrawler.OpsisPlugin.dll')) -and
+           ((Get-Content (Join-Path $previous 'OpsisNewsCrawler.OpsisPlugin.dll') -Raw) -match 'pre-p0-plugin-fixture')) 'old plugin bytes are preserved for rollback'
     Check ($installed -eq 0) "integrated installation succeeds against host ABI 1.0.0.0 (exit $installed)"
     $dll = Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'
     Check (Test-Path $dll) 'integrated setup installs the real Crawler plugin in Opsis plugin root'

@@ -3,6 +3,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: crawler-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 
@@ -51,4 +54,4 @@ jobs:
           name: opsis-crawler-plugin-dll-1.0.0.0
           path: publish-plugin/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7

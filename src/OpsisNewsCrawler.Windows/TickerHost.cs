@@ -41,6 +41,13 @@ public sealed partial class TickerHost : IDisposable
     private bool hasQuotes;
     private bool disposed;
     private bool started;
+    private int startEpoch; // discard delayed checks from a stopped session
+    private CancellationTokenSource? sessionCts;
+    private CancellationToken SessionToken => sessionCts?.Token ?? lifetimeToken;
+    private CrawlerEventDispatch? suiteDispatcher;
+
+    private void PublishSuiteEvent(SuiteEvent message) =>
+        suiteDispatcher?.TryPublish(message);
 
     // breaking news
     private readonly System.Windows.Forms.Timer breakingTimer = new() { Interval = 5000 };
@@ -122,15 +129,17 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>About 30 seconds after the start and then every 24 hours (GearWin's logic); while offline it asks again after a minute, up to four times.</summary>
     private async Task AutoCheckForUpdatesAsync()
     {
-        if (!Config.CheckForUpdates || autoChecking || disposed) return;
+        if (!started || !Config.CheckForUpdates || autoChecking || disposed) return;
+        var checkEpoch = startEpoch;
         autoChecking = true;
         try
         {
-            for (var attempt = 0; attempt < 4 && !disposed; attempt++)
+            for (var attempt = 0; attempt < 4 && started && checkEpoch == startEpoch && !disposed; attempt++)
             {
                 try
                 {
                     var found = await CheckForUpdatesAsync();
+                    if (!started || checkEpoch != startEpoch) return;
                     // Inside Opsis the balloon is Opsis' job (the card in the settings still shows the update); never while a full-screen app is in front.
                     if (found is not null && !HostedByOpsis && UpdateAnnouncePolicy.ShouldAnnounce(Config.LastNotifiedUpdate, found.Tag))
                     {
@@ -171,12 +180,12 @@ public sealed partial class TickerHost : IDisposable
         catch (OperationCanceledException) { }
     }
 
-    private async Task FirstUpdateCheckAsync()
+    private async Task FirstUpdateCheckAsync(int epoch)
     {
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(30), lifetimeToken).ConfigureAwait(true);
-            _ = AutoCheckForUpdatesAsync();
+            if (started && !disposed && startEpoch == epoch) _ = AutoCheckForUpdatesAsync();
         }
         catch (OperationCanceledException) { }
     }
@@ -435,7 +444,7 @@ public sealed partial class TickerHost : IDisposable
     private void OnLanguageChanged()
     {
         // Texts built from the language (placeholders, quote labels) are rebuilt.
-        _ = RefreshQuotesAsync(force: true);
+        if (started) _ = RefreshQuotesAsync(force: true);
         PushAll();
         UpdateMiniWeather();
     }
@@ -471,14 +480,14 @@ public sealed partial class TickerHost : IDisposable
         Theme.SetMode(Config.ThemeMode, Config.OpacityPercent / 100.0, Config.ThemeFollowAccent);
         UpdateHotkey();
 
-        ConfigureWindow(Window, Config.Position, main: true);
+        ConfigureWindow(Window, EffectiveMainPosition, main: true);
         Window.SetBackdropStyle(Config.BarBackdrop);
         Window.SetBarColor(Config.BarColorMode, Config.BarCustomColor);
-        Window.ReserveSpace = EffectiveReserveSpace;
+        Window.ReserveSpace = EffectiveReserveSpace && !HostShellHold;
         Window.SetCustomBounds(GetCustomBounds());
-        Window.SetPosition(Config.Position);
+        Window.SetPosition(EffectiveMainPosition);
 
-        var wantSecond = Config.SecondBarEnabled && Config.Position != TickerPosition.TaskbarIntegrated;
+        var wantSecond = !HostShellHold && Config.SecondBarEnabled && Config.Position != TickerPosition.TaskbarIntegrated;
         if (wantSecond && SecondWindow is null)
         {
             SecondWindow = new TickerWindow(State2, hostWindowDetector);
@@ -505,7 +514,7 @@ public sealed partial class TickerHost : IDisposable
         EvaluatePerformance();                      // the setting "Performance" may have changed
         ApplyRefreshIntervals();
         PushAll();
-        if (BarsOn)
+        if (started && BarsOn)
         {
             _ = RefreshQuotesAsync();
             _ = RefreshWeatherAsync();
@@ -643,7 +652,22 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>Set by the Opsis plugin before the first ApplyConfig: Opsis widgets, DeskStrip and DeskZones follow the work area.</summary>
     public bool HostedByOpsis { get; set; }
 
-    public bool EffectiveReserveSpace => Config.ReserveScreenSpace ?? HostedByOpsis;
+    /// <summary>Temporary host arbitration; never overwrites the user's saved positioning.</summary>
+    public bool HostShellHold { get; private set; }
+    public bool HostSafeMode { get; set; }
+
+    public void SetHostShellHold(bool value)
+    {
+        if (HostShellHold == value || disposed) return;
+        HostShellHold = value;
+        ApplyConfig(); // recompute window positions, but do not call SaveConfig()
+    }
+
+    private TickerPosition EffectiveMainPosition =>
+        HostedByOpsis && HostShellHold && Config.Position == TickerPosition.TaskbarIntegrated
+            ? TickerPosition.BottomTaskbar : Config.Position;
+
+    public bool EffectiveReserveSpace => !HostShellHold && (Config.ReserveScreenSpace ?? HostedByOpsis);
 
     public void SaveConfig() => Config.Save(configPath);
 
@@ -706,15 +730,20 @@ public sealed partial class TickerHost : IDisposable
 
     public void Start()
     {
-        if (disposed) return;
+        if (disposed || started) return;
+        // In Safe Mode the Opsis host must not activate a Crawler bar.
+        if (HostedByOpsis && HostSafeMode) return;
         started = true;
+        unchecked { startEpoch++; }
+        sessionCts = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
+        suiteDispatcher ??= new CrawlerEventDispatch(SuiteEventHub.Publish);
         EvaluatePerformance();
         performanceTimer.Tick -= OnPerformanceTimer;
         performanceTimer.Tick += OnPerformanceTimer;
         performanceTimer.Start();
         PushAll();
         if (Config.BarsEnabled) StartBars();
-        _ = FirstUpdateCheckAsync();
+        _ = FirstUpdateCheckAsync(startEpoch);
         updateTimer.Tick -= OnUpdateTimer;
         updateTimer.Tick += OnUpdateTimer;
         updateTimer.Start();
@@ -812,7 +841,15 @@ public sealed partial class TickerHost : IDisposable
 
     public void Stop()
     {
+        if (disposed || !started) return;
         started = false;
+        unchecked { startEpoch++; }
+        var oldSession = sessionCts;
+        sessionCts = null;
+        oldSession?.Cancel();
+        oldSession?.Dispose();
+        suiteDispatcher?.Dispose();
+        suiteDispatcher = null;
         // Plugin unload must stop *all* periodic work, not just the visible news bars.
         performanceTimer.Stop();
         updateTimer.Stop();
@@ -860,6 +897,7 @@ public sealed partial class TickerHost : IDisposable
 
     public void Refresh()
     {
+        if (disposed || !started) return;
         _ = RefreshAsync(force: true);
         _ = RefreshQuotesAsync(force: true);
     }
@@ -897,7 +935,7 @@ public sealed partial class TickerHost : IDisposable
     {
         Config.Position = position;
         if (position == TickerPosition.TaskbarIntegrated) Config.SecondBarEnabled = false;
-        Window.SetPosition(position);
+        Window.SetPosition(EffectiveMainPosition);
         ApplyConfig();
         SaveConfig();
     }
@@ -1105,7 +1143,7 @@ public sealed partial class TickerHost : IDisposable
 
         breakingVideoContext = urgent[0].Title;
         foreach (var item in urgent.Take(6))
-            SuiteEventHub.Publish(new SuiteEvent(SuiteEventKind.Breaking, "crawler", item.Url,
+            PublishSuiteEvent(new SuiteEvent(SuiteEventKind.Breaking, "crawler", item.Url,
                 item.Title, item.PublishedAt, item.Url, item.Why));
         var isNew = urgent.Where(i => !readStore.IsRead("breaking:" + i.Url)).ToList();
         foreach (var i in isNew) readStore.MarkRead("breaking:" + i.Url); // remembered, so a restart does not replay the intro
@@ -1325,6 +1363,11 @@ public sealed partial class TickerHost : IDisposable
     {
         if (disposed) return;
         disposed = true;
+        sessionCts?.Cancel();
+        sessionCts?.Dispose();
+        sessionCts = null;
+        suiteDispatcher?.Dispose();
+        suiteDispatcher = null;
         Loc.Changed -= OnLanguageChanged;
         OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.Changed -= OnPluginFeedsChanged;
         if (pluginFeedCacheInvalidator is not null)

@@ -9,7 +9,7 @@ namespace OpsisNewsCrawler.OpsisPlugin;
 /// Hosted, the crawler never creates its own tray icon: its commands are offered through <see cref="GetTrayMenuItems"/>
 /// and its settings are a tab of the host.
 /// </summary>
-public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginProfileAware, IPluginWidgetProvider
+public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginProfileAware, IPluginWidgetProvider, IPluginHostSettingsAware
 {
     public const string NavigationKey = "OpsisNewsCrawler";
 
@@ -63,15 +63,44 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
     public void SetMode(string mode) => _controller.SetMode(TickerParsing.ParseMode(mode));
     public void SetPosition(string position) => _controller.SetPosition(TickerParsing.ParsePosition(position));
 
-    public void SetTheme(bool dark, int background, int surface, int border, int text, int textMuted, int accent, double opacity) =>
+    public void SetTheme(bool dark, int background, int surface, int border, int text, int textMuted, int accent, double opacity)
+    {
+        _controller.Context.AcceptTheme(dark);
         Theme.SetColors(dark, Color.FromArgb(background), Color.FromArgb(surface), Color.FromArgb(border),
-            Color.FromArgb(text), Color.FromArgb(textMuted), Color.FromArgb(accent), Theme.Opacity); // the strip keeps its own transparency setting
+            Color.FromArgb(text), Color.FromArgb(textMuted), Color.FromArgb(accent), Theme.Opacity);
+    }
 
-    public void SetHardwareProfile(string tier) => _controller.Host.SetHostTier(tier);
+    public void SetHardwareProfile(string tier) => _controller.SetHostTier(tier);
+
+    /// <summary>Optional Opsis host P0 handshake. No plugin contract ABI change:
+    /// the trusted host discovers this method by name and supplies its own
+    /// cached WeatherHub callback for the cities configured in Crawler.</summary>
+    public void SetOpsisP0Environment(bool safeMode, bool shellHold, Func<double, double, Task<string>> weatherProvider)
+    {
+        ArgumentNullException.ThrowIfNull(weatherProvider);
+        _controller.Context.AcceptSafeMode(safeMode);
+        _controller.Context.AcceptShellHold(shellHold);
+        _controller.ConfigureP0Environment(safeMode, shellHold, weatherProvider);
+    }
+
+    /// <summary>Optional Opsis 2.8 host-owned settings. No UI creation,
+    /// changes to process-global Opsis.UI or file writes.</summary>
+    public void SetHostSettings(PluginHostSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        _controller.Context.AcceptTheme(settings.Dark);
+        _controller.Context.AcceptLanguage(settings.Language);
+        _controller.Context.AcceptTier(settings.HardwareTier);
+        _controller.Context.AcceptUiScale(settings.UiScalePercent);
+        _controller.LanguageFromHost = true;
+        Loc.SetLanguage(_controller.Context.Snapshot.Language);
+        _controller.SetHostTier(settings.HardwareTier);
+    }
 
     public void SetLanguage(string code)
     {
         _controller.LanguageFromHost = true;
+        _controller.Context.AcceptLanguage(code);
         Loc.SetLanguage(code);
     }
 
@@ -92,7 +121,7 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
 
     public IReadOnlyList<PluginMenuItem> GetTrayMenuItems() => BuildTrayMenu(
         () => NavigationRequested?.Invoke(NavigationKey), Refresh,
-        () => { if (_controller.Host.Paused) Resume(); else Pause(); }, CloseCrawler, OpenCrawler);
+        () => { if (_controller.IsPaused) Resume(); else Pause(); }, CloseCrawler, OpenCrawler);
 
     /// <summary>
     /// The commands the crawler adds to Opsis' tray menu. The welcome guide and the Opsis family window are NOT here: inside Opsis the host offers them itself,
@@ -140,6 +169,31 @@ internal sealed class TickerController
     private TickerHost? _host;
     private SettingsForm? _fallbackSettings;
 
+    public HostContextState Context { get; } = new(hosted: true);
+    public bool IsPaused => _host?.Paused ?? false;
+
+    private bool hostSafeMode;
+    private bool shellHold;
+    private Func<double, double, Task<string>>? weatherProvider;
+
+    public void ConfigureP0Environment(bool safeMode, bool hold, Func<double, double, Task<string>> provider)
+    {
+        hostSafeMode = safeMode;
+        shellHold = hold;
+        weatherProvider = provider;
+        if (_host is null) return; // host sets these before Start(), no eager UI
+        _host.HostSafeMode = safeMode;
+        _host.HostWeatherProvider = provider;
+        _host.SetHostShellHold(hold);
+        if (safeMode) _host.Stop();
+    }
+
+    public void SetHostTier(string? tier)
+    {
+        Context.AcceptTier(tier);
+        _host?.SetHostTier(Context.Snapshot.PerformanceTier);
+    }
+
     /// <summary>The host (Opsis) told us its language: the crawler's own language setting is then ignored.</summary>
     public bool LanguageFromHost { get; set; }
 
@@ -152,6 +206,11 @@ internal sealed class TickerController
             if (_host is null)
             {
                 _host = new TickerHost { HostedByOpsis = true, LanguageFollowsHost = LanguageFromHost };
+                if (LanguageFromHost) Loc.SetLanguage(Context.Snapshot.Language);
+                _host.SetHostTier(Context.Snapshot.PerformanceTier);
+                _host.HostSafeMode = hostSafeMode;
+                _host.SetHostShellHold(shellHold);
+                _host.HostWeatherProvider = weatherProvider;
                 if (!_host.Config.ThemeIndependentMigrated)
                 {
                     _host.Config.ThemeIndependentMigrated = true;
@@ -178,6 +237,11 @@ internal sealed class TickerController
 
     public void Start()
     {
+        if (hostSafeMode)
+        {
+            Log.Write("Crawler disabled by Opsis Safe Mode.");
+            return;
+        }
         if (!_guard.TryAcquire())
         {
             StandaloneRunning = true;
@@ -185,7 +249,8 @@ internal sealed class TickerController
             return;
         }
         StandaloneRunning = false;
-        Host.Start();
+        try { Host.Start(); }
+        catch { _guard.Release(); throw; }
     }
 
     public void Stop()

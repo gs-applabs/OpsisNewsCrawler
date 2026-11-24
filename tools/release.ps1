@@ -42,6 +42,13 @@ foreach ($name in "OpsisNewsCrawler.OpsisPlugin.dll", "OpsisNewsCrawler.Windows.
 if (Get-ChildItem $pluginDst -Filter "*MotionDesk*" -ErrorAction SilentlyContinue) { throw "old MotionDesk-named files in the plugin payload - delete them" }
 "payload version: $appVersion"
 
+# P0: the plugin must ship the single host-canonical ABI DLL, not a separately compiled same-version assembly.
+$canonicalContract = "$r\libs\OpsisNewsCrawler.Plugin.Abstractions.dll"
+$shippedContract = "$pluginDst\OpsisNewsCrawler.Plugin.Abstractions.dll"
+if (-not (Test-Path $canonicalContract)) { throw 'Missing canonical Opsis 2.8 ABI DLL' }
+if ((Get-FileHash $canonicalContract -Algorithm SHA256).Hash -ne (Get-FileHash $shippedContract -Algorithm SHA256).Hash) {
+  throw 'Plugin payload has a different ABI contract DLL from the pinned Opsis 2.8 source. Do not package.'
+}
 # Guard: the plugin contract keeps the assembly version of the copy that Opsis has loaded (otherwise the plugin cannot bind to it).
 $contract = [Reflection.AssemblyName]::GetAssemblyName("$pluginDst\OpsisNewsCrawler.Plugin.Abstractions.dll").Version
 # The Opsis project folder is a sibling of this one (currently still named MotionDeskStudio on disk; "Opsis" is tried first).
@@ -108,6 +115,11 @@ $assets = "$r\release\$ver-assets"
 if (Test-Path $assets) { Remove-Item $assets -Recurse -Force }
 New-Item -ItemType Directory -Force $assets | Out-Null
 Copy-Item "$r\Output\OpsisNewsCrawler-Setup.exe", "$r\Output\OpsisNewsCrawler-Setup.exe.sha256", $portable, "$portable.sha256" $assets
+# Ship the explicit rollback helper; it never runs silently during setup.
+Copy-Item "$r\tools\restore-opsis-crawler.ps1" "$assets\OpsisNewsCrawler-$ver-rollback.ps1"
+$rollbackHash = (Get-FileHash "$assets\OpsisNewsCrawler-$ver-rollback.ps1" -Algorithm SHA256).Hash.ToLowerInvariant()
+[IO.File]::WriteAllText("$assets\OpsisNewsCrawler-$ver-rollback.ps1.sha256", "$rollbackHash  OpsisNewsCrawler-$ver-rollback.ps1" + [Environment]::NewLine)
+
 # Additional unambiguous name for this .NET 11 candidate. Preserve canonical E2E filename.
 $net11Setup = "$assets\OpsisNewsCrawler-$ver-NET11-Setup.exe"
 Copy-Item "$assets\OpsisNewsCrawler-Setup.exe" $net11Setup
@@ -118,6 +130,10 @@ if (Test-Path "$assets\RELEASE-NOTES.md") {
   Add-Content "$assets\RELEASE-NOTES.md" ("`r`n## SHA-256`r`n`r`n```````r`n$h  OpsisNewsCrawler-Setup.exe`r`n$ph  OpsisNewsCrawler-$ver-portable.zip`r`n```````r`n")
 }
 "assets: $assets"
+
+# Only after successful package creation: keep the newest generated release artifacts.
+# The cleanup helper has strict path and name checks; no source/backups or GitHub releases are touched.
+& "$PSScriptRoot\prune-generated-releases.ps1" -Root $r -KeepVersion $ver -Apply
 
 # Best effort: bring bin\ (what the Run-...bat starts) up to date too; files in use are skipped.
 robocopy $stage "$r\bin" /MIR /NFL /NDL /NJH /NJS /R:1 /W:1 | Out-Null

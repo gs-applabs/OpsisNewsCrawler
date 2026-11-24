@@ -5,6 +5,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: crawler-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 
@@ -16,6 +19,25 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
+      - name: Repository cleanup and latest-version guard
+        shell: pwsh
+        run: ./tools/ci-hygiene.ps1
+      - name: Regression test — prune only superseded generated releases
+        shell: pwsh
+        run: |
+          $tmp = Join-Path $env:RUNNER_TEMP ('crawler-prune-' + [guid]::NewGuid().ToString('N'))
+          try {
+            @('release/0.17.0-assets', 'release/0.28.0-assets', 'release/keep-me', 'Output') | ForEach-Object { New-Item -ItemType Directory -Force (Join-Path $tmp $_) | Out-Null }
+            @('OpsisNewsCrawler-0.17.0-portable.zip', 'OpsisNewsCrawler-0.17.0-NET11-Setup.exe.sha256', 'OpsisNewsCrawler-0.28.0-portable.zip', 'user-data.txt') | ForEach-Object { Set-Content -LiteralPath (Join-Path $tmp ('Output/' + $_)) -Value 'fixture' }
+            ./tools/prune-generated-releases.ps1 -Root $tmp -KeepVersion 0.28.0
+            if (-not (Test-Path (Join-Path $tmp 'release/0.17.0-assets'))) { throw 'Dry run unexpectedly deleted files' }
+            ./tools/prune-generated-releases.ps1 -Root $tmp -KeepVersion 0.28.0 -Apply
+            if (Test-Path (Join-Path $tmp 'release/0.17.0-assets')) { throw 'Old release folder retained' }
+            if (Test-Path (Join-Path $tmp 'Output/OpsisNewsCrawler-0.17.0-portable.zip')) { throw 'Old portable package retained' }
+            foreach ($safe in @('release/0.28.0-assets', 'release/keep-me', 'Output/OpsisNewsCrawler-0.28.0-portable.zip', 'Output/user-data.txt')) {
+              if (-not (Test-Path (Join-Path $tmp $safe))) { throw "Unsafe release pruning deleted $safe" }
+            }
+          } finally { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }
       - name: Verify Opsis.UI 0.6.0 host parity
         shell: pwsh
         run: |
@@ -27,6 +49,47 @@ jobs:
         run: dotnet restore OpsisNewsCrawler.sln
       - name: Build solution
         run: dotnet build OpsisNewsCrawler.sln --configuration Release --no-restore
+      - name: P0 recovery script restores only a compatible plugin in a disposable folder
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP ('crawler-recovery-' + [guid]::NewGuid().ToString('N'))
+          try {
+            $opsisHost = Join-Path $root 'host'
+            $hostLib = Join-Path $opsisHost 'lib'
+            $plugin = Join-Path $root 'plugins/Opsis - Desktop Customization'
+            $snapshot = Join-Path $root 'backup/previous'
+            New-Item -ItemType Directory -Force $hostLib,$plugin,$snapshot | Out-Null
+            Copy-Item libs/Opsis.UI.dll $hostLib/Opsis.UI.dll
+            Copy-Item libs/OpsisNewsCrawler.Plugin.Abstractions.dll $hostLib/OpsisNewsCrawler.Plugin.Abstractions.dll
+            Copy-Item libs/Opsis.UI.dll $snapshot/Opsis.UI.dll
+            Copy-Item libs/OpsisNewsCrawler.Plugin.Abstractions.dll $snapshot/OpsisNewsCrawler.Plugin.Abstractions.dll
+            $dll = Get-ChildItem src/OpsisNewsCrawler.OpsisPlugin/bin/Release -Filter OpsisNewsCrawler.OpsisPlugin.dll -Recurse | Select-Object -First 1
+            if (!$dll) { throw 'P0 test plugin build missing' }
+            Copy-Item $dll.FullName $snapshot/OpsisNewsCrawler.OpsisPlugin.dll
+            Set-Content -LiteralPath (Join-Path $snapshot '.backup-complete') -Value 'completed'
+            Set-Content -LiteralPath (Join-Path $plugin 'old.txt') -Value 'superseded candidate'
+            $wrong = Join-Path $root 'plugins/UnrelatedPlugin'
+            New-Item -ItemType Directory -Force $wrong | Out-Null
+            $wrongDenied = $false
+            try {
+              ./tools/restore-opsis-crawler.ps1 -Mode Inspect -HostFolder $opsisHost -PluginFolder $wrong -BackupRoot (Join-Path $root 'backup') -Confirm:$false
+            } catch { $wrongDenied = $true }
+            if (!$wrongDenied) { throw 'Rollback helper accepted an unrelated plugin folder' }
+            $mutex = [Threading.Mutex]::new($false, 'Local\Opsis.SingleInstance')
+            try {
+              $liveDenied = $false
+              try {
+                ./tools/restore-opsis-crawler.ps1 -Mode Restore -HostFolder $opsisHost -PluginFolder $plugin -BackupRoot (Join-Path $root 'backup') -Confirm:$false
+              } catch { $liveDenied = $true }
+              if (!$liveDenied) { throw 'Rollback helper accepted a live Opsis host mutex' }
+            } finally { $mutex.Dispose() }
+            ./tools/restore-opsis-crawler.ps1 -Mode Inspect -HostFolder $opsisHost -PluginFolder $plugin -BackupRoot (Join-Path $root 'backup') -Confirm:$false
+            ./tools/restore-opsis-crawler.ps1 -Mode Restore -HostFolder $opsisHost -PluginFolder $plugin -BackupRoot (Join-Path $root 'backup') -Confirm:$false
+            if (!(Test-Path (Join-Path $plugin 'OpsisNewsCrawler.OpsisPlugin.dll'))) { throw 'Compatible plugin was not restored' }
+            if (Test-Path (Join-Path $plugin 'old.txt')) { throw 'Superseded candidate was left behind' }
+            if (!(Test-Path (Join-Path $snapshot '.backup-complete'))) { throw 'Recovery destroyed its source snapshot' }
+            if (Test-Path (Join-Path $plugin '.backup-complete')) { throw 'Backup marker leaked into the active plugin folder' }
+          } finally { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
       - name: Run core tests
         run: dotnet test tests/OpsisNewsCrawler.Core.Tests/OpsisNewsCrawler.Core.Tests.csproj --configuration Release
       - name: Plugin contract tests

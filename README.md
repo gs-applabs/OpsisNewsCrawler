@@ -11,13 +11,15 @@
 <a href="../../releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/gs-applabs/OpsisNewsCrawler"/></a>
 <a href="LICENSE"><img alt="license MIT" src="https://img.shields.io/badge/license-MIT-blue"/></a>
 <img alt="Windows 11" src="https://img.shields.io/badge/Windows-11-0078d4"/>
-<img alt=".NET 10" src="https://img.shields.io/badge/.NET-11-512bd4"/>
+<img alt=".NET 11" src="https://img.shields.io/badge/.NET-11-512bd4"/>
 <img alt="14 languages" src="https://img.shields.io/badge/languages-14-green"/>
 </p>
 
 - [Ελληνικά](#ελληνικά) · [English](#english) · [Η οικογένεια Opsis / The Opsis family](#η-οικογένεια-opsis--the-opsis-family) · [Άδεια / License](#άδεια--license)
 
 ---
+
+> **Κατάσταση ανάπτυξης 0.28.0 / Opsis 2.8:** Η ενσωμάτωση P0 βρίσκεται στα δοκιμαστικά [Crawler PR #8](https://github.com/gs-applabs/OpsisNewsCrawler/pull/8) και [Opsis PR #11](https://github.com/gs-applabs/Opsis/pull/11). Δεν αποτελεί πιστοποιημένη ή δημοσιευμένη σταθερή έκδοση. Πριν από εγκατάσταση/συγχώνευση απαιτούνται επιτυχείς Windows CI έλεγχοι, έλεγχος ABI με το Χρονολόγιο και πραγματικές δοκιμές Taskbar, πολλαπλών οθονών, DPI και επαναφοράς.
 
 ## Ελληνικά
 
@@ -76,7 +78,7 @@
 
 ### Εγκατάσταση
 
-**Απαιτήσεις:** Windows 11 (64-bit· τα Windows 10 δεν έχουν δοκιμαστεί), [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (ο installer το προτείνει και το κατεβάζει μόνο αν το επιτρέψετε), προαιρετικά WebView2 Runtime (ζωντανό βίντεο έκτακτων).
+**Απαιτήσεις:** Windows 11 (64-bit· τα Windows 10 δεν έχουν δοκιμαστεί), [.NET 11 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (ο installer το προτείνει και το κατεβάζει μόνο αν το επιτρέψετε), προαιρετικά WebView2 Runtime (ζωντανό βίντεο έκτακτων).
 
 1. Κατεβάστε από τα [Releases](../../releases/latest) το `OpsisNewsCrawler-Setup.exe` (ή το `…-portable.zip`) και το αντίστοιχο `.sha256`.
 2. **Ελέγξτε το αρχείο** (PowerShell, στον φάκελο λήψεων):
