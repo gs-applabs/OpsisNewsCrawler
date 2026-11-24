@@ -15,6 +15,13 @@ public sealed class P2InsightsForm : Form
     private readonly FlatComboBox digestScope = new() { Width=250 };
     private readonly DateTimePicker digestDate = new() { Format=DateTimePickerFormat.Short, Width=125 };
     private readonly FlatButton importCalendar = new();
+    private readonly FlatComboBox calendarRange = new() { Width=180 };
+    private readonly FlatComboBox calendarImpact = new() { Width=180 };
+    private readonly FlatComboBox calendarCountry = new() { Width=180 };
+    private readonly FlatButton relatedCalendarNews = new();
+    private readonly List<EconomicEvent> displayedEvents = new();
+    private readonly List<string> calendarCountries = new() { "" };
+    private bool updatingCountries;
     private readonly FlatButton exportCalendar = new();
     private readonly FlatButton evidence = new();
     private readonly FlatButton newTransaction = new();
@@ -67,6 +74,17 @@ public sealed class P2InsightsForm : Form
         digestDate.Value=DateTime.Today;
         importCalendar.Text=Loc.IsGreek?"Εισαγωγή ημερολογίου":"Import calendar";
         importCalendar.Click+=(_,_)=>ImportCalendar();
+        calendarRange.SetItems(Loc.IsGreek ? new[]{ "Επόμενες 7 ημέρες", "Επόμενες 30 ημέρες", "Επόμενες 90 ημέρες", "Προηγούμενες 30 ημέρες" }
+            : new[]{ "Next 7 days", "Next 30 days", "Next 90 days", "Previous 30 days" },2);
+        calendarImpact.SetItems(Loc.IsGreek ? new[]{ "Όλες οι επιπτώσεις", "Επίπεδο 1+", "Επίπεδο 2+", "Επίπεδο 3" }
+            : new[]{ "All impact levels", "Level 1+", "Level 2+", "Level 3" },0);
+        calendarRange.SelectedIndexChanged+=(_,_)=>Reload();
+        calendarImpact.SelectedIndexChanged+=(_,_)=>Reload();
+        calendarCountry.SelectedIndexChanged+=(_,_)=>{if(!updatingCountries)Reload();};
+        relatedCalendarNews.Text=Loc.IsGreek?"Συναφείς ειδήσεις":"Related headlines";
+        relatedCalendarNews.Click+=(_,_)=>ShowRelatedCalendarNews();
+        foreach(var control in new Control[]{calendarRange,calendarImpact,calendarCountry,relatedCalendarNews})
+        {control.Visible=false;bar.Controls.Add(control);}
         exportCalendar.Text="ICS";
         exportCalendar.Click+=(_,_)=>ExportCalendar();
         bar.WrapContents=true;
@@ -101,6 +119,9 @@ public sealed class P2InsightsForm : Form
         if(IsDisposed || !IsHandleCreated)return;
         visible.Clear();
         displayedClusters.Clear();
+        displayedEvents.Clear();
+        foreach(var control in new Control[]{calendarRange,calendarImpact,calendarCountry,relatedCalendarNews})
+            control.Visible=views.SelectedIndex==4;
         clusterFilter.Visible=views.SelectedIndex==1;
         evidence.Enabled=views.SelectedIndex==1;
         var news=host.RecentNews;
@@ -126,8 +147,10 @@ public sealed class P2InsightsForm : Form
                     visible.Add(($"{m.Topic.Name} · {m.Item.Title}",$"{m.Score}/100 · {m.Item.Source}",m.Item.Url));
                 break;
             case 4:
-                foreach(var entry in EconomicCalendar.Upcoming(host.Config.EconomicEvents,DateTimeOffset.Now,90))
-                    visible.Add((entry.Title,$"{entry.StartsAt:dd/MM/yyyy HH:mm} · {entry.Country} · {entry.Source} · impact {entry.Impact}",entry.Url));
+                RefreshCalendarCountries();
+                displayedEvents.AddRange(SelectedCalendarEvents());
+                foreach(var entry in displayedEvents)
+                    visible.Add((entry.Title,$"{entry.StartsAt.ToLocalTime():dd/MM/yyyy HH:mm} · {entry.Country} · {entry.Source} · {entry.Impact}/3 · A: {entry.Actual??"—"} / F: {entry.Forecast??"—"} / P: {entry.Previous??"—"}",entry.Url));
                 break;
             case 3:
                 foreach(var group in host.Config.PortfolioTransactions.GroupBy(x=>x.InstrumentKey).Take(100))
@@ -304,6 +327,36 @@ public sealed class P2InsightsForm : Form
         }
     }
 
+    private void RefreshCalendarCountries()
+    {
+        var selected=calendarCountry.SelectedIndex>=0 && calendarCountry.SelectedIndex<calendarCountries.Count?calendarCountries[calendarCountry.SelectedIndex]:"";
+        var countries=host.Config.EconomicEvents.Select(x=>x.Country?.Trim()??"").Where(x=>x.Length>0)
+            .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x=>x).Take(100).ToList();
+        calendarCountries.Clear();calendarCountries.Add("");calendarCountries.AddRange(countries);
+        updatingCountries=true;
+        try {calendarCountry.SetItems(new[]{Loc.IsGreek?"Όλες οι χώρες":"All countries"}.Concat(countries),Math.Max(0,calendarCountries.FindIndex(x=>string.Equals(x,selected,StringComparison.OrdinalIgnoreCase))));}
+        finally {updatingCountries=false;}
+    }
+
+    private IReadOnlyList<EconomicEvent> SelectedCalendarEvents()
+    {
+        var days=calendarRange.SelectedIndex switch {0=>7,1=>30,3=>30,_=>90};
+        var country=calendarCountry.SelectedIndex>=0 && calendarCountry.SelectedIndex<calendarCountries.Count?calendarCountries[calendarCountry.SelectedIndex]:"";
+        return EconomicCalendar.Select(host.Config.EconomicEvents,DateTimeOffset.Now,days,calendarImpact.SelectedIndex,country,calendarRange.SelectedIndex==3);
+    }
+
+    private void ShowRelatedCalendarNews()
+    {
+        var index=lines.SelectedIndices.Count>0?lines.SelectedIndices[0]:-1;
+        if(views.SelectedIndex!=4||index<0||index>=displayedEvents.Count)return;
+        var entry=displayedEvents[index];
+        var reports=EconomicCalendar.RelatedNews(entry,host.RecentNews);
+        if(reports.Count==0){summary.Text=Loc.IsGreek?"Δεν βρέθηκαν συναφείς τίτλοι στο τοπικό αρχείο.":"No related cached headlines.";return;}
+        var cluster=new StoryCluster(entry.Id,entry.Title,reports.Max(x=>x.PublishedAt),reports,
+            reports.Select(BreakingEngine.Publisher).Select(PublisherIdentity.Canonical).Where(x=>x.Length>0).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        using var form=new P3EvidenceForm(cluster);form.ShowDialog(this);
+    }
+
     private void ExportCalendar()
     {
         using var save=new SaveFileDialog {Filter="iCalendar (*.ics)|*.ics",DefaultExt="ics",
@@ -312,8 +365,7 @@ public sealed class P2InsightsForm : Form
         try
         {
             File.WriteAllText(save.FileName,
-                EconomicCalendar.ExportIcs(EconomicCalendar.Upcoming(host.Config.EconomicEvents,
-                    DateTimeOffset.Now,90)));
+                EconomicCalendar.ExportIcs(views.SelectedIndex==4?SelectedCalendarEvents():EconomicCalendar.Upcoming(host.Config.EconomicEvents,DateTimeOffset.Now,90)));
             summary.Text=save.FileName;
         }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException)

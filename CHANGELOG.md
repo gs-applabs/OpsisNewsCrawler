@@ -1,5 +1,10 @@
 # Changelog
 
+### P2/P3 economic calendar filters (2026-11-24)
+
+- Existing calendar supports country, impact, upcoming 7/30/90 days and past 30 days filters, with actual/forecast/previous fields and filtered ICS export. Related cached headlines use the existing HeadlineDedup and comparison form, not a second provider or calendar. Similarity does not prove causal links; imported entries are not live verified releases. Windows validation deferred.
+
+
 ### P2/P3 personalized digest exports (2026-11-24)
 
 - Existing Intelligence center offers a digest date and all-news or enabled-watchlist scope for daily and seven-day HTML exports. Date filtering precedes existing TopicMatcher, preserving source ordering and local-only operation. Exports cover only available cached stories, not an exhaustive archive.
