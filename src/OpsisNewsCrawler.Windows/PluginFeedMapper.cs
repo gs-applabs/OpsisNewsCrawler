@@ -38,7 +38,11 @@ internal static class PluginFeedMapper
         {
             if (!string.IsNullOrEmpty(i.EntryId) && !seenIds.Add(i.EntryId)) continue;
             if (!seenTexts.Add(i.Text.Trim())) continue;
-            result.Add(new NewsItem(i.Text.Trim(), i.Url ?? "", source, snapshot, string.IsNullOrWhiteSpace(i.Summary) ? null : i.Summary, null, NewsItemKind.Calendar, Key: string.IsNullOrEmpty(i.EntryId) ? null : i.EntryId));
+            result.Add(new NewsItem(i.Text.Trim(), i.Url ?? "", source, snapshot, string.IsNullOrWhiteSpace(i.Summary) ? null : i.Summary, null, NewsItemKind.Calendar, Key: string.IsNullOrEmpty(i.EntryId) ? null : i.EntryId)
+            {
+                PluginMetadata = new PluginFeedMetadata(i.Kind, i.ImageId, i.CountryCode, i.LanguageCode,
+                    i.HistoricalYear, i.DetailId, i.Priority)
+            });
             if (result.Count >= Math.Clamp(options.MaxLines, 1, 500)) break;
         }
         return result;

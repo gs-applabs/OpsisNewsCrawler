@@ -717,5 +717,18 @@
   "geo.myloc": "Meinen ungefähren Standort hinzufügen",
   "geo.myloc.consent": "Das Programm fragt Windows einmal nach deinem ungefähren Standort. Für das Wetter werden nur auf etwa 1 km gerundete Koordinaten verwendet und per HTTPS an den Wetterdienst gesendet; nichts Genaueres wird gespeichert. Fortfahren?",
   "geo.myloc.denied": "Der Standort ist nicht verfügbar oder wurde in Windows-Einstellungen > Datenschutz > Standort nicht erlaubt.",
-  "geo.myloc.name": "Mein Standort (ca.)"
+  "geo.myloc.name": "Mein Standort (ca.)",
+  "diag.button": "RSS-Quellenstatus und Leistungsdiagnose",
+  "diag.title": "RSS-Feeds • Status und Leistung",
+  "diag.source": "Quelle",
+  "diag.lastSuccess": "Letzter Erfolg",
+  "diag.failures": "Fehler",
+  "diag.nextAttempt": "Nächster Versuch",
+  "diag.error": "Fehlermeldung",
+  "diag.metrics": "CPU: {0:N1}% • RAM: {1:N0} MB • GDI: {2} • Schreibvorgänge: {3} • Übersprungen: {4} • Aktualisierungen: {5}",
+  "energy.normal": "Normale Verbindung",
+  "energy.metered": "Getaktete Verbindung (Daten sparen)",
+  "energy.label": "Verbindungskosten",
+  "dash.title": "Einstellungsübersicht",
+  "dash.metrics": "Nachrichten: {0} · RSS OK: {1}/{2} · Profil: {3} · Aufträge: {4} · Cache-Schreibvorgänge: {5} (gespart {6}) · Energiefaktor: ×{7:N2}"
 }

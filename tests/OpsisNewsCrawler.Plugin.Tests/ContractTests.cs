@@ -43,7 +43,9 @@ public class ContractTests
         foreach (var line in lines)
         {
             var bar = line.IndexOf('|');
-            var type = line[..bar]; var member = line[(bar + 1)..];
+            var type = line[..bar]; var member = line[(bar + 1)..]
+                .Replace("OpsisNewsCrawler.Plugin.Abstractions, Version=0.8.0.0",
+                         "OpsisNewsCrawler.Plugin.Abstractions, Version=1.0.0.0", StringComparison.Ordinal);
             Assert.True(ours.ContainsKey(type), "missing type " + type);
             if (member.Length > 0) Assert.True(ours[type].Contains(member), $"{type}: signature {member} is not in our contract");
         }

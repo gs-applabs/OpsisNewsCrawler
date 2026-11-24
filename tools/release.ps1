@@ -17,7 +17,7 @@ dotnet publish src\OpsisNewsCrawler.App\OpsisNewsCrawler.App.csproj -c Release -
 if ($LASTEXITCODE -ne 0) { throw "publish failed" }
 
 # The plugin folder is MIRRORED (stale files removed) from the build output; robocopy needs backslash paths.
-$pluginSrc = "$r\src\OpsisNewsCrawler.OpsisPlugin\bin\Release\net10.0-windows10.0.19041.0"
+$pluginSrc = "$r\src\OpsisNewsCrawler.OpsisPlugin\bin\Release\net11.0-windows10.0.19041.0"
 $pluginDst = "$stage\plugins\Opsis - Desktop Customization"
 robocopy $pluginSrc $pluginDst /MIR /NFL /NDL /NJH /NJS | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "copying the plugin failed (robocopy $LASTEXITCODE)" }
@@ -62,7 +62,7 @@ $h = (Get-FileHash "$r\Output\OpsisNewsCrawler-Setup.exe" -Algorithm SHA256).Has
 [IO.File]::WriteAllText("$r\Output\OpsisNewsCrawler-Setup.exe.sha256", "$h  OpsisNewsCrawler-Setup.exe`n")
 "setup: $r\Output\OpsisNewsCrawler-Setup.exe  sha256 $h"
 
-# Portable zip: the same files as the installer's program folder without the Opsis plugin copy (needs the .NET 10 Desktop Runtime).
+# Portable zip: the same files as the installer's program folder without the Opsis plugin copy (needs the .NET 11 Desktop Runtime).
 $ver = (Get-Item "$stage\OpsisNewsCrawler.exe").VersionInfo.ProductVersion.Split('+')[0]
 $portable = "$r\Output\OpsisNewsCrawler-$ver-portable.zip"
 if (Test-Path $portable) { Remove-Item $portable -Force }

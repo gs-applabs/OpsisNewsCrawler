@@ -15,7 +15,15 @@ public enum BarContent { News, Stocks, Both, Weather }
 /// </summary>
 public sealed record NewsItem(string Title, string Url, string Source, DateTimeOffset PublishedAt, string? Summary = null, string? ImageUrl = null,
     NewsItemKind Kind = NewsItemKind.News, int Trend = 0, bool Breaking = false, int Icon = 0, string? Key = null,
-    IReadOnlyList<StoryReport>? StoryReports = null, string? Why = null);
+    IReadOnlyList<StoryReport>? StoryReports = null, string? Why = null)
+{
+    /// <summary>Optional plugin-only details; added without altering the existing record constructor or breaking engine.</summary>
+    public PluginFeedMetadata? PluginMetadata { get; init; }
+}
+
+/// <summary>Preserved rich plugin data for previews, click routing and chronological displays.</summary>
+public sealed record PluginFeedMetadata(string? OriginalKind, string? ImageId, string? CountryCode,
+    string? LanguageCode, int? HistoricalYear, string? DetailId, int Priority);
 
 /// <summary>Another publisher's headline about the same story that the news provider folded into the kept headline (it counts as a confirmation, not as a second line).</summary>
 public sealed record StoryReport(string Source, string Host, DateTimeOffset At);

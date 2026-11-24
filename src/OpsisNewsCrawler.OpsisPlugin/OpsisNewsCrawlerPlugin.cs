@@ -9,7 +9,7 @@ namespace OpsisNewsCrawler.OpsisPlugin;
 /// Hosted, the crawler never creates its own tray icon: its commands are offered through <see cref="GetTrayMenuItems"/>
 /// and its settings are a tab of the host.
 /// </summary>
-public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginProfileAware, IPluginUpdateSource, IPluginHostSettingsAware
+public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginProfileAware, IPluginWidgetProvider, IPluginUpdateSource, IPluginHostSettingsAware
 {
     public const string NavigationKey = "OpsisNewsCrawler";
 
@@ -34,6 +34,8 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
 
     public string Id => "giorstergiopoulos.opsisnewscrawler";
     public string Name => "Opsis News Crawler";
+    // This is the plugin PRODUCT version used by Opsis to choose the newest installed copy.
+    // DLL AssemblyVersion/FileVersion are intentionally pinned at 1.0.0.0 for ABI identity.
     public string Version => AboutTexts.Version;
 
     public void Start()
@@ -114,6 +116,16 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
         new PluginMenuItem("news.pause", "News Crawler — Παύση / Συνέχεια", "News Crawler — Pause / Resume", pauseResume),
         new PluginMenuItem("news.close", "News Crawler — Κλείσιμο", "News Crawler — Close", close),
         new PluginMenuItem("news.open", "News Crawler — Άνοιγμα", "News Crawler — Open", open),
+    };
+
+    /// <summary>Host desktop widgets use the common Opsis palette and only in-memory data.</summary>
+    public IReadOnlyList<PluginWidget> GetWidgets() => new[]
+    {
+        new PluginWidget("crawler-news", "Ειδήσεις", "News", () => new CrawlerWidgetPanel(_controller.Host, "news")),
+        new PluginWidget("crawler-markets", "Αγορές", "Markets", () => new CrawlerWidgetPanel(_controller.Host, "markets")),
+        new PluginWidget("crawler-weather", "Καιρός", "Weather", () => new CrawlerWidgetPanel(_controller.Host, "weather")),
+        new PluginWidget("crawler-breaking", "Έκτακτες", "Breaking", () => new CrawlerWidgetPanel(_controller.Host, "breaking")),
+        new PluginWidget("crawler-history", "Σαν σήμερα", "On this day", () => new CrawlerWidgetPanel(_controller.Host, "history"))
     };
 
     public IReadOnlyList<PluginNavigationItem> GetNavigationItems() =>

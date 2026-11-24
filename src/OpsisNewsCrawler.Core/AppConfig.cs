@@ -107,6 +107,12 @@ public sealed class AppConfig
 
     /// <summary>The holdings shown in the portfolio window (quantity and average price; profit and loss are computed).</summary>
     public List<PortfolioPosition> Portfolio { get; set; } = new();
+    /// <summary>Optional local transaction ledger; holdings remain authoritative until explicitly reconciled.</summary>
+    public List<PortfolioTransaction> PortfolioTransactions { get; set; } = new();
+    /// <summary>Imported economic releases; offline copies with explicit source attribution.</summary>
+    public List<EconomicEvent> EconomicEvents { get; set; } = new();
+    /// <summary>Saved local topic watchlists. No remote profiling.</summary>
+    public List<TopicWatch> TopicWatches { get; set; } = new();
 
     /// <summary>Cities (ids of <see cref="GreekCities"/>) shown by a bar whose content is "Weather", in this order.</summary>
     public List<string> WeatherCities { get; set; } = GreekCities.DefaultSelection.ToList();
@@ -162,6 +168,10 @@ public sealed class AppConfig
 
     /// <summary>"auto" (follow the detected hardware), "low", "balanced" or "high" (force a tier). Inside Opsis, "auto" follows the tier Opsis reports.</summary>
     public string PerformanceMode { get; set; } = "auto";
+
+    /// <summary>"normal" = regular data plan; "metered" = prefer lower network usage.
+    /// Explicit choice because legacy desktop Win32 APIs cannot reliably tell which plans are billed.</summary>
+    public string NetworkCostMode { get; set; } = "normal";
 
     /// <summary>When the user was last asked about an older per-user copy that is still installed next to this machine-wide one (asked again after a week).</summary>
     public DateTimeOffset? DuplicateInstallAskedAt { get; set; }
@@ -530,7 +540,8 @@ public sealed class AppConfig
     {
         if (UpdateLogicVersion < 1) { CheckForUpdates = true; UpdateLogicVersion = 1; }
         NewsRefreshSeconds = RefreshIntervalSeconds;
-        PerformanceMode = PerformanceClassifier.ModeText(PerformanceClassifier.ParseMode(PerformanceMode));   // "auto" | "low" | "balanced" | "high"
+        PerformanceMode = PerformanceClassifier.ModeText(PerformanceClassifier.ParseMode(PerformanceMode));
+        NetworkCostMode = NetworkCostMode == "metered" ? "metered" : "normal";   // "auto" | "low" | "balanced" | "high"
         MaxItemsPerFeed = Math.Clamp(MaxItemsPerFeed, 1, 50);
         NewsMaxAgeHours = Math.Clamp(NewsMaxAgeHours, 1, 720);
         MutedNewsKeywords = (MutedNewsKeywords ?? new()).Where(k => !string.IsNullOrWhiteSpace(k))
@@ -584,7 +595,18 @@ public sealed class AppConfig
         QuoteRefreshSeconds = Math.Clamp(QuoteRefreshSeconds, 30, 3600);
         Portfolio = (Portfolio ?? new()).Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Code) && p.Quantity > 0 && p.AvgCost >= 0)
             .Select(p => { p.Currency = string.IsNullOrWhiteSpace(p.Currency) ? "EUR" : p.Currency.Trim().ToUpperInvariant(); p.Market ??= ""; return p; }).Take(500).ToList();
-        PriceAlerts = (PriceAlerts ?? new()).Where(x => x is not null && !string.IsNullOrWhiteSpace(x.Code) && x.Threshold > 0).ToList();
+        PriceAlerts = (PriceAlerts ?? new()).Where(x => x is not null && !string.IsNullOrWhiteSpace(x.Code) &&
+                (x.Metric == "changePercent" ? x.Threshold is >= -100 and <= 100 : x.Threshold > 0))
+            .Select(x => { x.Metric = x.Metric == "changePercent" ? "changePercent" : "price"; return x; }).Take(200).ToList();
+        TopicWatches = (TopicWatches ?? new()).Where(x => x is not null && !string.IsNullOrWhiteSpace(x.Name))
+            .Select(x => { x.Name=x.Name.Trim()[..Math.Min(80,x.Name.Trim().Length)]; x.Terms=(x.Terms ?? new()).Where(t=>t.Trim().Length>=3).Select(t=>t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList(); x.Region=(x.Region??"").Trim(); return x; })
+            .Take(50).ToList();
+        EconomicEvents = (EconomicEvents ?? new()).Where(x => x is not null &&
+            !string.IsNullOrWhiteSpace(x.Title) && x.Id.Length is >0 and <=100 &&
+            x.Impact is >=0 and <=3).DistinctBy(x=>x.Id).OrderBy(x=>x.StartsAt).TakeLast(1000).ToList();
+        PortfolioTransactions = (PortfolioTransactions ?? new()).Where(x => x is not null &&
+            !string.IsNullOrWhiteSpace(x.InstrumentKey) && x.Units > 0 && x.Fees >= 0 && x.UnitPrice >= 0)
+            .OrderBy(x=>x.When).TakeLast(5000).ToList();
         var builtIn = new HashSet<string>(Breaking.DefaultKeywords.Select(Breaking.Normalize));
         BreakingKeywords = (BreakingKeywords ?? new()).Where(k => !string.IsNullOrWhiteSpace(k)).Select(k => k.Trim())
             .Where(k => !builtIn.Contains(Breaking.Normalize(k))).Distinct(StringComparer.OrdinalIgnoreCase).Take(50).ToList();

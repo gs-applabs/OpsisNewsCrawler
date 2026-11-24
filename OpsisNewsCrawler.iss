@@ -17,7 +17,7 @@
 #define MyAppName "Opsis News Crawler"
 #define MyPublisher "gs-applabs"
 #define MyAppUrl "https://github.com/gs-applabs/OpsisNewsCrawler"
-#define MyAppVersion "0.25.0"
+#define MyAppVersion "0.28.0"
 #ifndef BinDir
 #define BinDir "bin"
 #endif
@@ -652,11 +652,37 @@ begin
   RegDeleteValue(HKCU, RunKeyPath, 'DeskTicker');
 end;
 
+// ABI safety: an integrated Crawler plugin cannot bind to an Opsis host still loading
+// the 0.8.0.0 plugin contract. Standalone installation remains available in all cases.
+function CompatibleOpsisContract(): Boolean;
+var
+  Root, Probe, V: String;
+begin
+  Result := False;
+  Root := OpsisInstallDir();
+  if Root = '' then
+    Root := ExpandConstant('{localappdata}\Programs\Opsis - Desktop Customization');
+  Probe := AddBackslash(Root) + 'OpsisNewsCrawler.Plugin.Abstractions.dll';
+  if not FileExists(Probe) then
+    Probe := AddBackslash(Root) + 'libs\OpsisNewsCrawler.Plugin.Abstractions.dll';
+  if not FileExists(Probe) then Exit;
+  if GetVersionNumbersString(Probe, V) then
+    Result := CompareText(V, '1.0.0.0') = 0;
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Left: String;
 begin
   Result := '';
+  if IsIntegrated() and not CompatibleOpsisContract() then
+  begin
+    // Keep #13#10 away from a line-start: Inno Setup ISPP otherwise treats it as a directive.
+    Result := 'Opsis host plugin contract 1.0.0.0 is required before integrated installation.';
+    Result := Result + #13#10 + 'Απαιτείται ενημέρωση του Opsis με το κοινό συμβόλαιο 1.0.0.0 πριν από την ενσωμάτωση.';
+    Result := Result + #13#10 + 'The standalone installation mode is still available.';
+    Exit;
+  end;
   Left := RemovePerUserInstall;
   if Left <> '' then
     Result := CustomMessage('OldInstallRemains') + #13#10 + Left;

@@ -10,7 +10,7 @@ namespace OpsisNewsCrawler.Core;
 public sealed record FeedTestResult(bool Ok, int Count, DateTimeOffset? Newest, string Error);
 
 /// <summary>Health of one feed URL: last success, last attempt, failures in a row and the last error message.</summary>
-public sealed record FeedHealth(string Url, DateTimeOffset? LastOk, DateTimeOffset? LastTry, int ConsecutiveFailures, string? LastError);
+public sealed record FeedHealth(string Url, DateTimeOffset? LastOk, DateTimeOffset? LastTry, int ConsecutiveFailures, string? LastError, DateTimeOffset? NextRetryAt = null);
 
 /// <summary>
 /// Downloads and parses RSS 2.0 / Atom feeds. A failing feed never breaks the others.
@@ -18,6 +18,15 @@ public sealed record FeedHealth(string Url, DateTimeOffset? LastOk, DateTimeOffs
 public sealed class RssNewsProvider : IDisposable
 {
     private const long MaxFeedBytes = 5 * 1024 * 1024;
+    public const int MaxConcurrentFeeds = 6;
+    public const int MaxConcurrentPerHost = 2;
+    private int activeRequests;
+    private int peakRequests;
+    /// <summary>Peak concurrent feed downloads since construction, for diagnostics.</summary>
+    public int PeakConcurrentRequests => Volatile.Read(ref peakRequests);
+    private long downloadedBytes;
+    /// <summary>Approximate successful RSS bytes received by this instance during its lifetime.</summary>
+    public long DownloadedBytes => Interlocked.Read(ref downloadedBytes);
     private const int MaxTitleLength = 200;
     private const int MaxSummaryLength = 400;
 
@@ -43,25 +52,43 @@ public sealed class RssNewsProvider : IDisposable
         public DateTimeOffset? LastTry;
         public int ConsecutiveFailures;
         public string? LastError;
+        public DateTimeOffset? NextRetryAt;
 
-        public void MarkOk() { LastOk = LastTry = DateTimeOffset.Now; ConsecutiveFailures = 0; LastError = null; }
-        public void MarkFailed(string error) { LastTry = DateTimeOffset.Now; ConsecutiveFailures++; LastError = error; }
+        public void MarkOk()
+        {
+            lock (this) { LastOk = LastTry = DateTimeOffset.UtcNow; ConsecutiveFailures = 0; LastError = null; NextRetryAt = null; }
+        }
+        public void MarkFailed(string error, TimeSpan? retryAfter = null)
+        {
+            lock (this)
+            {
+                LastTry = DateTimeOffset.UtcNow;
+                ConsecutiveFailures = Math.Min(ConsecutiveFailures + 1, 30);
+                LastError = error;
+                NextRetryAt = LastTry.Value + FeedRetryPolicy.Delay(ConsecutiveFailures, retryAfter);
+            }
+        }
+        public bool CoolingDown => NextRetryAt is { } retry && retry > DateTimeOffset.UtcNow;
     }
 
     /// <summary>How a source did in the last fetches (null times = never tried / never worked). For a "source health" display.</summary>
-    public IReadOnlyList<FeedHealth> Health() => states
-        .Select(kv => new FeedHealth(kv.Key, kv.Value.LastOk, kv.Value.LastTry, kv.Value.ConsecutiveFailures, kv.Value.LastError))
-        .ToList();
+    public IReadOnlyList<FeedHealth> Health() => states.Select(kv =>
+    {
+        var s = kv.Value;
+        lock (s) return new FeedHealth(kv.Key, s.LastOk, s.LastTry, s.ConsecutiveFailures, s.LastError, s.NextRetryAt);
+    }).OrderBy(x => x.Url, StringComparer.OrdinalIgnoreCase).ToList();
 
     private void RecordFailure(string name)
     {
         lock (failLock) failedFeeds.Add(name);
     }
 
-    public RssNewsProvider()
+    public RssNewsProvider(HttpMessageHandler? handler = null)
     {
-        http = new HttpClient { Timeout = TimeSpan.FromSeconds(15), MaxResponseContentBufferSize = MaxFeedBytes };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; OpsisNewsCrawler/0.25.0)");
+        http = handler is null ? new HttpClient() : new HttpClient(handler);
+        http.Timeout = TimeSpan.FromSeconds(15);
+        http.MaxResponseContentBufferSize = MaxFeedBytes;
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; OpsisNewsCrawler/0.28.0)");
         http.DefaultRequestHeaders.Accept.ParseAdd("application/rss+xml, application/atom+xml, application/xml, text/xml, */*");
     }
 
@@ -70,12 +97,32 @@ public sealed class RssNewsProvider : IDisposable
         int maxAgeHours = 168, bool newestFirst = false)
     {
         lock (failLock) failedFeeds = new();
-        var tasks = sources
-            .Where(s => !string.IsNullOrWhiteSpace(s.Url))
-            .Select(s => FetchOneAsync(s, maxPerFeed, cancellationToken))
-            .ToList();
+        using var global = new SemaphoreSlim(MaxConcurrentFeeds);
+        var domainGates = new System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim>(StringComparer.OrdinalIgnoreCase);
+        async Task<List<NewsItem>> FetchLimitedAsync(FeedSource source)
+        {
+            await global.WaitAsync(cancellationToken).ConfigureAwait(false);
+            var hostname = Uri.TryCreate(source.Url, UriKind.Absolute, out var uri) ? uri.Host : source.Url;
+            var domain = domainGates.GetOrAdd(hostname, _ => new SemaphoreSlim(MaxConcurrentPerHost));
+            var acquired = false;
+            try
+            {
+                await domain.WaitAsync(cancellationToken).ConfigureAwait(false);
+                acquired = true;
+                var active = Interlocked.Increment(ref activeRequests);
+                int previous;
+                while ((previous = Volatile.Read(ref peakRequests)) < active &&
+                       Interlocked.CompareExchange(ref peakRequests, active, previous) != previous) { }
+                try { return await FetchOneAsync(source, maxPerFeed, cancellationToken).ConfigureAwait(false); }
+                finally { Interlocked.Decrement(ref activeRequests); }
+            }
+            finally { if (acquired) domain.Release(); global.Release(); }
+        }
 
-        var perFeed = await Task.WhenAll(tasks).ConfigureAwait(false);
+        var feeds = sources.Where(s => !string.IsNullOrWhiteSpace(s.Url))
+            .DistinctBy(s => s.Url, StringComparer.OrdinalIgnoreCase).ToList();
+        var perFeed = await Task.WhenAll(feeds.Select(FetchLimitedAsync)).ConfigureAwait(false);
+        foreach (var gate in domainGates.Values) gate.Dispose();
 
         // Round-robin, so every source is visible in the ticker instead of the busiest one winning.
         var result = new List<NewsItem>();
@@ -159,8 +206,8 @@ public sealed class RssNewsProvider : IDisposable
             using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentLength is > MaxFeedBytes) return new FeedTestResult(false, 0, null, "feed too large");
-            var bytes = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
-            if (bytes.LongLength > MaxFeedBytes) return new FeedTestResult(false, 0, null, "feed too large");
+            var bytes = await ReadBoundedAsync(await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false), MaxFeedBytes, ct).ConfigureAwait(false);
+            Interlocked.Add(ref downloadedBytes, bytes.LongLength);
             var items = Parse(bytes, "", 50);
             return items.Count == 0
                 ? new FeedTestResult(false, 0, null, "no stories found")
@@ -170,7 +217,7 @@ public sealed class RssNewsProvider : IDisposable
         {
             throw;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or XmlException or IOException or InvalidOperationException or UriFormatException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or XmlException or IOException or InvalidOperationException or UriFormatException or InvalidDataException)
         {
             return new FeedTestResult(false, 0, null, ex.Message);
         }
@@ -179,6 +226,8 @@ public sealed class RssNewsProvider : IDisposable
     private async Task<List<NewsItem>> FetchOneAsync(FeedSource source, int maxItems, CancellationToken ct)
     {
         var state = states.GetOrAdd(source.Url, _ => new FeedState());
+        lock (state)
+            if (state.CoolingDown) return state.Items?.Take(maxItems).ToList() ?? new List<NewsItem>();
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, source.Url);
@@ -194,11 +243,21 @@ public sealed class RssNewsProvider : IDisposable
                 state.MarkOk();
                 return state.Items.Take(maxItems).ToList();
             }
+            if (response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.ServiceUnavailable)
+            {
+                var retry = response.Headers.RetryAfter?.Delta;
+                if (retry is null && response.Headers.RetryAfter?.Date is { } retryDate)
+                    retry = retryDate - DateTimeOffset.UtcNow;
+                state.MarkFailed($"HTTP {(int)response.StatusCode}", retry);
+                RecordFailure(source.Name);
+                return new List<NewsItem>();
+            }
             response.EnsureSuccessStatusCode();
 
-            if (response.Content.Headers.ContentLength is > MaxFeedBytes) return new List<NewsItem>();
-            var bytes = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
-            if (bytes.LongLength > MaxFeedBytes) return new List<NewsItem>();
+            if (response.Content.Headers.ContentLength is > MaxFeedBytes)
+                throw new InvalidDataException("feed exceeds the 5 MB size limit");
+            var bytes = await ReadBoundedAsync(await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false), MaxFeedBytes, ct).ConfigureAwait(false);
+            Interlocked.Add(ref downloadedBytes, bytes.LongLength);
 
             var parsed = Parse(bytes, source.Name, Math.Max(maxItems, CachedItemsPerFeed));
             state.ETag = response.Headers.ETag?.ToString();
@@ -211,7 +270,7 @@ public sealed class RssNewsProvider : IDisposable
         {
             throw;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or XmlException or IOException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or XmlException or IOException or InvalidDataException or UriFormatException or ArgumentException or InvalidOperationException)
         {
             System.Diagnostics.Debug.WriteLine($"OpsisNewsCrawler: feed '{source.Name}' failed: {ex.Message}");
             RecordFailure(source.Name);
@@ -220,14 +279,34 @@ public sealed class RssNewsProvider : IDisposable
         }
     }
 
+    /// <summary>Streams at most the allowed byte count, even when servers use chunked encoding or lie about Content-Length.</summary>
+    public static async Task<byte[]> ReadBoundedAsync(Stream stream, long maxBytes, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        if (maxBytes < 1) throw new ArgumentOutOfRangeException(nameof(maxBytes));
+        using var buffer = new MemoryStream();
+        var bytes = new byte[16 * 1024];
+        while (true)
+        {
+            var n = await stream.ReadAsync(bytes.AsMemory(), ct).ConfigureAwait(false);
+            if (n == 0) return buffer.ToArray();
+            if (buffer.Length + n > maxBytes) throw new InvalidDataException($"feed exceeds the {maxBytes} byte size limit");
+            buffer.Write(bytes, 0, n);
+        }
+    }
+
     public static List<NewsItem> Parse(byte[] xml, string sourceName, int maxItems)
     {
+        ArgumentNullException.ThrowIfNull(xml);
+        if (xml.LongLength > MaxFeedBytes) throw new InvalidDataException("RSS payload exceeds the 5 MB limit");
+        if (maxItems <= 0) return new List<NewsItem>();
         var settings = new XmlReaderSettings
         {
             DtdProcessing = DtdProcessing.Ignore,
             XmlResolver = null,
             CheckCharacters = false,
-            MaxCharactersFromEntities = 1024
+            MaxCharactersFromEntities = 1024,
+            MaxCharactersInDocument = MaxFeedBytes * 3
         };
 
         XDocument doc;
@@ -246,8 +325,8 @@ public sealed class RssNewsProvider : IDisposable
             if (string.IsNullOrEmpty(title) || link is null) continue;
 
             if (title.Length > MaxTitleLength) title = title[..MaxTitleLength].TrimEnd() + "…";
-            var date = ParseDate(ChildValue(entry, "pubDate") ?? ChildValue(entry, "published")
-                                 ?? ChildValue(entry, "updated") ?? ChildValue(entry, "date"));
+            var date = NewsDatePolicy.Normalize(ParseDate(ChildValue(entry, "pubDate") ?? ChildValue(entry, "published")
+                                 ?? ChildValue(entry, "updated") ?? ChildValue(entry, "date")), DateTimeOffset.UtcNow);
             var summary = ExtractSummary(entry, title);
             var image = ExtractImage(entry);
             items.Add(new NewsItem(title, link, sourceName, date ?? DateTimeOffset.MinValue, summary, image));

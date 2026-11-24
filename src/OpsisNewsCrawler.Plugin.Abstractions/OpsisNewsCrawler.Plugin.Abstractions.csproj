@@ -5,7 +5,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>0.25.0</Version>
+    <Version>0.28.0</Version>
     <!-- Contract assembly version 1.0.0.0 (Opsis 2.6.0). Opsis hands ITS copy of this assembly to every plugin whatever version the plugin was built against (PluginLoadContext), so a plugin built
          against 0.8.0.0 still binds; a plugin built against a NEWER contract than the host has is refused ("needs an update of Opsis"). Change it only together with a new copy in Opsis libs. -->
     <AssemblyVersion>1.0.0.0</AssemblyVersion>

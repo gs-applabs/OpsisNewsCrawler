@@ -717,5 +717,18 @@
   "geo.myloc": "Yaklaşık konumumu ekle",
   "geo.myloc.consent": "Program Windows’tan yaklaşık konumunuzu bir kez isteyecek. Hava durumu için yalnızca yaklaşık 1 km’ye yuvarlanmış koordinatlar kullanılır ve HTTPS ile sağlayıcıya gönderilir; daha hassas hiçbir şey saklanmaz. Devam edilsin mi?",
   "geo.myloc.denied": "Konum kullanılamıyor veya Windows Ayarları > Gizlilik > Konum’da izin verilmedi.",
-  "geo.myloc.name": "Konumum (yaklaşık)"
+  "geo.myloc.name": "Konumum (yaklaşık)",
+  "diag.button": "RSS kaynak sağlığı ve performans tanılaması",
+  "diag.title": "RSS akışları • Sağlık ve performans",
+  "diag.source": "Kaynak",
+  "diag.lastSuccess": "Son başarılı işlem",
+  "diag.failures": "Hatalar",
+  "diag.nextAttempt": "Sonraki deneme",
+  "diag.error": "Hata",
+  "diag.metrics": "CPU: {0:N1}% • RAM: {1:N0} MB • GDI: {2} • Yazma: {3} • Atlanan: {4} • Yenilemeler: {5}",
+  "energy.normal": "Normal bağlantı",
+  "energy.metered": "Kotalı bağlantı (veri tasarrufu)",
+  "energy.label": "Bağlantı maliyeti",
+  "dash.title": "Ayarlar özeti",
+  "dash.metrics": "Haberler: {0} · RSS sağlıklı: {1}/{2} · Profil: {3} · İşler: {4} · Önbellek yazma: {5} (atlanan {6}) · Enerji: ×{7:N2}"
 }

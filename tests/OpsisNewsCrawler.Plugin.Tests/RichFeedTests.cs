@@ -31,6 +31,25 @@ public class RichFeedTests
     }
 
     [Fact]
+    public void RichMetadataSurvivesMappingWithoutChangingCalendarSemantics()
+    {
+        var item = new PluginRichFeedItem("id1", "Ancient history", "https://example.org/event",
+            "history", "Summary", "portrait-1", "GR", "el", -490, "detail-7", 7);
+        var news = Assert.Single(PluginFeedMapper.FromRich(new[] { item }, "Chronikologio", Now, Opts()));
+        Assert.Equal(NewsItemKind.Calendar, news.Kind);
+        Assert.False(news.Breaking);
+        var meta = Assert.IsType<PluginFeedMetadata>(news.PluginMetadata);
+        Assert.Equal("history", meta.OriginalKind);
+        Assert.Equal("portrait-1", meta.ImageId);
+        Assert.Equal(-490, meta.HistoricalYear);
+        Assert.Equal("detail-7", meta.DetailId);
+        Assert.Equal(7, meta.Priority);
+        Assert.Equal("GR", meta.CountryCode);
+        Assert.Equal("el", meta.LanguageCode);
+        Assert.Equal(Now, news.PublishedAt);
+    }
+
+    [Fact]
     public void TheOrderIsTheSameEveryTimeWhateverTheOrderOfTheInput()
     {
         var items = new[] { R("c", "C", 1, 1900), R("a", "A", 5, 1800), R("b", "B", 5, 1950), R("d", "D", 0, null), R("e", "E", 5, 1950) };
