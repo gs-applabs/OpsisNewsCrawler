@@ -28,9 +28,17 @@ function FindHostDll([string]$name) {
 $HostFolder = Full $HostFolder
 $PluginFolder = Full $PluginFolder
 $BackupRoot = Full $BackupRoot
-if ($PluginFolder -eq $HostFolder -or !$PluginFolder.StartsWith((Full (Split-Path $PluginFolder -Parent)), [StringComparison]::OrdinalIgnoreCase)) {
-    throw 'Invalid plugin destination.'
+# The integrated Inno installer always installs THIS plugin into the leaf
+# 'Opsis - Desktop Customization', whether the parent is protected Program
+# Files, per-user AppData, or an explicitly selected PLUGINROOT.
+# A typo must never rename/delete another Opsis plugin or arbitrary folder.
+$expectedLeaf = 'Opsis - Desktop Customization'
+$actualLeaf = Split-Path $PluginFolder.TrimEnd([char[]]@('\', '/')) -Leaf
+if ($PluginFolder -eq $HostFolder -or
+    ![string]::Equals($actualLeaf, $expectedLeaf, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Invalid Crawler plugin destination: $PluginFolder (expected leaf $expectedLeaf)"
 }
+EnsureRealDirectory (Split-Path $PluginFolder -Parent)
 EnsureRealDirectory $HostFolder
 EnsureRealDirectory $BackupRoot
 $pending = Join-Path $BackupRoot 'pending'
@@ -71,6 +79,14 @@ foreach($pair in @(@($contract,$backupContract),@($ui,$backupUi))) {
 Write-Host "P0 completed rollback snapshot: $snapshot"
 Write-Host "Compatible with current host contract/UI; files $($contents.Count), payload bytes $total"
 if($Mode -eq 'Inspect'){return}
+# The host uses the same mutex name in Program.cs and the Inno installer.
+# Check both, since the process may be launched with a different exe name.
+try {
+    $runningHostMutex = [Threading.Mutex]::OpenExisting('Local\Opsis.SingleInstance')
+    $runningHostMutex.Dispose()
+    throw 'Opsis host mutex is active. Close Opsis before restoring a plugin.'
+}
+catch [Threading.WaitHandleCannotBeOpenedException] { }
 if (Get-Process -Name Opsis -ErrorAction SilentlyContinue) {
     throw 'Close Opsis completely before attempting a plugin rollback.'
 }
@@ -95,6 +111,9 @@ foreach($name in @('OpsisNewsCrawler.OpsisPlugin.dll','Opsis.UI.dll','OpsisNewsC
         throw "Staged rollback file is corrupted: $name"
     }
 }
+# Marker is a backup-only recovery guard and does not belong inside the
+# deployed plugin's code directory.
+Remove-Item -LiteralPath (Join-Path $stage '.backup-complete') -Force
 $moved = $false
 try{
     Move-Item -LiteralPath $PluginFolder -Destination $failed -ErrorAction Stop
