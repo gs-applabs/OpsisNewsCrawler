@@ -12,6 +12,29 @@ public sealed partial class SettingsPanel
         flow.Controls.Add(Note(Loc.IsGreek
             ? "Ο Opsis διαχειρίζεται τη θέση, τις οθόνες και τη διάρκεια ζωής των widgets. Εδώ αλλάζετε μόνο τον τρόπο εμφάνισης των δεδομένων του Crawler."
             : "Opsis owns widget placement, monitors and lifetime. Only the Crawler's data presentation is configured here.", 690));
+        // Presets update the five existing widget settings; Opsis still owns
+        // monitor placement, widget windows and theme tokens.
+        var presetRow = new FlowLayoutPanel
+        {
+            AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false
+        };
+        var presetChoice = new FlatComboBox { Width = 270 };
+        presetChoice.SetItems(WidgetStudioPresets.Keys.Select(key =>
+            WidgetStudioPresets.Title(key, Loc.IsGreek)), 0);
+        var applyPreset = new FlatButton
+        {
+            Text = Loc.IsGreek ? "Εφαρμογή προφίλ widgets" : "Apply widget profile"
+        };
+        applyPreset.Click += (_, _) =>
+        {
+            var index = presetChoice.SelectedIndex;
+            if (index < 0 || index >= WidgetStudioPresets.Keys.Count) return;
+            ApplyWidgetPreset(WidgetStudioPresets.Keys[index]);
+            MarkDirty();
+        };
+        presetRow.Controls.Add(presetChoice);
+        presetRow.Controls.Add(applyPreset);
+        flow.Controls.Add(Row(Loc.IsGreek ? "Έτοιμα προφίλ" : "Ready-made profiles", presetRow, 230));
         widgetEditors.Clear();
         foreach (var kind in WidgetStudio.Kinds)
         {
@@ -53,6 +76,19 @@ public sealed partial class SettingsPanel
             widgetEditors[kind] = (layout, count, showSource, showTime);
         }
         return page;
+    }
+
+    private void ApplyWidgetPreset(string name)
+    {
+        var profiles = WidgetStudioPresets.Create(name);
+        foreach (var (kind, controls) in widgetEditors)
+        {
+            var p = profiles[kind];
+            controls.Layout.SelectSilently(p.Layout switch { "context" => 1, "gallery" => 2, _ => 0 });
+            controls.Count.SetValueSilently(p.MaxItems);
+            controls.Source.Checked = p.ShowSource;
+            controls.Time.Checked = p.ShowTime;
+        }
     }
 
     private void LoadWidgetStudio()
