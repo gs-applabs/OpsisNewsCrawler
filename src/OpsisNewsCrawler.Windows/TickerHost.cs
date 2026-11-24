@@ -1120,6 +1120,10 @@ public sealed partial class TickerHost : IDisposable
 
     private bool HasLive => Config.LiveFeeds.Any(f => f.Enabled && Breaking.ToPlayableUrl(f.Url) is not null);
 
+    /// <summary>Current in-memory breaking headline used for offline selection of
+    /// user-supplied live feeds in the P1 Settings preview. Never starts playback.</summary>
+    public string BreakingVideoContext => breakingVideoContext ?? "";
+
     private IReadOnlyList<BreakingAssessment> breakingEvidence = Array.Empty<BreakingAssessment>();
 
     /// <summary>Latest local ranking evidence for the P1 read-only inspector.

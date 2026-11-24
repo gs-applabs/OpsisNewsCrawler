@@ -117,6 +117,27 @@ public sealed partial class SettingsPanel
             if (index < workLive.Count) workLive[index].Enabled = isChecked;
         };
         inner.Controls.Add(liveList);
+        liveList.SelectedIndexChanged += (_, _) => LoadSelectedLiveMetadata();
+
+        // P1 live hub controls reuse the existing Opsis-styled flat inputs.
+        // Metadata influences ranking of user-configured sources only.
+        inner.Controls.Add(Note(Loc.IsGreek
+            ? "Προτεραιότητα, γεωγραφική περιοχή και λέξεις-κλειδιά: δεν αποδεικνύουν αξιοπιστία ούτε επιβεβαιώνουν την άδεια αναμετάδοσης."
+            : "Priority, region and keywords rank your own feeds; they do not verify a channel or grant rebroadcasting rights.", 650));
+        livePriority = new FlatNumber();
+        livePriority.Configure(-100, 100, 5);
+        liveRegion = new FlatText { Width = 110 };
+        liveKeywords = new FlatText { Width = 440 };
+        inner.Controls.Add(Row(Loc.IsGreek ? "Προτεραιότητα (-100 έως 100)" : "Priority (-100 to 100)", livePriority, 230));
+        inner.Controls.Add(Row(Loc.IsGreek ? "Περιοχή (GR, CY κ.λπ.)" : "Region (GR, CY etc.)", liveRegion, 230));
+        inner.Controls.Add(Row(Loc.IsGreek ? "Λέξεις-κλειδιά (με ;)" : "Keywords (separate with ;)", liveKeywords, 230));
+        livePriority.ValueChanged += (_, _) => CommitSelectedLiveMetadata();
+        liveRegion.TextValueChanged += (_, _) => CommitSelectedLiveMetadata();
+        liveKeywords.TextValueChanged += (_, _) => CommitSelectedLiveMetadata();
+
+        var previewPriority = new FlatButton { Text = Loc.IsGreek ? "Προεπισκόπηση κατάταξης live" : "Preview live ranking" };
+        previewPriority.Click += (_, _) => PreviewLiveRanking();
+        inner.Controls.Add(previewPriority);
         var removeLive = new FlatButton { Text = L("btn.removeLive") };
         removeLive.Click += (_, _) =>
         {
@@ -142,8 +163,57 @@ public sealed partial class SettingsPanel
 
     private void RebuildLiveList()
     {
+        if (liveList is null || liveList.IsDisposed) return;
+        var oldIndex = liveList.SelectedIndex;
         liveList.ClearRows();
-        foreach (var f in workLive) liveList.AddRow($"{(string.IsNullOrWhiteSpace(f.Name) ? f.Url : f.Name)}   —   {f.Url}", f.Enabled);
+        foreach (var f in workLive)
+            liveList.AddRow($"{(string.IsNullOrWhiteSpace(f.Name) ? f.Url : f.Name)}   [{f.Region}, {f.Priority:+#;-#;0}]  —  {f.Url}", f.Enabled);
+        if (workLive.Count > 0) liveList.SelectedIndex = Math.Clamp(oldIndex, 0, workLive.Count - 1);
+    }
+
+    private void LoadSelectedLiveMetadata()
+    {
+        if (livePriority is null || liveRegion is null || liveKeywords is null) return;
+        var index = liveList.SelectedIndex;
+        if (index < 0 || index >= workLive.Count) return;
+        liveMetadataLoading = true;
+        var wasLoading = loading;
+        loading = true; // selecting a row is not itself a settings modification
+        try
+        {
+            var feed = workLive[index];
+            livePriority.SetValueSilently(feed.Priority);
+            liveRegion.Value = feed.Region ?? "";
+            liveKeywords.Value = string.Join("; ", feed.EventKeywords ?? new());
+        }
+        finally
+        {
+            loading = wasLoading;
+            liveMetadataLoading = false;
+        }
+    }
+
+    private void CommitSelectedLiveMetadata()
+    {
+        if (liveMetadataLoading) return;
+        var index = liveList.SelectedIndex;
+        if (index < 0 || index >= workLive.Count) return;
+        var feed = workLive[index];
+        feed.Priority = livePriority.Value;
+        feed.Region = liveRegion.Value;
+        feed.EventKeywords = liveKeywords.Value.Split(';', StringSplitOptions.TrimEntries |
+            StringSplitOptions.RemoveEmptyEntries).ToList();
+        workLive[index] = LiveVideoStudio.Clean(feed);
+    }
+
+    private void PreviewLiveRanking()
+    {
+        CommitSelectedLiveMetadata();
+        var ordered = LiveVideoPolicy.Select(workLive, host.BreakingVideoContext);
+        liveStatus.Text = ordered.Count == 0
+            ? (Loc.IsGreek ? "Δεν υπάρχουν έγκυρες ενεργές ροές." : "No valid enabled streams.")
+            : string.Join("  ·  ", ordered.Take(3).Select((x, i) => $"{i + 1}. {x.Name}"));
+        // Read-only preview: no WebView2 is created and no stream is opened.
     }
 
     private void AddLive()

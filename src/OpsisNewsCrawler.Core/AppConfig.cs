@@ -638,7 +638,7 @@ public sealed class AppConfig
         GreekCities.SetCustom(CustomPlaces);   // before the city ids below are checked
         CustomPlaces = GreekCities.Custom.ToList();
         if (GreekCities.Find(AlertCityId) is null) AlertCityId = "";
-        LiveFeeds = (LiveFeeds ?? new()).Where(l => l is not null && !string.IsNullOrWhiteSpace(l.Url)).ToList();
+        LiveFeeds = LiveVideoStudio.CleanAll(LiveFeeds);
         if (!Enum.IsDefined(MainContent)) MainContent = BarContent.News;
         WeatherCities = (WeatherCities ?? new()).Where(id => GreekCities.Find(id) is not null).Distinct().ToList();
         DesktopBarShape = DesktopBarShape is "rounded" or "pill" ? DesktopBarShape : "rect";

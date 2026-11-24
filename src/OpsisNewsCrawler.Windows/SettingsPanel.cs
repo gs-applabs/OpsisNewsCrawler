@@ -210,6 +210,9 @@ public sealed partial class SettingsPanel : UserControl
     private List<LiveFeed> workLive = new();
     private FlatList liveList = null!;
     private FlatText addLiveBox = null!;
+    private FlatNumber livePriority = null!;
+    private FlatText liveRegion = null!, liveKeywords = null!;
+    private bool liveMetadataLoading;
     private Label liveStatus = null!;
 
     /// <summary>Raised after Apply succeeded.</summary>
@@ -1298,7 +1301,7 @@ public sealed partial class SettingsPanel : UserControl
             forgetBreaking.Text = L("breaking.forget");
             maxAge.SetValueSilently(c.BreakingMaxAgeMinutes);
             duration.SetValueSilently(c.BreakingDurationMinutes);
-            workLive = c.LiveFeeds.Select(f => new LiveFeed(f.Name, f.Url) { Enabled = f.Enabled }).ToList();
+            workLive = c.LiveFeeds.Select(LiveVideoStudio.Clean).ToList();
             RebuildLiveList();
             // The crawler's themes are its own, also inside Opsis; "Follow Opsis" is just one more choice there.
             themeRow.Visible = true; themeAccent.Visible = true;
@@ -1758,7 +1761,7 @@ public sealed partial class SettingsPanel : UserControl
         c.BreakingSensitivity = BreakingEngine.SensitivityText((BreakingSensitivity)Math.Clamp(breakingSensitivity.SelectedIndex, 0, 2));
         c.BreakingMaxAgeMinutes = maxAge.Value;
         c.BreakingDurationMinutes = duration.Value;
-        c.LiveFeeds = workLive.Select(f => new LiveFeed(f.Name, f.Url) { Enabled = f.Enabled }).ToList();
+        c.LiveFeeds = LiveVideoStudio.CleanAll(workLive);
 
         // Feeds: write the edited copy back and fetch again when the active category's sources changed.
         var previousActive = c.ActiveCategory;
