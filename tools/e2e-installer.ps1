@@ -76,6 +76,9 @@ if ($Scenario -eq 'integrated') {
     }
     $hostLibs = Join-Path $env:LOCALAPPDATA 'Programs\Opsis - Desktop Customization\libs'
     $hostContract = Join-Path $hostLibs 'OpsisNewsCrawler.Plugin.Abstractions.dll'
+    $hostUi = Join-Path $hostLibs 'Opsis.UI.dll'
+    $uiSource = Join-Path (Split-Path -Parent $PSScriptRoot) 'libs\Opsis.UI.dll'
+    if (-not (Test-Path $uiSource)) { throw 'Missing UI6 payload used by the P0 preflight.' }
     $pluginRoot = Join-Path $Out 'isolated-opsis-plugins'
     $pluginDir = Join-Path $pluginRoot 'Opsis - Desktop Customization'
     New-Item -ItemType Directory -Force $hostLibs, $pluginRoot | Out-Null
@@ -86,6 +89,16 @@ if ($Scenario -eq 'integrated') {
     Check ($denied -ne 0) 'installer refuses integrated plugin deployment without host ABI 1.0.0.0'
     Check (-not (Test-Path (Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'))) 'refused install did not write plugin DLL'
     Copy-Item $ContractFile $hostContract -Force
+    Copy-Item $uiSource $hostUi -Force
+    # A DLL may claim the right FileVersion while its bytes differ.
+    # The integrated installer must reject that case before copying anything.
+    $modified = [IO.File]::ReadAllBytes($hostUi)
+    $modified[$modified.Length - 1] = $modified[$modified.Length - 1] -bxor 1
+    [IO.File]::WriteAllBytes($hostUi, $modified)
+    $mismatch = Run-Setup $NewSetup $setupArgs 'integrated-ui-hash-denied.log'
+    Check ($mismatch -ne 0) 'integrated installer rejects mismatched Opsis.UI SHA256'
+    Check (-not (Test-Path (Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'))) 'UI6 SHA mismatch did not deploy the plugin'
+    Copy-Item $uiSource $hostUi -Force
     $hostVersion = [Reflection.AssemblyName]::GetAssemblyName($hostContract).Version.ToString()
     Check ($hostVersion -eq '1.0.0.0') "staged host ABI identity is $hostVersion"
     $installed = Run-Setup $NewSetup $setupArgs 'integrated-installed.log'
