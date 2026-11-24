@@ -15,6 +15,19 @@ public sealed class CrawlerWidgetPanel : UserControl
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 30_000 };
     private readonly Label heading = new() { Dock = DockStyle.Top, Height = 36, AutoEllipsis = true };
     private readonly ListBox items = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, IntegralHeight = false };
+    private readonly FlowLayoutPanel gallery = new()
+    {
+        Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown,
+        WrapContents = false, Padding = new Padding(6), Visible = false,
+        AccessibleName = "Opsis Newsroom Gallery"
+    };
+    private readonly Label breakingBanner = new()
+    {
+        Dock = DockStyle.Top, Height = 30, Visible = false,
+        TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(12, 0, 4, 0),
+        AccessibleRole = AccessibleRole.StaticText
+    };
+    private string gallerySignature = "";
     private readonly List<NewsItem> visible = new();
     private int refreshQueued;
     private readonly IDisposable eventSubscription;
@@ -40,7 +53,10 @@ public sealed class CrawlerWidgetPanel : UserControl
         items.DoubleClick += (_, _) => OpenSelected();
         items.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { OpenSelected(); e.Handled = true; } };
         Controls.Add(items);
+        Controls.Add(gallery);
+        Controls.Add(breakingBanner);
         Controls.Add(heading);
+        gallery.Resize += (_, _) => ResizeGalleryCards();
         Theme.Changed += ApplyTheme;
         Loc.Changed += RefreshSafe;
         timer.Tick += (_, _) => RefreshSafe();
@@ -77,6 +93,12 @@ public sealed class CrawlerWidgetPanel : UserControl
         heading.BackColor = Theme.Surface;
         items.BackColor = Theme.Surface;
         items.ForeColor = Theme.Text;
+        gallery.BackColor = Theme.Background;
+        breakingBanner.BackColor = Theme.Accent;
+        breakingBanner.ForeColor = GalleryColorContrast.Foreground(Theme.Accent);
+        // Theme changes do not rebuild the data or create redundant network traffic.
+        foreach (var card in gallery.Controls.OfType<Button>())
+            StyleGalleryCard(card);
         Invalidate();
     }
 
@@ -110,6 +132,9 @@ public sealed class CrawlerWidgetPanel : UserControl
             return;
         }
         var profile = WidgetStudio.Resolve(host.Config.WidgetProfiles, kind);
+        var galleryMode = profile.Layout == "gallery" && WidgetStudio.CanUseGallery(kind);
+        items.Visible = !galleryMode;
+        gallery.Visible = galleryMode;
         visible.Clear();
         visible.AddRange(host.WidgetSnapshot(kind).Take(profile.MaxItems));
         items.BeginUpdate();
@@ -121,11 +146,89 @@ public sealed class CrawlerWidgetPanel : UserControl
                     profile, allowTime: kind != "history"));
             items.ItemHeight = profile.Layout == "context" ? 26 : 23;
             heading.Text = WidgetStudio.Title(kind, Loc.IsGreek);
+            breakingBanner.Visible = kind == "breaking" && visible.Count > 0;
+            if (breakingBanner.Visible)
+                breakingBanner.Text = Loc.IsGreek ? $"  ΕΚΤΑΚΤΗ ΕΠΙΚΑΙΡΟΤΗΤΑ  ·  {visible.Count}" : $"  BREAKING NEWS  ·  {visible.Count}";
+            if (galleryMode) RefreshGallery(profile);
+            else if (gallery.Controls.Count != 0)
+            {
+                ClearGallery();
+                gallerySignature = "";
+            }
             items.AccessibleDescription = visible.Count == 0
                 ? (Loc.IsGreek ? "Δεν υπάρχουν διαθέσιμα δεδομένα" : "No data available")
                 : string.Join(". ", visible.Take(3).Select(x => x.Title));
         }
         finally { items.EndUpdate(); }
+    }
+
+    private void RefreshGallery(WidgetStudioProfile profile)
+    {
+        // Fixed-size, in-memory signatures avoid rebuilding 30 WinForms controls
+        // on each timer tick and reduce GDI pressure in an always-running host.
+        var cards = visible.Select(x => WidgetStudio.GalleryCardText(
+            x.Title, x.Summary, x.Source, x.PublishedAt, profile,
+            Loc.IsGreek, x.Breaking || kind == "breaking", kind == "history")).ToArray();
+        var signature = string.Join("\u001e", cards) + "\u001f" +
+            string.Join("\u001e", visible.Select(x => x.Url ?? ""));
+        if (gallerySignature == signature && gallery.Controls.Count == cards.Length) return;
+        gallerySignature = signature;
+        gallery.SuspendLayout();
+        try
+        {
+            ClearGallery();
+            for (var i = 0; i < cards.Length; i++)
+            {
+                var snapshot = visible[i];
+                var card = new Button
+                {
+                    AutoSize = false, Height = 100, Width = GalleryCardWidth(),
+                    Margin = new Padding(2, 2, 2, 7),
+                    Padding = new Padding(12, 8, 10, 8),
+                    FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
+                    UseVisualStyleBackColor = false, UseMnemonic = false,
+                    Text = cards[i], TabStop = true,
+                    AccessibleRole = AccessibleRole.PushButton,
+                    AccessibleName = SafeAccessibilityText(snapshot.Title),
+                    AccessibleDescription = SafeAccessibilityText(snapshot.Summary ?? "")
+                };
+                StyleGalleryCard(card);
+                var url = snapshot.Url;
+                card.Click += (_, _) => OpenUrl(url);
+                gallery.Controls.Add(card);
+            }
+        }
+        finally { gallery.ResumeLayout(true); }
+    }
+
+    private int GalleryCardWidth() => Math.Max(180,
+        gallery.ClientSize.Width - gallery.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - 16);
+
+    private void ResizeGalleryCards()
+    {
+        if (IsDisposed) return;
+        var width = GalleryCardWidth();
+        foreach (var card in gallery.Controls.OfType<Button>())
+            if (card.Width != width) card.Width = width;
+    }
+
+    private void StyleGalleryCard(Button card)
+    {
+        card.BackColor = Theme.Surface;
+        card.ForeColor = Theme.Text;
+        card.FlatAppearance.BorderSize = 1;
+        card.FlatAppearance.BorderColor = kind == "breaking" ? Theme.Accent : Theme.Border;
+        card.FlatAppearance.MouseOverBackColor = Theme.Background;
+        card.FlatAppearance.MouseDownBackColor = Theme.Background;
+    }
+
+    private void ClearGallery()
+    {
+        foreach (Control child in gallery.Controls.Cast<Control>().ToArray())
+        {
+            gallery.Controls.Remove(child);
+            child.Dispose();
+        }
     }
 
     private static string SafeAccessibilityText(string input)
@@ -138,9 +241,13 @@ public sealed class CrawlerWidgetPanel : UserControl
     {
         var index = items.SelectedIndex;
         if (index < 0 || index >= visible.Count) return;
-        var url = visible[index].Url;
+        OpenUrl(visible[index].Url);
+    }
+
+    private static void OpenUrl(string? url)
+    {
         if (!NetGuard.IsPublicHttpUrl(url)) return;
-        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+        try { Process.Start(new ProcessStartInfo(url!) { UseShellExecute = true }); }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { }
     }
 
@@ -149,6 +256,7 @@ public sealed class CrawlerWidgetPanel : UserControl
         if (disposing)
         {
             timer.Stop(); timer.Dispose();
+            ClearGallery();
             eventSubscription.Dispose();
             Theme.Changed -= ApplyTheme;
             Loc.Changed -= RefreshSafe;

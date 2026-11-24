@@ -18,7 +18,7 @@ public static class WidgetStudio
 
     public static WidgetStudioProfile Clean(WidgetStudioProfile? raw) => new()
     {
-        Layout = raw?.Layout == "context" ? "context" : "headlines",
+        Layout = raw?.Layout is "context" or "gallery" ? raw.Layout : "headlines",
         MaxItems = Math.Clamp(raw?.MaxItems ?? 12, 3, 30),
         ShowSource = raw?.ShowSource ?? false,
         ShowTime = raw?.ShowTime ?? false
@@ -37,11 +37,15 @@ public static class WidgetStudio
             {
                 var clean = Clean(candidate.Value);
                 if (key == "history") clean.ShowTime = false; // historical year != publication time
+                if (!CanUseGallery(key) && clean.Layout == "gallery") clean.Layout = "headlines";
                 result[key] = clean;
             }
         }
         return result;
     }
+
+    public static bool CanUseGallery(string kind) =>
+        kind is "news" or "breaking" or "history";
 
     public static WidgetStudioProfile Resolve(
         IDictionary<string, WidgetStudioProfile>? configured, string kind)
@@ -59,6 +63,40 @@ public static class WidgetStudio
         ("history", true) => "Σαν Σήμερα", ("history", false) => "On This Day",
         _ => kind
     };
+
+    /// <summary>Deterministic, text-only gallery cards. Summaries and metadata
+    /// are clipped and stripped of control characters; no remote images or HTML
+    /// are fetched or evaluated as part of desktop widget rendering.</summary>
+    public static string GalleryCardText(string? title, string? summary, string? source,
+        DateTimeOffset publishedAt, WidgetStudioProfile? configured,
+        bool greek, bool breaking, bool history)
+    {
+        var p = Clean(configured);
+        var heading = CleanText(title, 110);
+        var teaser = CleanText(summary, 170);
+        if (string.Equals(teaser, heading, StringComparison.OrdinalIgnoreCase))
+            teaser = "";
+        var metadata = new List<string>(2);
+        if (p.ShowSource && !string.IsNullOrWhiteSpace(source))
+            metadata.Add(CleanText(source, 38));
+        if (p.ShowTime && !history && publishedAt != DateTimeOffset.MinValue &&
+            publishedAt <= DateTimeOffset.UtcNow.AddMinutes(5) &&
+            DateTimeOffset.UtcNow - publishedAt <= TimeSpan.FromDays(30))
+            metadata.Add(publishedAt.ToLocalTime().ToString("HH:mm"));
+        var lead = breaking ? (greek ? "ΕΚΤΑΚΤΟ  ·  " : "BREAKING  ·  ") : "";
+        var lines = new List<string> { lead + heading };
+        if (teaser.Length != 0) lines.Add(teaser);
+        if (metadata.Count != 0) lines.Add(string.Join("  ·  ", metadata));
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string CleanText(string? value, int max)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "";
+        var s = new string(value.Trim().Select(ch => char.IsControl(ch) ? ' ' : ch).ToArray());
+        s = string.Join(' ', s.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        return s.Length > max ? s[..(max - 1)] + "…" : s;
+    }
 
     /// <summary>One text row. Times are explicit local clock times, never
     /// ambiguous 'today' labels for historical events or fake verification scores.</summary>

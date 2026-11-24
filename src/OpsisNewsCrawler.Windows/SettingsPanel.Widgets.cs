@@ -25,8 +25,10 @@ public sealed partial class SettingsPanel
                 WrapContents = false
             };
             var layout = new FlatComboBox { Width = 260 };
-            layout.SetItems(Loc.IsGreek ? new[] { "Τίτλοι", "Με πληροφορίες" } :
-                new[] { "Headlines", "With context" }, 0);
+            var offersGallery = WidgetStudio.CanUseGallery(kind);
+            layout.SetItems(Loc.IsGreek
+                ? (offersGallery ? new[] { "Τίτλοι", "Με πληροφορίες", "Κάρτες / Newsroom Gallery" } : new[] { "Τίτλοι", "Με πληροφορίες" })
+                : (offersGallery ? new[] { "Headlines", "With context", "Newsroom Gallery cards" } : new[] { "Headlines", "With context" }), 0);
             var count = new FlatNumber();
             count.Configure(3, 30, 1);
             var showSource = new FlatToggle
@@ -58,7 +60,7 @@ public sealed partial class SettingsPanel
         foreach (var (kind, controls) in widgetEditors)
         {
             var profile = WidgetStudio.Resolve(host.Config.WidgetProfiles, kind);
-            controls.Layout.SelectSilently(profile.Layout == "context" ? 1 : 0);
+            controls.Layout.SelectSilently(profile.Layout switch { "context" => 1, "gallery" when WidgetStudio.CanUseGallery(kind) => 2, _ => 0 });
             controls.Count.SetValueSilently(profile.MaxItems);
             controls.Source.Checked = profile.ShowSource;
             controls.Time.Checked = profile.ShowTime;
@@ -72,7 +74,12 @@ public sealed partial class SettingsPanel
         {
             selected[kind] = WidgetStudio.Clean(new WidgetStudioProfile
             {
-                Layout = controls.Layout.SelectedIndex == 1 ? "context" : "headlines",
+                Layout = controls.Layout.SelectedIndex switch
+                {
+                    1 => "context",
+                    2 when WidgetStudio.CanUseGallery(kind) => "gallery",
+                    _ => "headlines"
+                },
                 MaxItems = controls.Count.Value,
                 ShowSource = controls.Source.Checked,
                 ShowTime = controls.Time.Checked
