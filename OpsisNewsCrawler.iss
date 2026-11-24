@@ -749,6 +749,37 @@ begin
   end;
 end;
 
+// Optional Chronikologio safety gate: the Opsis loader resolves the shared
+// ABI from its own default load context. An installed Chronikologio plugin
+// carrying different contract bytes must be upgraded separately first.
+function CompatibleChronikologioFolder(const Folder, HostContract: String): Boolean;
+var
+  PluginDll, ContractDll: String;
+begin
+  Result := True;
+  PluginDll := AddBackslash(Folder) + 'Chronikologio.OpsisPlugin.dll';
+  if not FileExists(PluginDll) then Exit;
+  ContractDll := AddBackslash(Folder) + 'OpsisNewsCrawler.Plugin.Abstractions.dll';
+  if FileExists(ContractDll) then
+    Result := CompareText(GetSHA256OfFile(HostContract),
+      GetSHA256OfFile(ContractDll)) = 0;
+end;
+
+function CompatibleInstalledChronikologio(): Boolean;
+var
+  Root, ContractDll: String;
+begin
+  Result := False;
+  ContractDll := OpsisSharedFile('OpsisNewsCrawler.Plugin.Abstractions.dll');
+  if ContractDll = '' then Exit;
+  Root := OpsisInstallDir();
+  if Root = '' then Root := ExpandConstant('{localappdata}\Programs\Opsis - Desktop Customization');
+  Result :=
+    CompatibleChronikologioFolder(AddBackslash(Root) + 'plugins\Chronikologio', ContractDll) and
+    CompatibleChronikologioFolder(ExpandConstant('{userappdata}\Opsis\plugins\Chronikologio'), ContractDll) and
+    CompatibleChronikologioFolder(ExpandConstant('{localappdata}\Opsis\plugins\Chronikologio'), ContractDll);
+end;
+
 function PrepareP0Rollback(): String;
 var
   Source, Root: String;
@@ -824,7 +855,14 @@ begin
     Result := Result + #13#10 + 'The standalone installation mode remains available.';
     Exit;
   end;
-  // Run the rollback snapshot only after ABI/UI6 checks succeeded.
+  if IsIntegrated() and not CompatibleInstalledChronikologio() then
+  begin
+    Result := 'An installed Chronikologio plugin has different shared contract DLL bytes.';
+    Result := Result + #13#10 + 'Το Χρονικολόγιο χρειάζεται ενημέρωση στο κοινό συμβόλαιο πριν από την ενσωμάτωση.';
+    Result := Result + #13#10 + 'No plugin files were replaced. The standalone mode remains available.';
+    Exit;
+  end;
+  // Run the rollback snapshot only after ABI/UI6/Chronikologio checks succeeded.
   // A failure aborts setup before any Crawler files are replaced.
   Result := PrepareP0Rollback();
   if Result <> '' then Exit;
