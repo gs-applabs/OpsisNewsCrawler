@@ -1,0 +1,79 @@
+name: .NET 11 / Opsis 2.8.x real plugin host smoke
+on:
+  push:
+    branches: ['feat/net11-opsis-280-ui6-compat']
+  pull_request:
+    branches: ['release/p3-v0.28.0-contract1-20261123']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-host-compat:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: crawler
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: gs-applabs/Opsis
+          ref: release/2.8.0.2510
+          path: opsis
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+      - name: Test Opsis.UI 0.6.0 parity
+        shell: pwsh
+        run: |
+          $ui = (Resolve-Path crawler/libs/Opsis.UI.dll).Path
+          $hostUi = (Resolve-Path opsis/lib/Opsis.UI.dll).Path
+          if ((Get-FileHash $ui -Algorithm SHA256).Hash -ne (Get-FileHash $hostUi -Algorithm SHA256).Hash) {
+            throw 'Opsis.UI DLL mismatch between Crawler and Opsis 2.8'
+          }
+          $v = [Diagnostics.FileVersionInfo]::GetVersionInfo($ui).FileVersion
+          if ($v -ne '0.6.0.0') { throw "UI6 FileVersion mismatch: $v" }
+      - name: Test and publish .NET 11 Crawler plugin
+        shell: pwsh
+        working-directory: crawler
+        run: |
+          dotnet test tests/OpsisNewsCrawler.Core.Tests/OpsisNewsCrawler.Core.Tests.csproj -c Release -m:1 --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'Core tests failed' }
+          dotnet test tests/OpsisNewsCrawler.Plugin.Tests/OpsisNewsCrawler.Plugin.Tests.csproj -c Release -m:1 --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'Plugin tests failed' }
+          dotnet publish src/OpsisNewsCrawler.OpsisPlugin/OpsisNewsCrawler.OpsisPlugin.csproj -c Release -o ../published-crawler -m:1 --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'Plugin publish failed' }
+      - name: Stage ABI 1.0.0.0 in disposable Opsis checkout
+        shell: pwsh
+        run: |
+          $contract = (Resolve-Path published-crawler/OpsisNewsCrawler.Plugin.Abstractions.dll).Path
+          $v = [Reflection.AssemblyName]::GetAssemblyName($contract).Version.ToString()
+          if ($v -ne '1.0.0.0') { throw "Wrong contract ABI: $v" }
+          Copy-Item -LiteralPath $contract -Destination opsis/lib/OpsisNewsCrawler.Plugin.Abstractions.dll -Force
+          if ((Get-FileHash $contract -Algorithm SHA256).Hash -ne (Get-FileHash opsis/lib/OpsisNewsCrawler.Plugin.Abstractions.dll -Algorithm SHA256).Hash) {
+            throw 'Contract DLL copies differ'
+          }
+      - name: Build actual Opsis 2.8.0.2510 host
+        shell: pwsh
+        working-directory: opsis
+        run: |
+          dotnet build Opsis.csproj -c Release -p:SkipContainers=true -m:1 --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'Opsis 2.8 host build failed' }
+      - name: Smoke actual Opsis PluginHost loader
+        shell: pwsh
+        working-directory: crawler
+        run: |
+          $hostDll = (Get-ChildItem ../opsis/bin/Release -Filter Opsis.dll -Recurse | Select-Object -First 1).FullName
+          if (-not $hostDll) { throw 'Compiled Opsis.dll missing' }
+          $plugin = (Resolve-Path '../published-crawler/OpsisNewsCrawler.OpsisPlugin.dll').Path
+          dotnet run --project tests/OpsisNewsCrawler.Host28Smoke/OpsisNewsCrawler.Host28Smoke.csproj -c Release -- "$hostDll" "$plugin"
+          if ($LASTEXITCODE -ne 0) { throw 'Real host load smoke failed' }
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: crawler-028-net11-opsis-280-compatible-plugin
+          path: published-crawler/
+          if-no-files-found: error
+          retention-days: 21
