@@ -1,5 +1,10 @@
 # Changelog
 
+### P2/P3 advanced price alert safeguards (2026-11-24)
+
+- Existing price and percentage rules support optional re-arm margin and maximum observation age. Missing/stale observations no longer re-arm fired rules. Settings reject duplicate thresholds and excess rules, and display source observation time, delayed status and change-from-open context on alerts. Existing default settings remain compatible; no new quote provider or scheduler. Regression test added, not run; Windows validation deferred.
+
+
 ### P2/P3 currency-safe portfolio ledger (2026-11-24)
 
 - Existing portfolio view groups by instrument and currency; no implicit FX conversions or cross-currency sums. Shows weighted average unit cost, realized P/L, dividends, combined realized income and fees. Transaction editor allows historical local timestamps, rejects ambiguous decimal separators and DST times, validates the full corresponding ledger before saving. Ledger rejects mixed instruments/currencies, unknown actions and empty-position splits. Regression test added but not run; no live valuation or unrealized return inferred. Windows validation deferred.

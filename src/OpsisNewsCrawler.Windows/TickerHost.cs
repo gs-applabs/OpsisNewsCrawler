@@ -1246,6 +1246,9 @@ public sealed partial class TickerHost : IDisposable
             var text = alert.Metric == "changePercent"
                 ? $"{label}: {(quote.ChangePercent ?? 0m):+0.##;-0.##;0}% ({(alert.Above ? "≥" : "≤")}{alert.Threshold:0.##}%)"
                 : Loc.T(alert.Above ? "alert.above" : "alert.below", label, alert.Threshold.ToString("0.00##", culture), quote.Price.ToString("0.00##", culture));
+            if (alert.Metric == "changePercent" && quote.ChangeFromOpen)
+                text += Loc.IsGreek ? " · από άνοιγμα" : " · from open";
+            text += $" · {quote.AsOf.ToLocalTime():dd/MM HH:mm}" + (quote.Delayed ? (Loc.IsGreek ? " · καθυστέρηση" : " · delayed") : "");
             breakingItems.Add(new NewsItem(text, "", Loc.T("pk.price.alert"), DateTimeOffset.Now,
                 Summary: label, Kind: NewsItemKind.News, Trend: alert.Above ? 1 : -1, Breaking: true));
         }
