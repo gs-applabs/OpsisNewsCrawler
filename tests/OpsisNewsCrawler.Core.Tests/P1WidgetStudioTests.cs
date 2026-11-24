@@ -58,5 +58,11 @@ public sealed class P1WidgetStudioTests
         Assert.DoesNotContain("\n", line);
         Assert.True(line.Length <= 160);
         Assert.EndsWith("…", line);
+        var context = WidgetStudio.FormatLine("Title", "News\nFake headline",
+            DateTimeOffset.UtcNow, new WidgetStudioProfile { Layout = "context", ShowSource = true });
+        Assert.DoesNotContain("\n", context);
+        var history = WidgetStudio.FormatLine("490 π.Χ.", "Χρονολόγιο",
+            DateTimeOffset.UtcNow, new WidgetStudioProfile { Layout = "context", ShowTime = true }, allowTime: false);
+        Assert.DoesNotContain(" — ", history); // historical year is in title; publication time is suppressed
     }
 }

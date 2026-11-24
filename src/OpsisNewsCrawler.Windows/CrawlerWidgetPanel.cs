@@ -114,7 +114,8 @@ public sealed class CrawlerWidgetPanel : UserControl
         {
             items.Items.Clear();
             foreach (var line in visible)
-                items.Items.Add(WidgetStudio.FormatLine(line.Title, line.Source, line.PublishedAt, profile));
+                items.Items.Add(WidgetStudio.FormatLine(line.Title, line.Source, line.PublishedAt,
+                    profile, allowTime: kind != "history"));
             items.ItemHeight = profile.Layout == "context" ? 26 : 23;
             heading.Text = WidgetStudio.Title(kind, Loc.IsGreek);
             items.AccessibleDescription = visible.Count == 0

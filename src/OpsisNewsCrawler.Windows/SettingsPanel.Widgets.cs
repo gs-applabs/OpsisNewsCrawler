@@ -37,7 +37,10 @@ public sealed partial class SettingsPanel
             var showTime = new FlatToggle
             {
                 RowWidth = 600,
-                Text = Loc.IsGreek ? "Εμφάνιση ώρας δημοσίευσης" : "Show publication time"
+                Text = kind == "history"
+                    ? (Loc.IsGreek ? "Ώρα δημοσίευσης (δεν αφορά ιστορικά γεγονότα)" : "Publication time (not used for historical events)")
+                    : (Loc.IsGreek ? "Εμφάνιση ώρας δημοσίευσης" : "Show publication time"),
+                Enabled = kind != "history"
             };
             options.Controls.Add(Row(Loc.IsGreek ? "Διάταξη" : "Layout", layout, 230));
             options.Controls.Add(Row(Loc.IsGreek ? "Μέγιστες εγγραφές" : "Maximum rows", count, 230));

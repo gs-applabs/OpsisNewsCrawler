@@ -33,7 +33,12 @@ public static class WidgetStudio
         {
             var candidate = configured.FirstOrDefault(kv =>
                 string.Equals(key, kv.Key, StringComparison.OrdinalIgnoreCase));
-            if (candidate.Key is not null) result[key] = Clean(candidate.Value);
+            if (candidate.Key is not null)
+            {
+                var clean = Clean(candidate.Value);
+                if (key == "history") clean.ShowTime = false; // historical year != publication time
+                result[key] = clean;
+            }
         }
         return result;
     }
@@ -58,7 +63,7 @@ public static class WidgetStudio
     /// <summary>One text row. Times are explicit local clock times, never
     /// ambiguous 'today' labels for historical events or fake verification scores.</summary>
     public static string FormatLine(string? title, string? source,
-        DateTimeOffset publishedAt, WidgetStudioProfile? configured)
+        DateTimeOffset publishedAt, WidgetStudioProfile? configured, bool allowTime = true)
     {
         var p = Clean(configured);
         var headline = (title ?? "").Trim().Replace('\r', ' ').Replace('\n', ' ');
@@ -66,8 +71,11 @@ public static class WidgetStudio
         if (p.Layout == "headlines") return headline;
         var metadata = new List<string>(2);
         if (p.ShowSource && !string.IsNullOrWhiteSpace(source))
-            metadata.Add(source.Trim().Length > 38 ? source.Trim()[..38] + "…" : source.Trim());
-        if (p.ShowTime && publishedAt != DateTimeOffset.MinValue &&
+        {
+            var label = source.Trim().Replace('\r', ' ').Replace('\n', ' ');
+            metadata.Add(label.Length > 38 ? label[..38] + "…" : label);
+        }
+        if (allowTime && p.ShowTime && publishedAt != DateTimeOffset.MinValue &&
             publishedAt <= DateTimeOffset.UtcNow.AddMinutes(5) &&
             DateTimeOffset.UtcNow - publishedAt <= TimeSpan.FromDays(30))
             metadata.Add(publishedAt.ToLocalTime().ToString("HH:mm"));
