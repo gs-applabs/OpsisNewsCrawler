@@ -49,6 +49,31 @@ jobs:
         run: dotnet restore OpsisNewsCrawler.sln
       - name: Build solution
         run: dotnet build OpsisNewsCrawler.sln --configuration Release --no-restore
+      - name: P0 recovery script restores only a compatible plugin in a disposable folder
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP ('crawler-recovery-' + [guid]::NewGuid().ToString('N'))
+          try {
+            $host = Join-Path $root 'host'
+            $hostLib = Join-Path $host 'lib'
+            $plugin = Join-Path $root 'plugins/Crawler'
+            $snapshot = Join-Path $root 'backup/previous'
+            New-Item -ItemType Directory -Force $hostLib,$plugin,$snapshot | Out-Null
+            Copy-Item libs/Opsis.UI.dll $hostLib/Opsis.UI.dll
+            Copy-Item libs/OpsisNewsCrawler.Plugin.Abstractions.dll $hostLib/OpsisNewsCrawler.Plugin.Abstractions.dll
+            Copy-Item libs/Opsis.UI.dll $snapshot/Opsis.UI.dll
+            Copy-Item libs/OpsisNewsCrawler.Plugin.Abstractions.dll $snapshot/OpsisNewsCrawler.Plugin.Abstractions.dll
+            $dll = Get-ChildItem src/OpsisNewsCrawler.OpsisPlugin/bin/Release -Filter OpsisNewsCrawler.OpsisPlugin.dll -Recurse | Select-Object -First 1
+            if (!$dll) { throw 'P0 test plugin build missing' }
+            Copy-Item $dll.FullName $snapshot/OpsisNewsCrawler.OpsisPlugin.dll
+            Set-Content -LiteralPath (Join-Path $snapshot '.backup-complete') -Value 'completed'
+            Set-Content -LiteralPath (Join-Path $plugin 'old.txt') -Value 'superseded candidate'
+            ./tools/restore-opsis-crawler.ps1 -Mode Inspect -HostFolder $host -PluginFolder $plugin -BackupRoot (Join-Path $root 'backup') -Confirm:$false
+            ./tools/restore-opsis-crawler.ps1 -Mode Restore -HostFolder $host -PluginFolder $plugin -BackupRoot (Join-Path $root 'backup') -Confirm:$false
+            if (!(Test-Path (Join-Path $plugin 'OpsisNewsCrawler.OpsisPlugin.dll'))) { throw 'Compatible plugin was not restored' }
+            if (Test-Path (Join-Path $plugin 'old.txt')) { throw 'Superseded candidate was left behind' }
+            if (!(Test-Path (Join-Path $snapshot '.backup-complete'))) { throw 'Recovery destroyed its source snapshot' }
+          } finally { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
       - name: Run core tests
         run: dotnet test tests/OpsisNewsCrawler.Core.Tests/OpsisNewsCrawler.Core.Tests.csproj --configuration Release
       - name: Plugin contract tests
