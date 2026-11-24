@@ -33,12 +33,12 @@ public sealed class P1NewsroomGalleryTests
     [Fact]
     public void GalleryMetadataIsPlainTextSafeAndBounded()
     {
-        var text = WidgetStudio.GalleryCardText(new string('A', 220) + "\\nBad",
-            new string('B', 220) + "\\rline", "Source\\nFake", DateTimeOffset.UtcNow,
+        var text = WidgetStudio.GalleryCardText(new string('A', 220) + "\nBad",
+            new string('B', 220) + "\rline", "Source\nFake", DateTimeOffset.UtcNow,
             new WidgetStudioProfile { Layout = "gallery", ShowSource = true, ShowTime = false },
             true, false, false);
-        Assert.DoesNotContain("Source\\nFake", text);
-        Assert.DoesNotContain("\\r", text);
+        Assert.DoesNotContain("Source\nFake", text);
+        Assert.DoesNotContain("\r", text);
         Assert.StartsWith(new string('A', 109) + "…", text);
         Assert.True(text.Length <= 350);
     }

@@ -57,6 +57,7 @@ public sealed class CrawlerWidgetPanel : UserControl
         Controls.Add(breakingBanner);
         Controls.Add(heading);
         gallery.Resize += (_, _) => ResizeGalleryCards();
+        gallery.DpiChangedAfterParent += (_, _) => ResizeGalleryCards();
         Theme.Changed += ApplyTheme;
         Loc.Changed += RefreshSafe;
         timer.Tick += (_, _) => RefreshSafe();
@@ -182,7 +183,8 @@ public sealed class CrawlerWidgetPanel : UserControl
                 var snapshot = visible[i];
                 var card = new Button
                 {
-                    AutoSize = false, Height = 100, Width = GalleryCardWidth(),
+                    AutoSize = false, Height = GalleryColorContrast.CardHeightForDpi(gallery.DeviceDpi),
+                    Width = GalleryCardWidth(),
                     Margin = new Padding(2, 2, 2, 7),
                     Padding = new Padding(12, 8, 10, 8),
                     FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
@@ -208,8 +210,12 @@ public sealed class CrawlerWidgetPanel : UserControl
     {
         if (IsDisposed) return;
         var width = GalleryCardWidth();
+        var height = GalleryColorContrast.CardHeightForDpi(gallery.DeviceDpi);
         foreach (var card in gallery.Controls.OfType<Button>())
+        {
             if (card.Width != width) card.Width = width;
+            if (card.Height != height) card.Height = height;
+        }
     }
 
     private void StyleGalleryCard(Button card)
