@@ -1,5 +1,17 @@
 # Changelog
 
+### P0 compatibility and failure-safety implementation (24/11/2026)
+
+Code is committed in Crawler draft PR #8 and companion Opsis 2.8 host draft PR #11. **This is not a validated or published installer.** Windows Crawler and host CI gates must pass before release; physical GPU/multi-monitor/DPI/UAC/long-soak verification has not occurred.
+
+- Weather: optional host cache via Opsis WeatherHub for configured cities, validation of freshness/schema, no duplicate cache write on valid host readings, fallback to standalone weather.
+- Safe Mode and shell: prohibit late plugin starts in Safe Mode; optional host callback changes Taskbar placement to a temporary non-reserving position when DeskStrip is active or compatibility review is required. Live DeskStrip changes notify Crawler; persistent settings are unchanged.
+- Idle/resource safety: idempotent Start/Stop, weather-session cancellation and suppression of stale retries, one bounded worker for SuiteEventHub emissions so slow observers cannot block ticker drawing.
+- Installer: refuse integrated setup when Opsis host's Local\Opsis.SingleInstance mutex is held, or when ABI/UI6/installed Chronikologio contract DLLs differ. Back up previous plugin folder before copying.
+- Recovery: explicit SHA-checked rollback of one completed plugin snapshot; never silently overwrite the Opsis host or another plugin.
+- CI release gates: net11 build, pinned binary contracts, actual Opsis plugin loader smoke for Crawler AND Chronikologio, installer E2E and mismatch/refusal tests, and repository hygiene.
+- Manual release gates: graphics card, multimonitor and 100/150/200% DPI, UAC/SmartScreen, and multi-day CPU/GDI/SSD soak. Plugin-local rollback does not imply atomic multi-app rollback.
+
 ## 0.28.0 — .NET 11 / Opsis 2.8 P0 development (2026-11-24, candidate)
 
 > Product version remains **0.28.0**. These entries document work in draft PRs, not a stable published release. See [PR #7](https://github.com/gs-applabs/OpsisNewsCrawler/pull/7) (.NET 11 migration) and [PR #8](https://github.com/gs-applabs/OpsisNewsCrawler/pull/8) (P0 host integration).
