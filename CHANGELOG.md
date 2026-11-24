@@ -1,5 +1,11 @@
 # Changelog
 
+### P2/P3 story comparison refinement (2026-11-24)
+
+- Existing StoryExplorer caches anchor tokens per cluster during each grouping pass and bounds the comparison window to 1–72 hours. Distinct reports without URLs are not all collapsed into one solely because their URLs are empty.
+- Intelligence center adds publisher-group filters and retains the displayed cluster snapshot for source comparison, avoiding reclustering on click and mismatches after refresh. Existing comparison form shows available cached RSS summaries, no new fetcher or fact-verification claims. Windows validation deferred.
+
+
 ### P1/P2 shared topic filtering (2026-11-24)
 
 - Optional News widget filter uses existing Intelligence watchlists and TopicMatcher, combined with existing RSS category selection. Filters before the display limit, keeps source ordering, and shows no results if no enabled watchlist matches. Existing defaults unchanged. No separate watchlist store, network request, or scheduler. Windows verification deferred.

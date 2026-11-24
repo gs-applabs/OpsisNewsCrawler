@@ -18,6 +18,8 @@ public sealed class P2InsightsForm : Form
     private readonly FlatButton newTransaction = new();
     private readonly FlatButton mediaPlaylist = new();
     private readonly FlatButton refresh = new();
+    private readonly FlatComboBox clusterFilter = new() { Width=250 };
+    private readonly List<StoryCluster> displayedClusters = new();
     private readonly Label summary = new() { Dock=DockStyle.Bottom, Height=34, AutoEllipsis=true };
     private readonly ListView lines = new()
     {
@@ -44,6 +46,10 @@ public sealed class P2InsightsForm : Form
             new[]{"Χρονολόγιο","Ομάδες ειδήσεων","Παρακολούθηση θεμάτων","Συναλλαγές χαρτοφυλακίου","Οικονομικό ημερολόγιο"}
             :new[]{"Timeline","Story clusters","Topic watchlist","Portfolio transactions","Economic calendar"},0);
         views.SelectedIndexChanged+=(_,_)=>Reload();
+        clusterFilter.SetItems(Loc.IsGreek ? new[]{ "Όλες οι ομάδες", "Πολλαπλές ομάδες εκδοτών", "Μία ή άγνωστη ομάδα" }
+            : new[]{ "All clusters", "Multiple publisher groups", "One or unknown group" },0);
+        clusterFilter.Visible=false;
+        clusterFilter.SelectedIndexChanged+=(_,_)=>Reload();
         refresh.Text=Loc.IsGreek?"Ανανέωση προβολής":"Refresh view";
         refresh.Click+=(_,_)=>Reload();
         export.Text=Loc.IsGreek?"Εξαγωγή HTML ημέρας":"Export daily HTML";
@@ -56,7 +62,7 @@ public sealed class P2InsightsForm : Form
         exportCalendar.Click+=(_,_)=>ExportCalendar();
         bar.WrapContents=true;
         bar.Height=105;
-        bar.Controls.Add(views);bar.Controls.Add(refresh);bar.Controls.Add(export);
+        bar.Controls.Add(views);bar.Controls.Add(clusterFilter);bar.Controls.Add(refresh);bar.Controls.Add(export);
         evidence.Text=Loc.IsGreek?"Σύγκριση πηγών":"Compare sources";
         evidence.Click+=(_,_)=>CompareSelectedStory();
         newTransaction.Text=Loc.IsGreek?"Νέα συναλλαγή":"Add trade";
@@ -85,13 +91,26 @@ public sealed class P2InsightsForm : Form
     {
         if(IsDisposed || !IsHandleCreated)return;
         visible.Clear();
+        displayedClusters.Clear();
+        clusterFilter.Visible=views.SelectedIndex==1;
+        evidence.Enabled=views.SelectedIndex==1;
         var news=host.RecentNews;
         switch(views.SelectedIndex)
         {
             case 1:
-                foreach(var g in StoryExplorer.Cluster(news).Take(150))
+                var clusters=StoryExplorer.Cluster(news).AsEnumerable();
+                clusters=clusterFilter.SelectedIndex switch
+                {
+                    1 => clusters.Where(g=>g.PublisherGroups>=2),
+                    2 => clusters.Where(g=>g.PublisherGroups<2),
+                    _ => clusters
+                };
+                displayedClusters.AddRange(clusters.Take(150));
+                foreach(var g in displayedClusters)
                     visible.Add((g.Headline,
-                        $"{g.Reports.Count} reports · {g.PublisherGroups} publisher groups · {g.LastUpdate:dd/MM HH:mm}",g.Key));
+                        Loc.IsGreek
+                            ? $"{g.Reports.Count} δημοσιεύματα · {g.PublisherGroups} ομάδες εκδοτών · {g.LastUpdate:dd/MM HH:mm}"
+                            : $"{g.Reports.Count} reports · {g.PublisherGroups} publisher groups · {g.LastUpdate:dd/MM HH:mm}",g.Key));
                 break;
             case 2:
                 foreach(var m in TopicMatcher.Find(news,host.Config.TopicWatches))
@@ -172,9 +191,8 @@ public sealed class P2InsightsForm : Form
     {
         var index=lines.SelectedIndices.Count>0?lines.SelectedIndices[0]:-1;
         if(index<0||index>=visible.Count||views.SelectedIndex!=1)return;
-        var key=visible[index].Url;
-        var cluster=StoryExplorer.Cluster(host.RecentNews).FirstOrDefault(x=>x.Key==key);
-        if(cluster is null)return;
+        if(index>=displayedClusters.Count)return;
+        var cluster=displayedClusters[index];
         using var form=new P3EvidenceForm(cluster);
         form.ShowDialog(this);
     }

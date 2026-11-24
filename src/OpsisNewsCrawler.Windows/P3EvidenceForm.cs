@@ -10,9 +10,10 @@ public sealed class P3EvidenceForm : Form
     private readonly ListView reportList=new()
     {
         Dock=DockStyle.Fill,FullRowSelect=true,MultiSelect=false,View=View.Details,
-        AccessibleName="Independent report comparison"
+        AccessibleName="Publisher report comparison"
     };
     private readonly IReadOnlyList<NewsItem> reports;
+    private readonly Label details=new() { Dock=DockStyle.Bottom,Height=95,AutoEllipsis=true,Padding=new Padding(8) };
 
     public P3EvidenceForm(StoryCluster cluster)
     {
@@ -37,10 +38,20 @@ public sealed class P3EvidenceForm : Form
             }));
         reportList.DoubleClick+=(_,_)=>Open();
         reportList.KeyDown+=(_,e)=>{if(e.KeyCode==Keys.Enter){Open();e.Handled=true;}};
-        Controls.Add(reportList);Controls.Add(header);
+        details.Text=Loc.IsGreek?"Επιλέξτε δημοσίευμα για τη διαθέσιμη περίληψη RSS.":"Select a report for its available RSS summary.";
+        reportList.SelectedIndexChanged+=(_,_)=>
+        {
+            var index=reportList.SelectedIndices.Count>0?reportList.SelectedIndices[0]:-1;
+            if(index<0||index>=reports.Count)return;
+            var text=reports[index].Summary??"";
+            if(text.Length>800)text=text[..800]+"…";
+            details.Text=string.IsNullOrWhiteSpace(text)?(Loc.IsGreek?"Δεν υπάρχει περίληψη RSS.":"No RSS summary available."):text;
+        };
+        Controls.Add(reportList);Controls.Add(details);Controls.Add(header);
         BackColor=Theme.Background; ForeColor=Theme.Text;
         header.BackColor=Theme.Surface;header.ForeColor=Theme.Text;
         reportList.BackColor=Theme.Surface;reportList.ForeColor=Theme.Text;
+        details.BackColor=Theme.Surface;details.ForeColor=Theme.Text;
     }
 
     private void Open()
