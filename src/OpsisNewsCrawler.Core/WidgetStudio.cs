@@ -1,3 +1,6 @@
+using System.Net;
+using System.Text.RegularExpressions;
+
 namespace OpsisNewsCrawler.Core;
 
 /// <summary>A bounded, local presentation profile for an existing Opsis widget.
@@ -69,7 +72,7 @@ public static class WidgetStudio
     /// are fetched or evaluated as part of desktop widget rendering.</summary>
     public static string GalleryCardText(string? title, string? summary, string? source,
         DateTimeOffset publishedAt, WidgetStudioProfile? configured,
-        bool greek, bool breaking, bool history)
+        bool greek, bool breaking, bool history, int relatedReports = 0)
     {
         var p = Clean(configured);
         var heading = CleanText(title, 110);
@@ -86,6 +89,11 @@ public static class WidgetStudio
         var lead = breaking ? (greek ? "ΕΚΤΑΚΤΟ  ·  " : "BREAKING  ·  ") : "";
         var lines = new List<string> { lead + heading };
         if (teaser.Length != 0) lines.Add(teaser);
+        // StoryReports are publication records, NOT fact-check confirmation.
+        // Never label them as independently verified sources.
+        if (p.ShowSource && relatedReports > 1 && !history)
+            metadata.Add($"{Math.Clamp(relatedReports, 2, 99)} " +
+                (greek ? "συναφείς καταγραφές" : "related reports"));
         if (metadata.Count != 0) lines.Add(string.Join("  ·  ", metadata));
         return string.Join(Environment.NewLine, lines);
     }
@@ -93,7 +101,13 @@ public static class WidgetStudio
     private static string CleanText(string? value, int max)
     {
         if (string.IsNullOrWhiteSpace(value)) return "";
-        var s = new string(value.Trim().Select(ch => char.IsControl(ch) ? ' ' : ch).ToArray());
+        var clipped = value.Length > 4096 ? value[..4096] : value;
+        var decoded = WebUtility.HtmlDecode(clipped);
+        // Display only safe plain text, never HTML/WebView content in the
+        // background desktop widget. The input size and match length are bounded.
+        var plain = Regex.Replace(decoded, @"<[^<>]{0,256}>", " ",
+            RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(50));
+        var s = new string(plain.Trim().Select(ch => char.IsControl(ch) ? ' ' : ch).ToArray());
         s = string.Join(' ', s.Split(' ', StringSplitOptions.RemoveEmptyEntries));
         return s.Length > max ? s[..(max - 1)] + "…" : s;
     }

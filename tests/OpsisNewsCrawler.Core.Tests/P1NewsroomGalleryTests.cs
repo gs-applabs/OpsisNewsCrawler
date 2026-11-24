@@ -55,6 +55,20 @@ public sealed class P1NewsroomGalleryTests
     }
 
     [Fact]
+    public void RelatedReportCountIsProvenanceNotVerification()
+    {
+        var text = WidgetStudio.GalleryCardText("<b>Story</b>",
+            "Details &amp; more", "Agency", DateTimeOffset.UtcNow,
+            new WidgetStudioProfile { Layout = "gallery", ShowSource = true },
+            false, false, false, relatedReports: 4);
+        Assert.Contains("Story", text);
+        Assert.Contains("Details & more", text);
+        Assert.Contains("4 related reports", text);
+        Assert.DoesNotContain("<b>", text);
+        Assert.DoesNotContain("verified", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void HistoricEntriesNeverGetCurrentNewsPublicationTimes()
     {
         var now = DateTimeOffset.UtcNow;

@@ -169,7 +169,8 @@ public sealed class CrawlerWidgetPanel : UserControl
         // on each timer tick and reduce GDI pressure in an always-running host.
         var cards = visible.Select(x => WidgetStudio.GalleryCardText(
             x.Title, x.Summary, x.Source, x.PublishedAt, profile,
-            Loc.IsGreek, x.Breaking || kind == "breaking", kind == "history")).ToArray();
+            Loc.IsGreek, x.Breaking || kind == "breaking", kind == "history",
+            relatedReports: x.StoryReports?.Count ?? 0)).ToArray();
         var signature = string.Join("\u001e", cards) + "\u001f" +
             string.Join("\u001e", visible.Select(x => x.Url ?? ""));
         if (gallerySignature == signature && gallery.Controls.Count == cards.Length) return;
