@@ -25,6 +25,8 @@ public sealed class P2InsightsForm : Form
     private readonly FlatButton exportCalendar = new();
     private readonly FlatButton evidence = new();
     private readonly FlatButton newTransaction = new();
+    private readonly FlatButton openPortfolio = new();
+    private readonly FlatButton openAnalysis = new();
     private readonly FlatButton mediaPlaylist = new();
     private readonly FlatButton refresh = new();
     private readonly FlatComboBox clusterFilter = new() { Width=250 };
@@ -94,10 +96,14 @@ public sealed class P2InsightsForm : Form
         evidence.Click+=(_,_)=>CompareSelectedStory();
         newTransaction.Text=Loc.IsGreek?"Νέα συναλλαγή":"Add trade";
         newTransaction.Click+=(_,_)=>AddTransaction();
+        openPortfolio.Text=Loc.IsGreek?"Υπάρχον χαρτοφυλάκιο":"Existing portfolio";
+        openPortfolio.Click+=(_,_)=>host.ShowPortfolio();
+        openAnalysis.Text=Loc.IsGreek?"Γραφήματα αγορών":"Market charts";
+        openAnalysis.Click+=(_,_)=>host.ShowAnalysis();
         mediaPlaylist.Text=Loc.IsGreek?"Media Suite · M3U":"Media Suite · M3U";
         mediaPlaylist.Click+=(_,_)=>ExportMediaPlaylist();
         bar.Controls.Add(exportWeekly);bar.Controls.Add(digestScope);bar.Controls.Add(digestDate);bar.Controls.Add(importCalendar);bar.Controls.Add(exportCalendar);
-        bar.Controls.Add(evidence);bar.Controls.Add(newTransaction);bar.Controls.Add(mediaPlaylist);
+        bar.Controls.Add(evidence);bar.Controls.Add(newTransaction);bar.Controls.Add(openPortfolio);bar.Controls.Add(openAnalysis);bar.Controls.Add(mediaPlaylist);
         bar.Height=195;
         Controls.Add(lines);Controls.Add(summary);Controls.Add(bar);
         lines.DoubleClick+=(_,_)=>OpenSelected();
@@ -124,6 +130,7 @@ public sealed class P2InsightsForm : Form
             control.Visible=views.SelectedIndex==4;
         clusterFilter.Visible=views.SelectedIndex==1;
         evidence.Enabled=views.SelectedIndex==1;
+        newTransaction.Visible=openPortfolio.Visible=openAnalysis.Visible=views.SelectedIndex==3;
         var news=host.RecentNews;
         switch(views.SelectedIndex)
         {
@@ -160,9 +167,10 @@ public sealed class P2InsightsForm : Form
                         var result=PortfolioLedger.Calculate(group);
                         var label=$"{group.Key.Instrument} · {group.Key.Currency}";
                         var avg=result.AverageUnitCost?.ToString("0.####")??"—";
+                        var valuation=LedgerValuationText(group.Key.Instrument,group.Key.Currency,result);
                         visible.Add((label,Loc.IsGreek
-                            ? $"{result.Units:0.####} μον. · κόστος {result.CostBasis:0.00} · μ.ό. {avg} · κέρδη {result.RealizedPnl:0.00} · μερίσματα {result.Dividends:0.00} · καθαρά {result.NetRealizedIncome:0.00} · προμήθειες {result.Fees:0.00}"
-                            : $"{result.Units:0.####} units · cost {result.CostBasis:0.00} · avg {avg} · realized {result.RealizedPnl:0.00} · dividends {result.Dividends:0.00} · net {result.NetRealizedIncome:0.00} · fees {result.Fees:0.00}",null));
+                            ? $"{result.Units:0.####} μον. · κόστος {result.CostBasis:0.00} · μ.ό. {avg} · κέρδη {result.RealizedPnl:0.00} · μερίσματα {result.Dividends:0.00} · καθαρά {result.NetRealizedIncome:0.00} · προμήθειες {result.Fees:0.00} · {valuation}"
+                            : $"{result.Units:0.####} units · cost {result.CostBasis:0.00} · avg {avg} · realized {result.RealizedPnl:0.00} · dividends {result.Dividends:0.00} · net {result.NetRealizedIncome:0.00} · fees {result.Fees:0.00} · {valuation}",null));
                     }
                     catch(Exception ex) when(ex is InvalidOperationException or ArgumentException or OverflowException)
                     {
@@ -188,6 +196,24 @@ public sealed class P2InsightsForm : Form
                 :$"Items: {visible.Count} · Offline view · Source data may be delayed.";
         }
         finally {lines.EndUpdate();}
+    }
+
+    private string LedgerValuationText(string key,string currency,LedgerPosition position)
+    {
+        // Read-only: do not create a duplicate holding in Config.Portfolio or request new prices.
+        if(position.Units==0)return Loc.IsGreek?"Κλειστή θέση":"Closed position";
+        var inst=host.Config.Watchlist.FirstOrDefault(i=>string.Equals(
+            $"{i.Source}|{i.Market}|{i.Code}",key,StringComparison.OrdinalIgnoreCase));
+        if(inst is null || !PortfolioLedger.MatchesQuoteCurrency(inst,currency) ||
+            !host.QuoteService.LatestByKey.TryGetValue(key,out var quote) ||
+            PortfolioLedger.ValueAt(position,quote) is not { } v)
+            return Loc.IsGreek?"Αποτίμηση μη διαθέσιμη (τιμή/νόμισμα)":"Valuation unavailable (quote/currency)";
+        var pct=v.Percent?.ToString("0.##")+"%";
+        if(v.Percent is null)pct="—";
+        var timing=quote.AsOf.ToLocalTime().ToString("dd/MM HH:mm");
+        return Loc.IsGreek
+            ? $"Αξία {v.Value:0.00} {currency} · μη πραγματοποιημένα {v.Unrealized:0.00} ({pct}) · {timing}"+(quote.Delayed?" · καθυστέρηση":"")
+            : $"Value {v.Value:0.00} {currency} · unrealized {v.Unrealized:0.00} ({pct}) · {timing}"+(quote.Delayed?" · delayed":"");
     }
 
     private void OpenSelected()

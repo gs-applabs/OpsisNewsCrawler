@@ -14,6 +14,25 @@ public sealed record LedgerPosition(decimal Units, decimal CostBasis, decimal Re
 
 public static class PortfolioLedger
 {
+    // QuoteService uses the same key layout as PortfolioPosition.Key.
+    // Only explicit configured price units are accepted; no currency conversion is inferred.
+    public static bool MatchesQuoteCurrency(QuoteInstrument instrument, string currency)
+    {
+        var unit=(instrument.Unit??"").Trim();
+        var code=NormalizeCurrency(currency);
+        return string.Equals(unit,code,StringComparison.OrdinalIgnoreCase)
+            || (unit=="€" && code=="EUR" && instrument.Source==QuoteSource.Athens);
+    }
+
+    public static (decimal Value, decimal Unrealized, decimal? Percent)? ValueAt(
+        LedgerPosition position, MarketQuote? quote)
+    {
+        if(quote is null || quote.Price<=0 || position.Units<=0) return null;
+        var value=position.Units*quote.Price;
+        var pnl=value-position.CostBasis;
+        return (value,pnl,position.CostBasis>0?Math.Round(pnl/position.CostBasis*100,2):null);
+    }
+
     public static string NormalizeCurrency(string? currency)
     {
         var code=(currency??"").Trim().ToUpperInvariant();

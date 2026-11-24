@@ -1,5 +1,10 @@
 # Changelog
 
+### P2/P3 cached ledger valuation and existing market tools (2026-11-24)
+
+- Transaction view reads existing QuoteService.LatestByKey, shows native-currency market value and unrealized P/L when a matching configured instrument and explicit currency unit are available; otherwise reports unavailable. EUR Athens is supported by its configured euro symbol; ambiguous units are not inferred. Shows quote timestamp and delay, no new quote requests or FX assumptions. Existing portfolio and analysis windows linked from the transaction view rather than adding charts or another portfolio engine. No automatic migration or merging of legacy holdings. Windows validation deferred.
+
+
 ### P2/P3 advanced price alert safeguards (2026-11-24)
 
 - Existing price and percentage rules support optional re-arm margin and maximum observation age. Missing/stale observations no longer re-arm fired rules. Settings reject duplicate thresholds and excess rules, and display source observation time, delayed status and change-from-open context on alerts. Existing default settings remain compatible; no new quote provider or scheduler. Regression test added, not run; Windows validation deferred.
