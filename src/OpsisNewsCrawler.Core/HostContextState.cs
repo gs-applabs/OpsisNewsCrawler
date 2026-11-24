@@ -43,7 +43,7 @@ public sealed class HostContextState
         lock (gate)
         {
             var next = transform(snapshot);
-            if (next with { Revision = 0 } == snapshot with { Revision = 0 }) return;
+            if ((next with { Revision = 0 }).Equals(snapshot with { Revision = 0 })) return;
             snapshot = next with { Revision = snapshot.Revision + 1 };
         }
     }
