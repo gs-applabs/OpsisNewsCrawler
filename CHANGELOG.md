@@ -1,5 +1,9 @@
 # Changelog
 
+### 0.28.0 release preparation (2026-11-24)
+
+- README (el + en) lists every capability of 0.28.0 and the Opsis 2.8 / .NET 11 compatibility; the in-app Version history and Help (14 languages) have a 0.28.0 entry; the release note states the pre-release status and what is still unverified.
+
 ### Final audit pass on the .NET 11 build (2026-11-24)
 
 - Merged the a05ffa3 head (P1 widget studio, P2/P3 portfolio, digests, alerts, UI6) with the 0.25.0 and P3 lines. The shared ABI is the compiled `libs/OpsisNewsCrawler.Plugin.Abstractions.dll` (SHA-256 `514f2a3e…`, same bytes as the Opsis host); no parallel contract is built or shipped. Opsis.UI is the 0.6.0 build in `libs/`.

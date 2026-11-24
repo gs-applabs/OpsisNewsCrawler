@@ -1,4 +1,4 @@
-# Opsis News Crawler 0.28.0 — P0 + P1 + P2 + P3 (staging)
+# Opsis News Crawler 0.28.0 — P0 + P1 + P2 + P3 (release, 24/11/2026)
 
 ## Ελληνικά
 
@@ -56,3 +56,8 @@ Opsis News Crawler 0.28.0 packages P0 stability, P1 video/host UI, and P2 local 
 
 ### P3 compatibility note (English)
 The P3 shared contract and Crawler plugin both use AssemblyVersion and FileVersion 1.0.0.0. Opsis and Chronikologio must be built against the exact same shared contract binary; upgrading only one plugin is unsupported. P3 adds local economic-calendar JSON/ICS handling, source-evidence review, offline weekly digests and optional Media Suite playlist export. This is a staging build until Windows host-load, installer and regression gates pass.
+
+## Κατάσταση δημοσίευσης / Release status (24/11/2026)
+
+- **Ελληνικά:** δημοσιεύεται ως **pre-release**. Έχουν περάσει build, 687 + 55 tests, ci-audit (en, el, de, ar) και compile του installer. **Δεν** έχουν γίνει ακόμη: εγκατάσταση/αναβάθμιση/απεγκατάσταση σε καθαρό Windows, πραγματική φόρτωση σε Opsis 2.8, multi-monitor/DPI, υπογραφή Authenticode. Απαιτεί .NET 11 Desktop Runtime.
+- **English:** published as a **pre-release**. Build, 687 + 55 tests, ci-audit (en, el, de, ar) and the installer compile pass. **Not yet done:** install/upgrade/uninstall on a clean Windows machine, a real load in Opsis 2.8, multi-monitor/DPI, Authenticode signing. Needs the .NET 11 Desktop Runtime.

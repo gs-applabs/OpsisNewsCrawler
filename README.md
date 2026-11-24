@@ -11,7 +11,7 @@
 <a href="../../releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/gs-applabs/OpsisNewsCrawler"/></a>
 <a href="LICENSE"><img alt="license MIT" src="https://img.shields.io/badge/license-MIT-blue"/></a>
 <img alt="Windows 11" src="https://img.shields.io/badge/Windows-11-0078d4"/>
-<img alt=".NET 10" src="https://img.shields.io/badge/.NET-11-512bd4"/>
+<img alt=".NET 11" src="https://img.shields.io/badge/.NET-11-512bd4"/>
 <img alt="14 languages" src="https://img.shields.io/badge/languages-14-green"/>
 </p>
 
@@ -34,6 +34,13 @@
 | 📰 Ειδήσεις | RSS από πολλές πηγές σε **6 κατηγορίες** (Οικονομία, Αγορές, Διεθνή, Ελλάδα, Άμυνα & Διπλωματία, Αθλητικά) και δικές σας πηγές· η ίδια είδηση από πολλές πηγές εμφανίζεται μία φορά· έκτακτες με κόκκινη μπάρα, ήχο και σύνδεσμο σε ζωντανό βίντεο· «για αργότερα» με Ctrl+κλικ |
 | 📈 Τιμές | Μετοχές Euronext (Αθήνα με 15′ καθυστέρηση, Παρίσι, Άμστερνταμ, Βρυξέλλες, Λισσαβώνα, Μιλάνο, Όσλο), μέταλλα, πετρέλαιο/αέριο, ισοτιμίες ΕΚΤ· ειδοποιήσεις ορίων· οι τιμές επισημαίνονται ως καθυστερημένες |
 | 💼 Χαρτοφυλάκιο και ανάλυση | Αξία και κέρδος/ζημιά, RSI, SMA20/50, MACD, κεριά, δοκιμή στρατηγικής, δείκτης φόβου και απληστίας, διάθεση ειδήσεων |
+| 🗂 Θέματα και ιστορίες | Λίστες παρακολούθησης θεμάτων (λέξεις-κλειδιά και περιοχή), ομαδοποίηση δημοσιευμάτων ανά γεγονός με σύγκριση πηγών (δεν είναι έλεγχος αλήθειας), τοπικό χρονολόγιο μαζί με τις εφαρμογές Opsis |
+| 📤 Εξαγωγές | Ημερήσια και εβδομαδιαία σύνοψη HTML (χωρίς δίκτυο, ασφαλής κωδικοποίηση, εκτύπωση σε PDF από τον browser), οικονομικό ημερολόγιο με φίλτρα (εισαγωγή JSON, εξαγωγή ICS), playlist M3U για το Opsis Media Suite |
+| 🧾 Ledger χαρτοφυλακίου | Αγορές, πωλήσεις, μερίσματα, split και προμήθειες ανά νόμισμα (χωρίς αυτόματη μετατροπή), σταθμικό κόστος, πραγματοποιημένο κέρδος/ζημιά, αποτίμηση από την τελευταία γνωστή τιμή· οι παλιές θέσεις μεταφέρονται ως αρχικό υπόλοιπο με επιβεβαίωση και επιστρέφουν αν αποτύχει η αποθήκευση |
+| 🔔 Ειδοποιήσεις τιμής | Τιμή ή ημερήσια μεταβολή %, περιθώριο επανεξοπλισμού, μέγιστη ηλικία δεδομένων· δεν ενεργοποιούνται από μηδενικές ή ελλιπείς τιμές |
+| 📺 Live Video Hub | Προαιρετικό: κανάλια της επιλογής σας, σίγαση, χωρίς αυτόματη αναπαραγωγή |
+| 🧱 Widgets Opsis | Πέντε προαιρετικά widgets (ειδήσεις, αγορές, καιρός, έκτακτα, ιστορικά γεγονότα), studio και gallery ειδήσεων, υψηλή αντίθεση, πλοήγηση με πληκτρολόγιο |
+| 🛡 Σταθερότητα και ασφάλεια | Όρια ταυτόχρονων λήψεων, backoff και Retry-After, όριο 5 MB ανά feed, φρουρός ανακατευθύνσεων (όχι προς τοπικές διευθύνσεις ή από https σε http), safe mode, λιγότερες εγγραφές στον δίσκο, εγκατάσταση με αντίγραφο επαναφοράς |
 | ⛅ Καιρός | Πόλεις της Ελλάδας: εικονίδιο, θερμοκρασία, άνεμος, υγρασία· χάρτης με κλικ· προειδοποιήσεις έντονων φαινομένων |
 | 🌋 Φυσικές καταστροφές | Σεισμοί, πυρκαγιές, πλημμύρες, καταιγίδες, ηφαίστεια ως περιεχόμενο μπάρας· φίλτρα περιοχής, μεγέθους, ηλικίας και ειδών· συγχώνευση αναφορών πολλών οργανισμών |
 | 🖥 Μπάρες | Πάνω από τη γραμμή εργασιών ή **μέσα** σε αυτήν (ακολουθεί και την αυτόματη απόκρυψη)· δεύτερη μπάρα, μπάρα ανά οθόνη, μπάρα επιφάνειας που αντικαθιστά την κρυμμένη μπάρα εργασιών· κάθε μπάρα δείχνει ειδήσεις, αγορές ή καιρό |
@@ -81,6 +88,8 @@
 ### Εγκατάσταση
 
 **Απαιτήσεις:** Windows 11 (64-bit· τα Windows 10 δεν έχουν δοκιμαστεί), [.NET 11 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (ο installer το προτείνει και το κατεβάζει μόνο αν το επιτρέψετε), προαιρετικά WebView2 Runtime (ζωντανό βίντεο έκτακτων).
+
+**Συμβατότητα 0.28.0:** ως plugin απαιτεί **Opsis 2.8** (κοινό συμβόλαιο plugin 1.0.0.0, ακριβώς το ίδιο DLL με το host, και Opsis.UI 0.6.0)· ο installer αρνείται την ενσωμάτωση αν το DLL του host διαφέρει και τότε εγκαθίσταται αυτόνομα. Όλες οι εφαρμογές της οικογένειας τρέχουν σε .NET 11. Οι ρυθμίσεις σας διατηρούνται κατά την αναβάθμιση και ο installer κρατά αντίγραφο επαναφοράς του προηγούμενου plugin.
 
 1. Κατεβάστε από τα [Releases](../../releases/latest) το `OpsisNewsCrawler-Setup.exe` (ή το `…-portable.zip`) και το αντίστοιχο `.sha256`.
 2. **Ελέγξτε το αρχείο** (PowerShell, στον φάκελο λήψεων):
@@ -133,6 +142,13 @@ A scrolling news, market-price and weather bar for the Windows desktop — above
 | 📰 News | RSS from many sources in **6 categories** (Economy, Markets, International, Greece, Defence & Diplomacy, Sports) plus your own; the same story from several sources is shown once; breaking news with a red bar, sound and a live-video link; "read later" with Ctrl+click |
 | 📈 Prices | Euronext shares (Athens 15′ delayed, Paris, Amsterdam, Brussels, Lisbon, Milan, Oslo), metals, oil/gas, ECB currency rates; price alerts; quotes are labelled delayed |
 | 💼 Portfolio and analysis | Value and profit/loss, RSI, SMA20/50, MACD, candlesticks, strategy back-test, fear & greed gauge, news mood |
+| 🗂 Topics and stories | Topic watchlists (keywords and region), stories grouped by event with a source comparison (not a fact check), a local timeline shared with the Opsis apps |
+| 📤 Exports | Daily and weekly HTML digests (offline, safely encoded, print to PDF from the browser), an economic calendar with filters (JSON import, ICS export), an M3U playlist for Opsis Media Suite |
+| 🧾 Portfolio ledger | Buys, sells, dividends, splits and fees per currency (no automatic conversion), weighted average cost, realised profit/loss, valuation from the last known price; old holdings move over as an opening balance after confirmation and come back if saving fails |
+| 🔔 Price alerts | Price or daily change %, re-arm margin, maximum data age; zero or missing prices never trigger them |
+| 📺 Live Video Hub | Optional: channels of your choice, muted, never plays by itself |
+| 🧱 Opsis widgets | Five optional widgets (news, markets, weather, urgent, history), a news studio and gallery, high contrast, keyboard navigation |
+| 🛡 Stability and security | Limits on parallel downloads, back-off and Retry-After, 5 MB cap per feed, redirect guard (never to local addresses, never from https to http), safe mode, fewer disk writes, installer with a rollback copy |
 | ⛅ Weather | Greek cities: icon, temperature, wind, humidity; map on click; severe-weather warnings |
 | 🌋 Natural disasters | Earthquakes, fires, floods, storms, volcanoes as bar content; filters for region, magnitude, age and kind; reports of several organisations merged |
 | 🖥 Bars | Above the taskbar or **inside** it (follows auto-hide); a second bar, a bar per monitor, a desktop bar that stands in for a hidden taskbar; each bar shows news, markets or weather |
@@ -180,6 +196,8 @@ Dark and light themes (all of them: [`docs/screenshots`](docs/screenshots)).
 ### Installation
 
 **Requirements:** Windows 11 (64-bit; Windows 10 is untested), the [.NET 11 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (the installer offers it and downloads it only if you allow), optionally the WebView2 Runtime (live video of breaking news).
+
+**0.28.0 compatibility:** as a plugin it needs **Opsis 2.8** (shared plugin contract 1.0.0.0, exactly the same DLL as the host, and Opsis.UI 0.6.0); the installer refuses to integrate when the host's DLL differs and installs stand-alone instead. Every app of the family runs on .NET 11. Your settings are kept on upgrade and the installer keeps a rollback copy of the previous plugin.
 
 1. Download `OpsisNewsCrawler-Setup.exe` (or `…-portable.zip`) and the matching `.sha256` from [Releases](../../releases/latest).
 2. **Verify the file** (PowerShell, in the download folder):
