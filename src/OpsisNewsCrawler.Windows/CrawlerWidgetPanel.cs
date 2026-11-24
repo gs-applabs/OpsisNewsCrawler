@@ -90,7 +90,13 @@ public sealed class CrawlerWidgetPanel : UserControl
     private void ApplyTheme()
     {
         if (IsDisposed) return;
-        if (InvokeRequired) { if (IsHandleCreated) BeginInvoke(new Action(ApplyTheme)); return; }
+        if (InvokeRequired)
+        {
+            if (IsHandleCreated)
+                try { BeginInvoke(new Action(ApplyTheme)); }
+                catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException) { }
+            return;
+        }
         BackColor = Theme.Surface;
         ForeColor = Theme.Text;
         var accent = WidgetAccent();
@@ -153,7 +159,7 @@ public sealed class CrawlerWidgetPanel : UserControl
                     profile, allowTime: kind != "history"));
             items.ItemHeight = profile.Layout == "context" ? 26 : 23;
             heading.Text = WidgetStudio.Title(kind, Loc.IsGreek);
-            breakingBanner.Visible = kind == "breaking" && visible.Count > 0;
+            breakingBanner.Visible = galleryMode && kind == "breaking" && visible.Count > 0;
             if (breakingBanner.Visible)
                 breakingBanner.Text = Loc.IsGreek ? $"  ΕΚΤΑΚΤΗ ΕΠΙΚΑΙΡΟΤΗΤΑ  ·  {visible.Count}" : $"  BREAKING NEWS  ·  {visible.Count}";
             if (galleryMode) RefreshGallery(profile);
@@ -164,7 +170,7 @@ public sealed class CrawlerWidgetPanel : UserControl
             }
             items.AccessibleDescription = visible.Count == 0
                 ? (Loc.IsGreek ? "Δεν υπάρχουν διαθέσιμα δεδομένα" : "No data available")
-                : string.Join(". ", visible.Take(3).Select(x => x.Title));
+                : SafeAccessibilityText(string.Join(". ", visible.Take(3).Select(x => x.Title)));
         }
         finally { items.EndUpdate(); }
     }
