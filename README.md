@@ -76,7 +76,7 @@
 
 ### Εγκατάσταση
 
-**Απαιτήσεις:** Windows 11 (64-bit· τα Windows 10 δεν έχουν δοκιμαστεί), [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (ο installer το προτείνει και το κατεβάζει μόνο αν το επιτρέψετε), προαιρετικά WebView2 Runtime (ζωντανό βίντεο έκτακτων).
+**Απαιτήσεις:** Windows 11 (64-bit· τα Windows 10 δεν έχουν δοκιμαστεί), [.NET 11 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (ο installer το προτείνει και το κατεβάζει μόνο αν το επιτρέψετε), προαιρετικά WebView2 Runtime (ζωντανό βίντεο έκτακτων).
 
 1. Κατεβάστε από τα [Releases](../../releases/latest) το `OpsisNewsCrawler-Setup.exe` (ή το `…-portable.zip`) και το αντίστοιχο `.sha256`.
 2. **Ελέγξτε το αρχείο** (PowerShell, στον φάκελο λήψεων):

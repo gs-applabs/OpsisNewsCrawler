@@ -1,7 +1,51 @@
 # Changelog
 
+## 0.28.0 — .NET 11 / Opsis 2.8 P0 development (2026-11-24, candidate)
+
+> Product version remains **0.28.0**. These entries document work in draft PRs, not a stable published release. See [PR #7](https://github.com/gs-applabs/OpsisNewsCrawler/pull/7) (.NET 11 migration) and [PR #8](https://github.com/gs-applabs/OpsisNewsCrawler/pull/8) (P0 host integration).
+
+- **Toolchain / host:** `net11.0-windows`, identical `Opsis.UI.dll` as Opsis `release/2.8.0.2510` (UI file version 0.6.0.0, assembly 0.1.0.0); Crawler plugin and shared contract AssemblyVersion/FileVersion 1.0.0.0.
+- **P0 host context and theme:** versioned, in-memory language/theme/performance-tier snapshot; Opsis owns its process-global UI6 palette, while standalone owns its own palette. Host callbacks avoid creating the hidden ticker before `Start`.
+- **P0 lifecycle:** idempotent `Start/Stop`, delayed first-update guard and no manual refresh while stopped; mutex is released on a failed start. Unit tests cover host-context revision and invalid locale/tier.
+- **P0 installer / safety:** Inno integrated mode checks ABI and compares SHA-256 of both shared contract and Opsis.UI against the host before copying plugin files; standalone mode is unaffected. The `tools/verify-opsis-host-p0.ps1` read-only script checks an installed Opsis host, Crawler and optional Chronikologio.
+- **CI:** Windows build, plugin ABI, real Opsis 2.8 loader, and installer E2E are release gates. **Do not merge/publish until current-head green CI and real desktop regression testing.** Host + Chronikologio must be upgraded together to the exact shared contract DLL.
+- **Remaining P0:** host-provided weather handoff (no ABI 1.0 callback today); explicit Taskbar/DeskStrip ownership; safe-mode and Windows-update handshake; coordinated multi-app rollback; cross-process idle/SSD/GPU and 100/150/200% DPI testing. No claim of completion for these components.
+
+## Consolidated historical progress and release-note archive (2026-10—2026-11)
+
+**Repository housekeeping policy (as of 2026-11-24):** this is the single chronological development journal. Keep the **latest** release document (`docs/releases/RELEASE-0.28.0.md`), source-code instructions (`CLAUDE.md`), stable technical specifications (security, providers, breaking, plugin, coexistence, performance, etc.), tests and licensing. Do not create separate dated HANDOFF/TASKS/P0/P2/review Markdown progress files for every session. Add future progress under the current-version heading here. Keep an older binary or ZIP only if a release/rollback policy explicitly requires it; deleting a tracked documentation file does **not** rewrite Git history or delete previous GitHub releases.
+
+### Previous release milestones (summarized from superseded `docs/releases/RELEASE-*.md`)
+
+| Version | Historical milestones (already described in earlier entries above/below) |
+|---|---|
+| 0.15.0 | Welcome guide, Opsis family status/update integration, alert/tray icon evolution. |
+| 0.16.0–0.16.2 | Global weather locations, natural hazards from USGS/EMSC/GDACS/EONET, disaster cards, per-bar scroll speeds, source safeguards, update signing/checksum limits. |
+| 0.17.0 | First Opsis.UI shared controls and focus/DPI/RTL improvements. |
+| 0.18.0–0.18.8 | Hazard maps and event details, taskbar transparency and integrated mode, settings toggle/reset behaviour, single instance/mutex, legacy per-user install cleanup and auto-save settings. The older tray animation assumptions are superseded by subsequent versions. |
+| 0.19.0–0.19.2 | Hardware performance tiers, installer migration fixes, static tray icon and scroll-focus bug fixes. |
+| 0.20.0–0.20.3 | Evidence-weighted breaking news with user-adjustable sensitivity; plugin rich feed/widget interfaces, encoding fixes and safer updater/version hygiene. |
+| 0.22.2 | Taskbar flicker fix and avoidance of repeated shell Z-order/backdrop reassignment; real multi-monitor and Windows-build matrix validation still required. |
+| 0.24.0–0.24.1 | Rich metadata feeds, family catalogue, optional MET Norway fallback and opt-in approximate location. |
+| 0.28.0 P0–P3 | RSS safety, SSD/idle reduction, Live TV, five widgets, watchlists, merged timeline, daily/weekly offline HTML digests, market tools, economic calendar and ABI 1.0.0.0 staged for coordinated Opsis 2.8 delivery. |
+
+### Historical progress file dispositions
+
+| Former file | Important decisions retained / current handling |
+|---|---|
+| `docs/HANDOFF.md` / `docs/TASKS.md` | Historical R/N/O requirement and session-by-session checklists (Oct 2026) were superseded by implementation, `CHANGELOG.md` and current tests. Preserved exact source in Git at commit `6d4fb3609d8ae59ada6acd8384f94789c7aad83d`; do not treat old ✅ or unchecked boxes as current QA results. |
+| `docs/PLAN-INTAKE.md` | 2026-11-10 prioritization, staged regional/weather expansion, taskbar-flicker reproduction before changes and high-contrast/automatic text-colour requirements. Continue unresolved priorities under current P0/P1/P2 sections, not an old 2.4.x contract plan. |
+| `CHANGELOG.md (historical review section)` / `docs/INSTRUCTIONS-REVIEW.md` | Historical UX and security audit: source health, title dedup, accessible ticker names, DPI/RTL, taskbar overlay, full-text contrast, user-provider permissions. Some were implemented later; pending verification remains as current work, never promoted to “passed” without a test run. |
+| `docs/P0-IMPLEMENTATION-2026-11-23.md` | Early P0 RSS concurrency/size caps, backoff, reduced disk writes, GDI, timers, cancellation, async rich metadata; originally on 0.24.1 + ABI 0.8, now superseded by 0.28.0 and ABI 1.0.0.0. Reconfirm with current tests. |
+| `docs/P2-COMPATIBILITY-AND-RELEASE.md` | Requires coordinated Opsis/Chronikologio/Crawler contract build, fresh/upgrade/rollback installer E2E, DPI, soak and signature caveats. SHA-256 detects integrity, not publisher authenticity. |
+| `docs/NET11-OPSIS-280-COMPAT.md` / `docs/P0-OPSIS-28-HOST-INTEGRATION.md` | Net11 runtime, UI6 parity, actual host loader tests, host-context and single-instance guards, data-only ABI preflight and installer hash denial moved into the current 0.28.0 development heading above. |
+| Older `docs/releases/RELEASE-*.md` except 0.28.0 | Superseded individual release notes replaced by milestone table and original `CHANGELOG.md` entries. |
+
+**Provenance:** the full pre-consolidation text of these superseded files remains accessible in Git history at [the snapshot commit](https://github.com/gs-applabs/OpsisNewsCrawler/tree/6d4fb3609d8ae59ada6acd8384f94789c7aad83d/docs). This archive is a historical summary, not a claim that old releases or CI jobs were certified today.
+
+
 ## 0.28.0 — 2026-11-23
-- **Version alignment:** standalone application, Core, Windows UI, plugin, installer and tests upgraded to product version 0.28.0. Crawler plugin assembly and file version pinned at 1.0.0.0; shared host contract assembly stays 0.8.0.0 (new contract members require synchronized DLL rollout).
+- **Version alignment:** standalone application, Core, Windows UI, plugin, installer and tests upgraded to product version 0.28.0. Crawler plugin assembly and file version pinned at 1.0.0.0; shared host contract was initially 0.8.0.0 in this staging line; the later P3 coordinated rollout uses 1.0.0.0 (new contract members require synchronized DLL rollout).
 - **P0 reliability:** RSS concurrency, bounded downloads, retry/backoff, cache write reduction, graceful shutdown, GDI measurement protection, refresh scheduler, rich plugin feed metadata and health diagnostics.
 - **P1 interaction:** Live Video Hub and channel selection, explainable breaking scores and publisher-group independence, optional Opsis desktop widgets, suite events, DPI, keyboard focus, smart contrast, regional power/metered network behavior.
 - **P2 local research:** topic watchlists, story source explorer, local multi-app timeline, daily offline HTML digest (print to PDF via browser), optional portfolio trade ledger, price-percent alerts, and unified Opsis-style insights center.
@@ -194,7 +238,7 @@ Detailed notes per release: `docs/releases/RELEASE-<version>.md` and the GitHub 
 ## 0.14.3 — 2026-10-23
 - The icon is rectangular: the breaking-news intro draws the whole artwork (four news symbols) over the full bar height, crisp at 100/150/200 % DPI (rendered at the final pixel size, only scaled down while it grows); the intro echo ring is a rounded rectangle.
 - Settings header icon is the same wide icon. Letter badges and favicon plates are rounded squares, not circles; favicons are kept at 64 px and scaled down; the icon next to a headline grows with the bar (20 px at 42 px).
-- New --snapshot-bar <png> switch; review with proposals in docs/REVIEW-2026-10.md. Tests: 113.
+- New --snapshot-bar <png> switch; review with proposals in CHANGELOG.md (historical review section). Tests: 113.
 
 ## 0.14.2 — 2026-10-22
 - Severe-weather alert: clicking it opens the warnings page (meteo.gr) and the bar returns to normal news. Before, nothing opened and the bar stayed red and static for 30 minutes.
