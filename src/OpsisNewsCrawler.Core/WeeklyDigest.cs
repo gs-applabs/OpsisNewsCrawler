@@ -27,7 +27,7 @@ public static class WeeklyDigest
                 .Append(story.PublishedAt.ToLocalTime().ToString("dd/MM HH:mm",CultureInfo.InvariantCulture))
                 .Append("</small><h2>");
             var allowed=Uri.TryCreate(story.Url,UriKind.Absolute,out var url) &&
-                url.Scheme==Uri.UriSchemeHttps && NetGuard.IsPublicHost(url.Host);
+                url.Scheme==Uri.UriSchemeHttps && NetGuard.IsPublicHttpUrl(story.Url);
             if(allowed)sb.Append("<a rel=\"noopener noreferrer\" href=\"")
                 .Append(WebUtility.HtmlEncode(url!.AbsoluteUri)).Append("\">");
             sb.Append(WebUtility.HtmlEncode(story.Title));

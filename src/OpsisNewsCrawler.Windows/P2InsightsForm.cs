@@ -12,12 +12,25 @@ public sealed class P2InsightsForm : Form
     private readonly FlatComboBox views = new() { Width=300 };
     private readonly FlatButton export = new();
     private readonly FlatButton exportWeekly = new();
+    private readonly FlatComboBox digestScope = new() { Width=250 };
+    private readonly DateTimePicker digestDate = new() { Format=DateTimePickerFormat.Short, Width=125 };
     private readonly FlatButton importCalendar = new();
+    private readonly FlatComboBox calendarRange = new() { Width=180 };
+    private readonly FlatComboBox calendarImpact = new() { Width=180 };
+    private readonly FlatComboBox calendarCountry = new() { Width=180 };
+    private readonly FlatButton relatedCalendarNews = new();
+    private readonly List<EconomicEvent> displayedEvents = new();
+    private readonly List<string> calendarCountries = new() { "" };
+    private bool updatingCountries;
     private readonly FlatButton exportCalendar = new();
     private readonly FlatButton evidence = new();
     private readonly FlatButton newTransaction = new();
+    private readonly FlatButton openPortfolio = new();
+    private readonly FlatButton openAnalysis = new();
     private readonly FlatButton mediaPlaylist = new();
     private readonly FlatButton refresh = new();
+    private readonly FlatComboBox clusterFilter = new() { Width=250 };
+    private readonly List<StoryCluster> displayedClusters = new();
     private readonly Label summary = new() { Dock=DockStyle.Bottom, Height=34, AutoEllipsis=true };
     private readonly ListView lines = new()
     {
@@ -44,28 +57,54 @@ public sealed class P2InsightsForm : Form
             new[]{"Χρονολόγιο","Ομάδες ειδήσεων","Παρακολούθηση θεμάτων","Συναλλαγές χαρτοφυλακίου","Οικονομικό ημερολόγιο"}
             :new[]{"Timeline","Story clusters","Topic watchlist","Portfolio transactions","Economic calendar"},0);
         views.SelectedIndexChanged+=(_,_)=>Reload();
+        clusterFilter.SetItems(Loc.IsGreek ? new[]{ "Όλες οι ομάδες", "Πολλαπλές ομάδες εκδοτών", "Μία ή άγνωστη ομάδα" }
+            : new[]{ "All clusters", "Multiple publisher groups", "One or unknown group" },0);
+        clusterFilter.Visible=false;
+        clusterFilter.SelectedIndexChanged+=(_,_)=>Reload();
         refresh.Text=Loc.IsGreek?"Ανανέωση προβολής":"Refresh view";
         refresh.Click+=(_,_)=>Reload();
         export.Text=Loc.IsGreek?"Εξαγωγή HTML ημέρας":"Export daily HTML";
         export.Click+=(_,_)=>ExportDigest();
         exportWeekly.Text=Loc.IsGreek?"Εβδομάδα HTML":"Weekly HTML";
         exportWeekly.Click+=(_,_)=>ExportWeeklyDigest();
+        digestScope.SetItems(Loc.IsGreek ? new[]{ "Σύνοψη: όλες οι ειδήσεις", "Σύνοψη: ενεργά θέματα" }
+            : new[]{ "Digest: all news", "Digest: enabled watchlists" },0);
+        digestScope.AccessibleName=Loc.IsGreek?"Περιεχόμενο σύνοψης":"Digest scope";
+        digestDate.AccessibleName=Loc.IsGreek?"Ημερομηνία λήξης σύνοψης":"Digest ending date";
+        digestDate.MinDate=DateTime.Today.AddYears(-5);
+        digestDate.MaxDate=DateTime.Today;
+        digestDate.Value=DateTime.Today;
         importCalendar.Text=Loc.IsGreek?"Εισαγωγή ημερολογίου":"Import calendar";
         importCalendar.Click+=(_,_)=>ImportCalendar();
+        calendarRange.SetItems(Loc.IsGreek ? new[]{ "Επόμενες 7 ημέρες", "Επόμενες 30 ημέρες", "Επόμενες 90 ημέρες", "Προηγούμενες 30 ημέρες" }
+            : new[]{ "Next 7 days", "Next 30 days", "Next 90 days", "Previous 30 days" },2);
+        calendarImpact.SetItems(Loc.IsGreek ? new[]{ "Όλες οι επιπτώσεις", "Επίπεδο 1+", "Επίπεδο 2+", "Επίπεδο 3" }
+            : new[]{ "All impact levels", "Level 1+", "Level 2+", "Level 3" },0);
+        calendarRange.SelectedIndexChanged+=(_,_)=>Reload();
+        calendarImpact.SelectedIndexChanged+=(_,_)=>Reload();
+        calendarCountry.SelectedIndexChanged+=(_,_)=>{if(!updatingCountries)Reload();};
+        relatedCalendarNews.Text=Loc.IsGreek?"Συναφείς ειδήσεις":"Related headlines";
+        relatedCalendarNews.Click+=(_,_)=>ShowRelatedCalendarNews();
+        foreach(var control in new Control[]{calendarRange,calendarImpact,calendarCountry,relatedCalendarNews})
+        {control.Visible=false;bar.Controls.Add(control);}
         exportCalendar.Text="ICS";
         exportCalendar.Click+=(_,_)=>ExportCalendar();
         bar.WrapContents=true;
         bar.Height=105;
-        bar.Controls.Add(views);bar.Controls.Add(refresh);bar.Controls.Add(export);
+        bar.Controls.Add(views);bar.Controls.Add(clusterFilter);bar.Controls.Add(refresh);bar.Controls.Add(export);
         evidence.Text=Loc.IsGreek?"Σύγκριση πηγών":"Compare sources";
         evidence.Click+=(_,_)=>CompareSelectedStory();
         newTransaction.Text=Loc.IsGreek?"Νέα συναλλαγή":"Add trade";
         newTransaction.Click+=(_,_)=>AddTransaction();
+        openPortfolio.Text=Loc.IsGreek?"Υπάρχον χαρτοφυλάκιο":"Existing portfolio";
+        openPortfolio.Click+=(_,_)=>host.ShowPortfolio();
+        openAnalysis.Text=Loc.IsGreek?"Γραφήματα αγορών":"Market charts";
+        openAnalysis.Click+=(_,_)=>host.ShowAnalysis();
         mediaPlaylist.Text=Loc.IsGreek?"Media Suite · M3U":"Media Suite · M3U";
         mediaPlaylist.Click+=(_,_)=>ExportMediaPlaylist();
-        bar.Controls.Add(exportWeekly);bar.Controls.Add(importCalendar);bar.Controls.Add(exportCalendar);
-        bar.Controls.Add(evidence);bar.Controls.Add(newTransaction);bar.Controls.Add(mediaPlaylist);
-        bar.Height=155;
+        bar.Controls.Add(exportWeekly);bar.Controls.Add(digestScope);bar.Controls.Add(digestDate);bar.Controls.Add(importCalendar);bar.Controls.Add(exportCalendar);
+        bar.Controls.Add(evidence);bar.Controls.Add(newTransaction);bar.Controls.Add(openPortfolio);bar.Controls.Add(openAnalysis);bar.Controls.Add(mediaPlaylist);
+        bar.Height=195;
         Controls.Add(lines);Controls.Add(summary);Controls.Add(bar);
         lines.DoubleClick+=(_,_)=>OpenSelected();
         lines.KeyDown+=(_,e)=>{if(e.KeyCode==Keys.Enter){OpenSelected();e.Handled=true;}};
@@ -85,34 +124,57 @@ public sealed class P2InsightsForm : Form
     {
         if(IsDisposed || !IsHandleCreated)return;
         visible.Clear();
+        displayedClusters.Clear();
+        displayedEvents.Clear();
+        foreach(var control in new Control[]{calendarRange,calendarImpact,calendarCountry,relatedCalendarNews})
+            control.Visible=views.SelectedIndex==4;
+        clusterFilter.Visible=views.SelectedIndex==1;
+        evidence.Enabled=views.SelectedIndex==1;
+        newTransaction.Visible=openPortfolio.Visible=openAnalysis.Visible=views.SelectedIndex==3;
         var news=host.RecentNews;
         switch(views.SelectedIndex)
         {
             case 1:
-                foreach(var g in StoryExplorer.Cluster(news).Take(150))
+                var clusters=StoryExplorer.Cluster(news).AsEnumerable();
+                clusters=clusterFilter.SelectedIndex switch
+                {
+                    1 => clusters.Where(g=>g.PublisherGroups>=2),
+                    2 => clusters.Where(g=>g.PublisherGroups<2),
+                    _ => clusters
+                };
+                displayedClusters.AddRange(clusters.Take(150));
+                foreach(var g in displayedClusters)
                     visible.Add((g.Headline,
-                        $"{g.Reports.Count} reports · {g.PublisherGroups} publisher groups · {g.LastUpdate:dd/MM HH:mm}",g.Key));
+                        Loc.IsGreek
+                            ? $"{g.Reports.Count} δημοσιεύματα · {g.PublisherGroups} ομάδες εκδοτών · {g.LastUpdate:dd/MM HH:mm}"
+                            : $"{g.Reports.Count} reports · {g.PublisherGroups} publisher groups · {g.LastUpdate:dd/MM HH:mm}",g.Key));
                 break;
             case 2:
                 foreach(var m in TopicMatcher.Find(news,host.Config.TopicWatches))
                     visible.Add(($"{m.Topic.Name} · {m.Item.Title}",$"{m.Score}/100 · {m.Item.Source}",m.Item.Url));
                 break;
             case 4:
-                foreach(var entry in EconomicCalendar.Upcoming(host.Config.EconomicEvents,DateTimeOffset.Now,90))
-                    visible.Add((entry.Title,$"{entry.StartsAt:dd/MM/yyyy HH:mm} · {entry.Country} · {entry.Source} · impact {entry.Impact}",entry.Url));
+                RefreshCalendarCountries();
+                displayedEvents.AddRange(SelectedCalendarEvents());
+                foreach(var entry in displayedEvents)
+                    visible.Add((entry.Title,$"{entry.StartsAt.ToLocalTime():dd/MM/yyyy HH:mm} · {entry.Country} · {entry.Source} · {entry.Impact}/3 · A: {entry.Actual??"—"} / F: {entry.Forecast??"—"} / P: {entry.Previous??"—"}",entry.Url));
                 break;
             case 3:
-                foreach(var group in host.Config.PortfolioTransactions.GroupBy(x=>x.InstrumentKey).Take(100))
+                foreach(var group in host.Config.PortfolioTransactions.GroupBy(x=>(Instrument:(x.InstrumentKey??"").Trim().ToUpperInvariant(), Currency:(x.Currency??"").Trim().ToUpperInvariant())).Take(100))
                 {
                     try
                     {
                         var result=PortfolioLedger.Calculate(group);
-                        visible.Add((group.Key,
-                            $"{result.Units:0.####} units · cost {result.CostBasis:0.00} · realized {result.RealizedPnl:0.00} · dividends {result.Dividends:0.00}",null));
+                        var label=$"{group.Key.Instrument} · {group.Key.Currency}";
+                        var avg=result.AverageUnitCost?.ToString("0.####")??"—";
+                        var valuation=LedgerValuationText(group.Key.Instrument,group.Key.Currency,result);
+                        visible.Add((label,Loc.IsGreek
+                            ? $"{result.Units:0.####} μον. · κόστος {result.CostBasis:0.00} · μ.ό. {avg} · κέρδη {result.RealizedPnl:0.00} · μερίσματα {result.Dividends:0.00} · καθαρά {result.NetRealizedIncome:0.00} · προμήθειες {result.Fees:0.00} · {valuation}"
+                            : $"{result.Units:0.####} units · cost {result.CostBasis:0.00} · avg {avg} · realized {result.RealizedPnl:0.00} · dividends {result.Dividends:0.00} · net {result.NetRealizedIncome:0.00} · fees {result.Fees:0.00} · {valuation}",null));
                     }
-                    catch(InvalidOperationException)
+                    catch(Exception ex) when(ex is InvalidOperationException or ArgumentException or OverflowException)
                     {
-                        visible.Add((group.Key,Loc.IsGreek?"Μη συνεπές ιστορικό συναλλαγών":"Inconsistent transaction ledger",null));
+                        visible.Add(($"{group.Key.Instrument} · {group.Key.Currency}",Loc.IsGreek?"Μη συνεπές ιστορικό συναλλαγών":"Inconsistent transaction ledger",null));
                     }
                 }
                 break;
@@ -136,6 +198,24 @@ public sealed class P2InsightsForm : Form
         finally {lines.EndUpdate();}
     }
 
+    private string LedgerValuationText(string key,string currency,LedgerPosition position)
+    {
+        // Read-only: do not create a duplicate holding in Config.Portfolio or request new prices.
+        if(position.Units==0)return Loc.IsGreek?"Κλειστή θέση":"Closed position";
+        var inst=host.Config.Watchlist.FirstOrDefault(i=>string.Equals(
+            $"{i.Source}|{i.Market}|{i.Code}",key,StringComparison.OrdinalIgnoreCase));
+        if(inst is null || !PortfolioLedger.MatchesQuoteCurrency(inst,currency) ||
+            !host.QuoteService.LatestByKey.TryGetValue(key,out var quote) ||
+            PortfolioLedger.ValueAt(position,quote) is not { } v)
+            return Loc.IsGreek?"Αποτίμηση μη διαθέσιμη (τιμή/νόμισμα)":"Valuation unavailable (quote/currency)";
+        var pct=v.Percent?.ToString("0.##")+"%";
+        if(v.Percent is null)pct="—";
+        var timing=quote.AsOf.ToLocalTime().ToString("dd/MM HH:mm");
+        return Loc.IsGreek
+            ? $"Αξία {v.Value:0.00} {currency} · μη πραγματοποιημένα {v.Unrealized:0.00} ({pct}) · {timing}"+(quote.Delayed?" · καθυστέρηση":"")
+            : $"Value {v.Value:0.00} {currency} · unrealized {v.Unrealized:0.00} ({pct}) · {timing}"+(quote.Delayed?" · delayed":"");
+    }
+
     private void OpenSelected()
     {
         if(views.SelectedIndex==1){CompareSelectedStory();return;}
@@ -147,19 +227,38 @@ public sealed class P2InsightsForm : Form
         catch(Exception ex) when(ex is InvalidOperationException or Win32Exception){}
     }
 
+    private NewsItem[] DigestItems(DateOnly ending, bool weekly)
+    {
+        var first=weekly?ending.AddDays(-6):ending;
+        var rows=host.RecentNews.Where(n=>n.Kind==NewsItemKind.News &&
+            DateOnly.FromDateTime(n.PublishedAt.LocalDateTime) is var day && day>=first && day<=ending)
+            .OrderByDescending(n=>n.PublishedAt).Take(1000).ToArray();
+        if(digestScope.SelectedIndex!=1)return rows;
+        var matches=TopicMatcher.Find(rows,host.Config.TopicWatches).Select(x=>x.Item).ToHashSet();
+        return rows.Where(matches.Contains).ToArray();
+    }
+
+    private string DigestTitle(bool weekly)
+    {
+        var title=weekly?(Loc.IsGreek?"Εβδομαδιαία σύνοψη":"Weekly digest")
+            :(Loc.IsGreek?"Ημερήσια σύνοψη":"Daily digest");
+        return title+(digestScope.SelectedIndex==1?(Loc.IsGreek?" · Θέματα παρακολούθησης":" · Watched topics"):"");
+    }
+
     private void ExportDigest()
     {
+        var ending=DateOnly.FromDateTime(digestDate.Value);
+        var data=DigestItems(ending,false);
         using var save=new SaveFileDialog
         {
             Title=Loc.IsGreek?"Εξαγωγή ημερήσιας σύνοψης":"Export daily digest",
             Filter="HTML (*.html)|*.html",DefaultExt="html",
-            FileName="OpsisNewsCrawler-"+DateTime.Today.ToString("yyyyMMdd")+".html"
+            FileName="OpsisNewsCrawler-"+ending.ToString("yyyyMMdd")+".html"
         };
         if(save.ShowDialog(this)!=DialogResult.OK)return;
         try
         {
-            NewsDigest.SaveHtml(save.FileName,host.RecentNews,
-                DateOnly.FromDateTime(DateTime.Today),Loc.IsGreek?"Ημερήσια σύνοψη":"Daily digest");
+            NewsDigest.SaveHtml(save.FileName,data,ending,DigestTitle(false));
             summary.Text=save.FileName;
         }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException)
@@ -172,9 +271,8 @@ public sealed class P2InsightsForm : Form
     {
         var index=lines.SelectedIndices.Count>0?lines.SelectedIndices[0]:-1;
         if(index<0||index>=visible.Count||views.SelectedIndex!=1)return;
-        var key=visible[index].Url;
-        var cluster=StoryExplorer.Cluster(host.RecentNews).FirstOrDefault(x=>x.Key==key);
-        if(cluster is null)return;
+        if(index>=displayedClusters.Count)return;
+        var cluster=displayedClusters[index];
         using var form=new P3EvidenceForm(cluster);
         form.ShowDialog(this);
     }
@@ -214,18 +312,19 @@ public sealed class P2InsightsForm : Form
 
     private void ExportWeeklyDigest()
     {
+        var ending=DateOnly.FromDateTime(digestDate.Value);
+        var data=DigestItems(ending,true);
         using var save=new SaveFileDialog
         {
             Title=Loc.IsGreek?"Εβδομαδιαία σύνοψη":"Weekly digest",
             Filter="HTML (*.html)|*.html",DefaultExt="html",
-            FileName="OpsisWeekly-"+DateTime.Today.ToString("yyyyMMdd")+".html"
+            FileName="OpsisWeekly-"+ending.ToString("yyyyMMdd")+".html"
         };
         if(save.ShowDialog(this)!=DialogResult.OK)return;
         try
         {
-            var html=WeeklyDigest.Html(host.RecentNews,DateOnly.FromDateTime(DateTime.Today),
-                Loc.IsGreek?"Εβδομαδιαία σύνοψη":"Weekly digest");
-            File.WriteAllText(save.FileName,html);
+            var html=WeeklyDigest.Html(data,ending,DigestTitle(true));
+            SafeFile.WriteAllText(save.FileName,html);
             summary.Text=save.FileName;
         }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException)
@@ -257,6 +356,36 @@ public sealed class P2InsightsForm : Form
         }
     }
 
+    private void RefreshCalendarCountries()
+    {
+        var selected=calendarCountry.SelectedIndex>=0 && calendarCountry.SelectedIndex<calendarCountries.Count?calendarCountries[calendarCountry.SelectedIndex]:"";
+        var countries=host.Config.EconomicEvents.Select(x=>x.Country?.Trim()??"").Where(x=>x.Length>0)
+            .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x=>x).Take(100).ToList();
+        calendarCountries.Clear();calendarCountries.Add("");calendarCountries.AddRange(countries);
+        updatingCountries=true;
+        try {calendarCountry.SetItems(new[]{Loc.IsGreek?"Όλες οι χώρες":"All countries"}.Concat(countries),Math.Max(0,calendarCountries.FindIndex(x=>string.Equals(x,selected,StringComparison.OrdinalIgnoreCase))));}
+        finally {updatingCountries=false;}
+    }
+
+    private IReadOnlyList<EconomicEvent> SelectedCalendarEvents()
+    {
+        var days=calendarRange.SelectedIndex switch {0=>7,1=>30,3=>30,_=>90};
+        var country=calendarCountry.SelectedIndex>=0 && calendarCountry.SelectedIndex<calendarCountries.Count?calendarCountries[calendarCountry.SelectedIndex]:"";
+        return EconomicCalendar.Select(host.Config.EconomicEvents,DateTimeOffset.Now,days,calendarImpact.SelectedIndex,country,calendarRange.SelectedIndex==3);
+    }
+
+    private void ShowRelatedCalendarNews()
+    {
+        var index=lines.SelectedIndices.Count>0?lines.SelectedIndices[0]:-1;
+        if(views.SelectedIndex!=4||index<0||index>=displayedEvents.Count)return;
+        var entry=displayedEvents[index];
+        var reports=EconomicCalendar.RelatedNews(entry,host.RecentNews);
+        if(reports.Count==0){summary.Text=Loc.IsGreek?"Δεν βρέθηκαν συναφείς τίτλοι στο τοπικό αρχείο.":"No related cached headlines.";return;}
+        var cluster=new StoryCluster(entry.Id,entry.Title,reports.Max(x=>x.PublishedAt),reports,
+            reports.Select(BreakingEngine.Publisher).Select(PublisherIdentity.Canonical).Where(x=>x.Length>0).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        using var form=new P3EvidenceForm(cluster);form.ShowDialog(this);
+    }
+
     private void ExportCalendar()
     {
         using var save=new SaveFileDialog {Filter="iCalendar (*.ics)|*.ics",DefaultExt="ics",
@@ -265,8 +394,7 @@ public sealed class P2InsightsForm : Form
         try
         {
             File.WriteAllText(save.FileName,
-                EconomicCalendar.ExportIcs(EconomicCalendar.Upcoming(host.Config.EconomicEvents,
-                    DateTimeOffset.Now,90)));
+                EconomicCalendar.ExportIcs(views.SelectedIndex==4?SelectedCalendarEvents():EconomicCalendar.Upcoming(host.Config.EconomicEvents,DateTimeOffset.Now,90)));
             summary.Text=save.FileName;
         }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException)

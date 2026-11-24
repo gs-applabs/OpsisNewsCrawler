@@ -1,7 +1,7 @@
 namespace OpsisNewsCrawler.Core;
 
 /// <summary>Writes small settings/cache files so that a crash or power loss never leaves a half-written file behind.</summary>
-internal static class SafeFile
+public static class SafeFile
 {
     public static void WriteAllText(string path, string text)
     {

@@ -129,31 +129,3 @@ public interface IPluginProfileAware
 {
     void SetHardwareProfile(string tier);
 }
-
-// ---- Contract 1.0.0.0 (additive; nothing above changed) --------------------------------------------------------------------------------------------------------------------------
-// Both interfaces are OPTIONAL: the host checks with `is`, so a plugin that does not implement them keeps working, and a plugin that implements them still loads in a host that does not
-// know them (the host simply never calls them; the plugin must not depend on being called).
-
-/// <summary>Where the releases of a plugin are published. <see cref="Repository"/> is "owner/name" on GitHub (the owner must be one of the accounts Opsis trusts); <see cref="AssetName"/> is the
-/// file of the release that holds the plugin folder as a zip. The release must also carry a SHA-256 of that asset (the digest of GitHub or an asset named like the zip plus ".sha256").</summary>
-public sealed record PluginUpdateSource(string Repository, string AssetName);
-
-/// <summary>Optional capability: the plugin tells Opsis where its updates come from. Opsis is then the ONLY place that checks and installs updates of the plugin (one button, SHA-256 verified).</summary>
-public interface IPluginUpdateSource
-{
-    PluginUpdateSource GetUpdateSource();
-}
-
-/// <summary>The settings that belong to Opsis and are shared with every plugin. The plugin shows no setting of its own for them.</summary>
-/// <param name="Language">UI language code ("el", "en", ...).</param>
-/// <param name="Dark">True for a dark Opsis theme.</param>
-/// <param name="HardwareTier">"Low", "Balanced" or "High".</param>
-/// <param name="UiScalePercent">Interface scale chosen in Opsis (100, 125, ...).</param>
-/// <param name="HostManagesUpdates">True when Opsis checks and installs the updates of this plugin: the plugin must not run an updater of its own.</param>
-public sealed record PluginHostSettings(string Language, bool Dark, string HardwareTier, int UiScalePercent, bool HostManagesUpdates);
-
-/// <summary>Optional capability: the host pushes its shared settings on start and whenever one of them changes (always on the UI thread).</summary>
-public interface IPluginHostSettingsAware
-{
-    void SetHostSettings(PluginHostSettings settings);
-}

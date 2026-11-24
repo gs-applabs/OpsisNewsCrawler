@@ -45,7 +45,16 @@ public class ContractTests
             var bar = line.IndexOf('|');
             var type = line[..bar]; var member = line[(bar + 1)..]
                 .Replace("OpsisNewsCrawler.Plugin.Abstractions, Version=0.8.0.0",
-                         "OpsisNewsCrawler.Plugin.Abstractions, Version=1.0.0.0", StringComparison.Ordinal);
+                         "OpsisNewsCrawler.Plugin.Abstractions, Version=1.0.0.0", StringComparison.Ordinal)
+                // The frozen Chronikologio reference surface was compiled
+                // against .NET 10. Runtime framework assemblies may change
+                // their version in .NET 11 without any plugin ABI change.
+                // Normalize framework identity only; keep our contract types,
+                // generic arguments, method signatures and defaults exact.
+                .Replace("System.Private.CoreLib, Version=10.0.0.0",
+                         $"System.Private.CoreLib, Version={typeof(object).Assembly.GetName().Version}", StringComparison.Ordinal)
+                .Replace("System.Windows.Forms, Version=10.0.0.0",
+                         $"System.Windows.Forms, Version={typeof(Control).Assembly.GetName().Version}", StringComparison.Ordinal);
             Assert.True(ours.ContainsKey(type), "missing type " + type);
             if (member.Length > 0) Assert.True(ours[type].Contains(member), $"{type}: signature {member} is not in our contract");
         }

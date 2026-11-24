@@ -6,6 +6,9 @@ namespace OpsisNewsCrawler.Windows;
 /// <summary>Market watchlists, price alerts and source-status settings.</summary>
 public sealed partial class SettingsPanel
 {
+    private FlatText alertMargin = null!;
+    private FlatNumber alertAge = null!;
+
     private Control BuildMarkets()
     {
         var page = NewPage(out var flow);
@@ -152,6 +155,10 @@ public sealed partial class SettingsPanel
         var alertRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
         alertRow.Controls.AddRange(new Control[] { alertInstrument, alertMetric, alertDirection, alertThreshold, addAlert, removeAlert });
         alertFlow.Controls.Add(alertRow);
+        alertMargin = new FlatText { Width = 100 }; alertMargin.Value = "0";
+        alertAge = new FlatNumber(); alertAge.Configure(0, 10080, 1);
+        alertFlow.Controls.Add(Row(Loc.IsGreek ? "Περιθώριο επανόπλισης (μονάδες ή ποσοστιαίες μονάδες)" : "Re-arm margin (units or percentage points)", alertMargin, 330));
+        alertFlow.Controls.Add(Row(Loc.IsGreek ? "Μέγιστη ηλικία τιμής (λεπτά, 0 = χωρίς όριο)" : "Maximum quote age (minutes, 0 = unlimited)", alertAge, 330));
         alertCard.Controls.Add(alertFlow);
         flow.Controls.Add(alertCard);
 
@@ -184,7 +191,7 @@ public sealed partial class SettingsPanel
         if (alertList is null || alertList.IsDisposed) return;
         alertList.ClearRows();
         foreach (var a in workAlerts)
-            alertList.AddRow($"{a.Label}  {(a.Above ? "≥" : "≤")}  {a.Threshold.ToString("0.00##", System.Globalization.CultureInfo.CurrentCulture)}{(a.Metric == "changePercent" ? "%" : "")}", a.Enabled);
+            alertList.AddRow($"{a.Label}  {(a.Above ? "≥" : "≤")}  {a.Threshold.ToString("0.00##", System.Globalization.CultureInfo.CurrentCulture)}{(a.Metric == "changePercent" ? "%" : "")} · Δ {a.RearmMargin:0.####} · {(a.MaxAgeMinutes == 0 ? "∞" : a.MaxAgeMinutes.ToString()+" min")}", a.Enabled);
     }
 
     private void AddAlert()
@@ -193,19 +200,26 @@ public sealed partial class SettingsPanel
         var index = alertInstrument.SelectedIndex;
         if (index < 0 || index >= alertChoices.Count) return;
         var text = (alertThreshold.Value ?? "").Trim().Replace(',', '.');
-        if (!decimal.TryParse(text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var limit)
+        if (!decimal.TryParse(text, System.Globalization.NumberStyles.AllowDecimalPoint | System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out var limit)
             || (alertMetric.SelectedIndex == 0 ? limit <= 0 : limit is < -100 or > 100))
         {
             SetStatus(Loc.T("pk.enter.a.valid.limit"));
             return;
         }
+        var marginText = (alertMargin.Value ?? "0").Trim().Replace(',', '.');
+        if (!decimal.TryParse(marginText, System.Globalization.NumberStyles.AllowDecimalPoint, System.Globalization.CultureInfo.InvariantCulture, out var margin) || margin < 0 || margin > 1_000_000m)
+        { SetStatus(Loc.IsGreek ? "Μη έγκυρο περιθώριο επανόπλισης." : "Invalid re-arm margin."); return; }
         var inst = alertChoices[index];
+        var metric = alertMetric.SelectedIndex == 1 ? "changePercent" : "price";
+        var above = alertDirection.SelectedIndex != 1;
+        if (workAlerts.Count >= 200 || workAlerts.Any(a => a.Matches(inst) && a.Metric == metric && a.Above == above && a.Threshold == limit))
+        { SetStatus(Loc.IsGreek ? "Διπλότυπος κανόνας ή όριο 200 ειδοποιήσεων." : "Duplicate rule or 200-alert limit."); return; }
         workAlerts.Add(new PriceAlert
         {
             Source = inst.Source, Code = inst.Code, Market = inst.Market,
             Label = string.IsNullOrEmpty(inst.Symbol) ? inst.DisplayName(Loc.IsGreek) : inst.Symbol,
             Above = alertDirection.SelectedIndex != 1, Threshold = limit, Enabled = true,
-            Metric = alertMetric.SelectedIndex == 1 ? "changePercent" : "price"
+            Metric = metric, RearmMargin = margin, MaxAgeMinutes = alertAge.Value
         });
         alertThreshold.Value = "";
         ShowAlerts();

@@ -9,18 +9,29 @@ public static class StoryExplorer
     public static IReadOnlyList<StoryCluster> Cluster(IEnumerable<NewsItem> news,
         TimeSpan? maxSeparation = null)
     {
-        var window = maxSeparation ?? TimeSpan.FromHours(12);
+        var window = TimeSpan.FromHours(Math.Clamp((maxSeparation ?? TimeSpan.FromHours(12)).TotalHours, 1, 72));
         var groups = new List<List<NewsItem>>();
+        var anchors = new List<HashSet<string>>();
         foreach (var item in news.Where(n => n.Kind == NewsItemKind.News && !string.IsNullOrWhiteSpace(n.Title))
                      .OrderByDescending(n => n.PublishedAt).Take(600))
         {
             var words = HeadlineDedup.Words(item.Title);
-            var group = groups.FirstOrDefault(g =>
-                Math.Abs((g[0].PublishedAt - item.PublishedAt).TotalHours) <= window.TotalHours
-                && HeadlineDedup.AreSameStory(HeadlineDedup.Words(g[0].Title), words));
-            if (group is null) groups.Add(new List<NewsItem> { item });
-            else if (!group.Any(n => string.Equals(n.Url, item.Url, StringComparison.OrdinalIgnoreCase)))
-                group.Add(item);
+            var index = -1;
+            for (var i = 0; i < groups.Count; i++)
+            {
+                if (groups[i][0].PublishedAt - item.PublishedAt > window) continue;
+                if (HeadlineDedup.AreSameStory(anchors[i], words)) { index = i; break; }
+            }
+            if (index < 0)
+            {
+                groups.Add(new List<NewsItem> { item });
+                anchors.Add(words);
+            }
+            else if (!groups[index].Any(n => !string.IsNullOrWhiteSpace(item.Url)
+                ? string.Equals(n.Url, item.Url, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(n.Source, item.Source, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(n.Title, item.Title, StringComparison.OrdinalIgnoreCase)))
+                groups[index].Add(item);
         }
         return groups.Select(g =>
         {

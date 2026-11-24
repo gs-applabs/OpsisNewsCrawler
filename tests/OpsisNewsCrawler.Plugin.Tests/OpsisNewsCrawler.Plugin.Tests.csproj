@@ -19,11 +19,9 @@
     <ProjectReference Include="../../src/OpsisNewsCrawler.OpsisPlugin/OpsisNewsCrawler.OpsisPlugin.csproj" />
     <ProjectReference Include="../../src/OpsisNewsCrawler.Windows/OpsisNewsCrawler.Windows.csproj" />
     <ProjectReference Include="../../src/OpsisNewsCrawler.Core/OpsisNewsCrawler.Core.csproj" />
-    <ProjectReference Include="../../src/OpsisNewsCrawler.Plugin.Abstractions/OpsisNewsCrawler.Plugin.Abstractions.csproj" />
-    <None Include="reference/*.txt;reference/*.sha256;reference/*.dll" CopyToOutputDirectory="PreserveNewest" />
+    
+    <None Include="reference/*.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-  <!-- Like the app and the plugin: the contract DLL next to the tests is the canonical copy (a Release build of the project reference has another SHA-256). -->
-  <Target Name="UseCanonicalContract" AfterTargets="Build">
-    <Copy SourceFiles="$(MSBuildThisFileDirectory)reference\OpsisNewsCrawler.Plugin.Abstractions.dll" DestinationFolder="$(OutDir)" />
-  </Target>
+  <!-- Canonical ABI 1.0.0.0 DLL byte-identical to Opsis 2.8.0.2510; do not build a parallel contract into the plugin payload. -->
+  <ItemGroup><Reference Include="OpsisNewsCrawler.Plugin.Abstractions"><HintPath>../../libs/OpsisNewsCrawler.Plugin.Abstractions.dll</HintPath><Private>true</Private></Reference></ItemGroup>
 </Project>

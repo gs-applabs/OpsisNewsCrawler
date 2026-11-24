@@ -165,6 +165,9 @@ public sealed partial class SettingsPanel : UserControl
     private FlatComboBox barBackdrop = null!;
     private FlatComboBox taskbarBackdrop = null!;
 
+    // P1: edit existing Opsis desktop widgets, never register duplicate widget keys.
+    private readonly Dictionary<string, (FlatComboBox Layout, FlatNumber Count, FlatCheckBox Source, FlatCheckBox Time)> widgetEditors = new();
+
     // Breaking
     private FlatCheckBox breakingEnabled = null!;
     private FlatCheckBox breakingSound = null!;
@@ -207,6 +210,9 @@ public sealed partial class SettingsPanel : UserControl
     private List<LiveFeed> workLive = new();
     private FlatList liveList = null!;
     private FlatText addLiveBox = null!;
+    private FlatNumber livePriority = null!;
+    private FlatText liveRegion = null!, liveKeywords = null!;
+    private bool liveMetadataLoading;
     private Label liveStatus = null!;
 
     /// <summary>Raised after Apply succeeded.</summary>
@@ -370,6 +376,7 @@ public sealed partial class SettingsPanel : UserControl
                 (Loc.T("pk.desktop.bar.a.free"), BuildDesktopBar()),
                 (Loc.T("pk.other.monitors.one.bar"), BuildMonitors()))),
             (L("tab.look"), BuildLook()),
+            (Loc.IsGreek ? "P1 · Στούντιο widgets" : "P1 · Widget Studio", BuildWidgetStudio()),
             (L("tab.breaking"), BuildBreaking()));
         AddGroup(L("tab.sources"),
             (Loc.T("pk.news.flow"), Combine((null, BuildSources()), (L("tab.readLater"), BuildReadLater()))),
@@ -690,7 +697,6 @@ public sealed partial class SettingsPanel : UserControl
         updateStatus = new Label { AutoSize = true, Tag = "muted", MaximumSize = new Size(700, 0), Margin = new Padding(0, 6, 0, 0), UseMnemonic = false, Text = Loc.T("upd.current", AboutTexts.Version) };
         updFlow.Controls.Add(updateStatus);
         updates.Controls.Add(updFlow);
-        updates.Visible = !host.HostManagesUpdates;   // inside Opsis 2.6.0 the Opsis update button is the only place that updates this plugin
         flow.Controls.Add(updates);
         checkNow.Click += async (_, _) => await CheckUpdatesNowAsync(checkNow);
         installUpdate.Click += async (_, _) => await InstallUpdateAsync();
@@ -1191,6 +1197,7 @@ public sealed partial class SettingsPanel : UserControl
             workTopics = (c.TopicWatches ?? new()).Select(t=>new TopicWatch {
                 Name=t.Name, Terms=t.Terms.ToList(), Region=t.Region, Enabled=t.Enabled }).ToList();
             RebuildTopics();
+            LoadWidgetStudio();
             var langs = Loc.Available();
             language.SelectSilently(Math.Max(0, langs.ToList().FindIndex(l => l.Code == Loc.Language)));
             perfMode.SelectSilently((int)PerformanceClassifier.ParseMode(c.PerformanceMode));
@@ -1294,7 +1301,7 @@ public sealed partial class SettingsPanel : UserControl
             forgetBreaking.Text = L("breaking.forget");
             maxAge.SetValueSilently(c.BreakingMaxAgeMinutes);
             duration.SetValueSilently(c.BreakingDurationMinutes);
-            workLive = c.LiveFeeds.Select(f => new LiveFeed(f.Name, f.Url) { Enabled = f.Enabled }).ToList();
+            workLive = c.LiveFeeds.Select(LiveVideoStudio.Clean).ToList();
             RebuildLiveList();
             // The crawler's themes are its own, also inside Opsis; "Follow Opsis" is just one more choice there.
             themeRow.Visible = true; themeAccent.Visible = true;
@@ -1406,6 +1413,31 @@ public sealed partial class SettingsPanel : UserControl
         foreach (var card in Descendants(tabs).OfType<FlatCard>())
         {
             if (!Descendants(card).Any(IsSettingControl)) continue;
+            if (card.Tag is string tag && tag.StartsWith("p1-widget-", StringComparison.Ordinal))
+            {
+                var kind = tag["p1-widget-".Length..];
+                card.ShowReset = true;
+                card.ResetRequested += (_, _) =>
+                {
+                    if (!widgetEditors.TryGetValue(kind, out var controls)) return;
+                    loading = true;
+                    try
+                    {
+                        controls.Layout.SelectSilently(0);
+                        controls.Count.SetValueSilently(12);
+                        if (kind == "news") newsWidgetCategory?.SelectSilently(0);
+                        if (widgetFontScale.TryGetValue(kind, out var fontScale))
+                            fontScale.SetValueSilently(100);
+                        controls.Source.Checked = false;
+                        controls.Time.Checked = false;
+                        if (widgetAccentOptions.TryGetValue(kind, out var accent))
+                            accent.Checked = false;
+                    }
+                    finally { loading = false; }
+                    MarkDirty();
+                };
+                continue;
+            }
             card.ShowReset = true;
             card.ResetRequested += (_, _) => ResetCard(card);
         }
@@ -1624,6 +1656,7 @@ public sealed partial class SettingsPanel : UserControl
     private void ApplySettings()
     {
         var c = host.Config;
+        c.WidgetProfiles = ReadWidgetStudio();
         c.TopicWatches = workTopics.Select(t => new TopicWatch { Name=t.Name, Terms=t.Terms.ToList(),
             Region=t.Region, Enabled=t.Enabled }).ToList();
         var mutedKeywords = mutedNewsKeywords.Value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).Take(100).ToList();
@@ -1733,7 +1766,7 @@ public sealed partial class SettingsPanel : UserControl
         c.BreakingSensitivity = BreakingEngine.SensitivityText((BreakingSensitivity)Math.Clamp(breakingSensitivity.SelectedIndex, 0, 2));
         c.BreakingMaxAgeMinutes = maxAge.Value;
         c.BreakingDurationMinutes = duration.Value;
-        c.LiveFeeds = workLive.Select(f => new LiveFeed(f.Name, f.Url) { Enabled = f.Enabled }).ToList();
+        c.LiveFeeds = LiveVideoStudio.CleanAll(workLive);
 
         // Feeds: write the edited copy back and fetch again when the active category's sources changed.
         var previousActive = c.ActiveCategory;
@@ -1749,6 +1782,7 @@ public sealed partial class SettingsPanel : UserControl
         host.SetBarsEnabled(barsEnabled.Checked);
         if (!host.HostedByOpsis) StartupRegistration.Set(startWithWindows.Checked);
         host.SetCategory(chosen);
+        host.NewsWidgetCategoryChanged();
         if ((feedsChanged || newsSettingsChanged) && string.Equals(chosen, previousActive, StringComparison.OrdinalIgnoreCase)) host.ReloadNews();
         host.SaveConfig();
         hasUnsavedChanges = false;

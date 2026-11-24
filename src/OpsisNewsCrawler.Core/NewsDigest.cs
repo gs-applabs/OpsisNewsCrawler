@@ -24,10 +24,10 @@ public static class NewsDigest
             h.Append("<article><div class=\"meta\">").Append(WebUtility.HtmlEncode(item.Source))
                 .Append(" · ").Append(item.PublishedAt.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture))
                 .Append("</div><h2>");
-            if (Uri.TryCreate(item.Url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
+            if (Uri.TryCreate(item.Url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps && NetGuard.IsPublicHttpUrl(item.Url))
                 h.Append("<a rel=\"noopener noreferrer\" href=\"").Append(WebUtility.HtmlEncode(uri.AbsoluteUri)).Append("\">");
             h.Append(safeTitle);
-            if (Uri.TryCreate(item.Url, UriKind.Absolute, out uri) && uri.Scheme == Uri.UriSchemeHttps)
+            if (Uri.TryCreate(item.Url, UriKind.Absolute, out uri) && uri.Scheme == Uri.UriSchemeHttps && NetGuard.IsPublicHttpUrl(item.Url))
                 h.Append("</a>");
             h.Append("</h2><p>").Append(WebUtility.HtmlEncode(item.Summary ?? "")).Append("</p></article>");
         }
