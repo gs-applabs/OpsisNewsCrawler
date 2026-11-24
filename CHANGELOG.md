@@ -1,5 +1,10 @@
 # Changelog
 
+### P1/P2 shared topic filtering (2026-11-24)
+
+- Optional News widget filter uses existing Intelligence watchlists and TopicMatcher, combined with existing RSS category selection. Filters before the display limit, keeps source ordering, and shows no results if no enabled watchlist matches. Existing defaults unchanged. No separate watchlist store, network request, or scheduler. Windows verification deferred.
+
+
 ### P1 editorial controls and live catalogue refinement (2026-11-24)
 
 - Existing Breaking Evidence Inspector gains source-group filters and descending priority ranking without a second scoring engine. Existing Live Video Hub supports a user-entered sample headline for offline ranking; blank retains the current breaking context. Reject duplicate or oversized catalogue entries before adding, with a 64-source limit and no new player, network request or persistent settings file. Windows validation deferred.

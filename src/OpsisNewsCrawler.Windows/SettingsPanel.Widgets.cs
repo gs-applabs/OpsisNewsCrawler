@@ -11,6 +11,7 @@ public sealed partial class SettingsPanel
     private readonly Dictionary<string, FlatNumber> widgetFontScale =
         new(StringComparer.OrdinalIgnoreCase);
     private FlatComboBox? newsWidgetCategory;
+    private FlatCheckBox? newsTopicFilter;
     private List<string> newsWidgetCategoryIds = new();
 
     private Control BuildWidgetStudio()
@@ -46,6 +47,7 @@ public sealed partial class SettingsPanel
         widgetAccentOptions.Clear();
         widgetFontScale.Clear();
         newsWidgetCategory = null;
+        newsTopicFilter = null;
         newsWidgetCategoryIds.Clear();
         foreach (var kind in WidgetStudio.Kinds)
         {
@@ -79,6 +81,15 @@ public sealed partial class SettingsPanel
                         ? "Χρησιμοποιεί τις υπάρχουσες κατηγορίες RSS, όπως Ελλάδα και Διεθνή. Δεν εντοπίζει αυτόματα την τοποθεσία σου."
                         : "Uses your existing RSS categories, such as Greece and International. No location or IP detection.",
                     600));
+                newsTopicFilter = new FlatToggle
+                {
+                    RowWidth = 600,
+                    Text = Loc.IsGreek ? "Μόνο ειδήσεις από ενεργά θέματα παρακολούθησης" : "Only news matching enabled watchlists"
+                };
+                options.Controls.Add(newsTopicFilter);
+                options.Controls.Add(Note(Loc.IsGreek
+                    ? "Χρησιμοποιεί τα θέματα του Κέντρου πληροφοριών. Χωρίς αντιστοιχίες, η λίστα μένει κενή."
+                    : "Uses the Intelligence center watchlists. No matches means an empty list.", 600));
             }
             var layout = new FlatComboBox { Width = 260 };
             var offersGallery = WidgetStudio.CanUseGallery(kind);
@@ -145,6 +156,8 @@ public sealed partial class SettingsPanel
             controls.Time.Checked = p.ShowTime;
             if (kind == "news" && newsWidgetCategory is not null)
                 newsWidgetCategory.SelectSilently(0); // apply preset: active category
+            if (kind == "news" && newsTopicFilter is not null)
+                newsTopicFilter.Checked = p.FollowWatchedTopicsOnly;
             if (widgetAccentOptions.TryGetValue(kind, out var accent))
                 accent.Checked = p.AccentMode == "host";
         }
@@ -174,6 +187,8 @@ public sealed partial class SettingsPanel
                     id, profile.NewsCategoryId, StringComparison.OrdinalIgnoreCase));
                 newsWidgetCategory.SelectSilently(index < 0 ? 0 : index);
             }
+            if (kind == "news" && newsTopicFilter is not null)
+                newsTopicFilter.Checked = profile.FollowWatchedTopicsOnly;
             if (widgetAccentOptions.TryGetValue(kind, out var accent))
                 accent.Checked = profile.AccentMode == "host";
         }
@@ -201,6 +216,7 @@ public sealed partial class SettingsPanel
                 ShowTime = controls.Time.Checked,
                 AccentMode = widgetAccentOptions.TryGetValue(kind, out var accent) &&
                     accent.Checked ? "host" : "theme",
+                FollowWatchedTopicsOnly = kind == "news" && newsTopicFilter?.Checked == true,
                 NewsCategoryId = kind == "news" && newsWidgetCategory is not null &&
                     newsWidgetCategory.SelectedIndex >= 0 &&
                     newsWidgetCategory.SelectedIndex < newsWidgetCategoryIds.Count

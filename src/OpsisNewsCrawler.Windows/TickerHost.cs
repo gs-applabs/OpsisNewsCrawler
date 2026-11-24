@@ -993,12 +993,12 @@ public sealed partial class TickerHost : IDisposable
 
     private IReadOnlyList<NewsItem> NewsWidgetSnapshot()
     {
-        var category = WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId;
+        var profile = WidgetStudio.Resolve(Config.WidgetProfiles, "news");
+        var category = profile.NewsCategoryId;
+        // Use the same cached category and existing P2 TopicMatcher; filter before the display limit.
         if (category.Length == 0 || IsActiveCategory(category) || Config.FindCategory(category) is null)
-            return allItems.Where(x => x.Kind == NewsItemKind.News).Take(30).ToArray();
-        // Cached or already-requested category, no network I/O in the snapshot.
-        return CategoryNewsForDisplay(category).Where(x => x.Kind == NewsItemKind.News)
-            .Take(30).ToArray();
+            return WidgetStudio.FilterNews(allItems, Config.TopicWatches, profile);
+        return WidgetStudio.FilterNews(CategoryNewsForDisplay(category), Config.TopicWatches, profile);
     }
 
     /// <summary>Called only on UI thread when the already-registered News

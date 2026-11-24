@@ -20,6 +20,7 @@ public sealed class WidgetStudioProfile
     /// <summary>Existing user-configured RSS category ID. Empty means the
     /// active ticker category. This is NOT IP, GPS or inferred geolocation.</summary>
     public string NewsCategoryId { get; set; } = "";
+    public bool FollowWatchedTopicsOnly { get; set; }
 }
 
 public static class WidgetStudio
@@ -35,7 +36,8 @@ public static class WidgetStudio
         ShowSource = raw?.ShowSource ?? false,
         ShowTime = raw?.ShowTime ?? false,
         AccentMode = raw?.AccentMode == "host" ? "host" : "theme",
-        NewsCategoryId = CleanCategoryId(raw?.NewsCategoryId)
+        NewsCategoryId = CleanCategoryId(raw?.NewsCategoryId),
+        FollowWatchedTopicsOnly = raw?.FollowWatchedTopicsOnly ?? false
     };
 
     public static Dictionary<string, WidgetStudioProfile> CleanAll(
@@ -51,7 +53,7 @@ public static class WidgetStudio
             {
                 var clean = Clean(candidate.Value);
                 if (key == "history") clean.ShowTime = false; // historical year != publication time
-                if (key != "news") clean.NewsCategoryId = "";
+                if (key != "news") { clean.NewsCategoryId = ""; clean.FollowWatchedTopicsOnly = false; }
                 if (!CanUseGallery(key) && clean.Layout == "gallery") clean.Layout = "headlines";
                 if (key != "markets" && clean.Layout == "market-cards") clean.Layout = "headlines";
                 if (key != "weather" && clean.Layout == "weather-cards") clean.Layout = "headlines";
@@ -59,6 +61,17 @@ public static class WidgetStudio
             }
         }
         return result;
+    }
+
+    /// <summary>Reuse the configured P2 watchlists and TopicMatcher; no additional topic store.
+    /// When the filter is enabled and no enabled topic matches, return an empty snapshot.</summary>
+    public static IReadOnlyList<NewsItem> FilterNews(IEnumerable<NewsItem> news,
+        IEnumerable<TopicWatch> topics, WidgetStudioProfile? profile)
+    {
+        var candidates = news.Where(x => x.Kind == NewsItemKind.News).Take(1000).ToArray();
+        if (!Clean(profile).FollowWatchedTopicsOnly) return candidates.Take(30).ToArray();
+        var matched = TopicMatcher.Find(candidates, topics).Select(x => x.Item).ToHashSet();
+        return candidates.Where(matched.Contains).Take(30).ToArray();
     }
 
     public static string CleanCategoryId(string? categoryId)
