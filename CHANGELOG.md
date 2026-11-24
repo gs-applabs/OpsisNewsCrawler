@@ -19,6 +19,9 @@ Code is committed in Crawler draft PR #8 and companion Opsis 2.8 host draft PR #
 - Existing `CrawlerWidgetPanel` adopts the stored profile and accessible list names/selected descriptions, with single-scheduled refresh from SuiteEventHub instead of a backlog of repeated UI-thread callbacks. It uses the existing Opsis/UI6 theme tokens and keeps invisible widget timers stopped.
 - Breaking settings include a read-only **Evidence Inspector**, ranking the latest stories using the existing `BreakingEngine.Assess` results. It displays source-group counts and full positive/negative reasons, explicitly disclaims that score 0–100 is not a truth probability or fact-check. Assessment work is reused (no second scoring pass or network access).
 - Added `P1WidgetStudioTests` for migration/defaults, bad config clamping, title formatting, context metadata and multiline injection. Existing widget ABI tests still require exactly five widgets.
+- **P1 Smart Breaking Live Video Studio:** the existing user-supplied stream editor now edits/retains per-stream priority, region and event keywords (previously lost by settings-copy). Provides **offline** read-only ranked top-three preview using existing LiveVideoPolicy. No stream starts automatically. Invalid/massive URL or metadata entries are bounded and unsafe schemes rejected.
+- Live Video and widget accessibility regression tests added; accessibility metadata is capped at 512 characters and malformed newline-heavy source labels are sanitized. Historical-year widget cannot display meaningless current publication timestamps.
+
 - Companion Opsis P0 PR #11 and P0 Crawler PR #8 remain draft; P1 is a separate draft branch based on P0. All Windows CI and real host load checks must pass before either is merged.
 
 ## 0.28.0 — .NET 11 / Opsis 2.8 P0 development (2026-11-24, candidate)
