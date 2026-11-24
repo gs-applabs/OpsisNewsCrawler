@@ -28,3 +28,12 @@ pwsh ./tools/verify-opsis-host-p0.ps1 -HostFolder 'C:\Program Files\Opsis' -Plug
 ```
 
 Adjust paths to the actual installation. The Chronikologio parameter is optional. The script performs **only read operations** and rejects mismatched contract or UI6 DLL hashes, the wrong ABI or unsupported Opsis major version. It is not a substitute for VM installer/rollback testing.
+## P0 installer fail-closed gate (Q02 / A09)
+
+- Integrated installation now looks for the Opsis host assemblies under root, `lib/` or `libs/`.
+- It extracts the candidate Crawler contract and UI6 DLL to the Inno temporary directory **before modifying the existing install**, and uses Inno Setup's `GetSHA256OfFile` to require exact binary parity with the Opsis host.
+- In the absence of host contract ABI 1.0.0.0 or a matching UI6 0.6.0 DLL, integrated setup fails with a bilingual explanation. Separate install remains available.
+- The disposable integrated E2E test now stages the exact UI6 binary and confirms that a tampered UI6 copy is rejected before any plugin is deployed.
+- This does not by itself implement full atomic multi-app upgrade/rollback; a coordinated update of Opsis and Chronikologio remains necessary.
+
+**Never overwrite the host's shared DLL from a plugin installer without a coordinated host+other-plugins release.**
