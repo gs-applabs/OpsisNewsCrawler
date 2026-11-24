@@ -15,6 +15,17 @@ $stage = "$r\Output\stage"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 dotnet publish src\OpsisNewsCrawler.App\OpsisNewsCrawler.App.csproj -c Release --no-build -o $stage --nologo -v q
 if ($LASTEXITCODE -ne 0) { throw "publish failed" }
+# Prevent an older .NET 10 executable from being included under the 0.28.0 name.
+$runtimeConfig = "$stage\OpsisNewsCrawler.runtimeconfig.json"
+if (-not (Test-Path $runtimeConfig)) { throw "Missing .NET runtimeconfig: $runtimeConfig" }
+$runtimeJson = Get-Content $runtimeConfig -Raw | ConvertFrom-Json
+$tfm = [string]$runtimeJson.runtimeOptions.tfm
+$frameworks = @($runtimeJson.runtimeOptions.frameworks) + @($runtimeJson.runtimeOptions.framework)
+$desktop = $frameworks | Where-Object { $_ -and $_.name -eq 'Microsoft.WindowsDesktop.App' } | Select-Object -First 1
+if ($tfm -ne 'net11.0' -or -not $desktop -or -not ([string]$desktop.version).StartsWith('11.0.')) {
+  throw "Refusing installer: expected net11.0 + WindowsDesktop 11.0 runtime, got TFM '$tfm' and desktop '$($desktop.version)'."
+}
+"installer runtime gate: $tfm / WindowsDesktop $($desktop.version)"
 
 # The plugin folder is MIRRORED (stale files removed) from the build output; robocopy needs backslash paths.
 $pluginSrc = "$r\src\OpsisNewsCrawler.OpsisPlugin\bin\Release\net11.0-windows10.0.19041.0"
@@ -97,6 +108,10 @@ $assets = "$r\release\$ver-assets"
 if (Test-Path $assets) { Remove-Item $assets -Recurse -Force }
 New-Item -ItemType Directory -Force $assets | Out-Null
 Copy-Item "$r\Output\OpsisNewsCrawler-Setup.exe", "$r\Output\OpsisNewsCrawler-Setup.exe.sha256", $portable, "$portable.sha256" $assets
+# Additional unambiguous name for this .NET 11 candidate. Preserve canonical E2E filename.
+$net11Setup = "$assets\OpsisNewsCrawler-$ver-NET11-Setup.exe"
+Copy-Item "$assets\OpsisNewsCrawler-Setup.exe" $net11Setup
+[IO.File]::WriteAllText("$net11Setup.sha256", "$h  OpsisNewsCrawler-$ver-NET11-Setup.exe`n")
 $notes = "$r\docs\releases\RELEASE-$ver.md"
 if (Test-Path $notes) { Copy-Item $notes "$assets\RELEASE-NOTES.md" } else { "note: $notes is missing - write the release notes before publishing" }
 if (Test-Path "$assets\RELEASE-NOTES.md") {
