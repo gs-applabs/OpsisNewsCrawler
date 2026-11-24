@@ -43,6 +43,9 @@ public sealed partial class TickerHost : IDisposable
     private bool started;
     private int startEpoch; // discard delayed checks from a stopped session
     private int newsWidgetUsers; // visible instances only, including across monitors
+    /// <summary>Local only: a changed RSS category refreshes the visible News widget
+    /// without broadcasting a fake headline to Chronikologio/other plugins.</summary>
+    public event Action? NewsWidgetUpdated;
     private CancellationTokenSource? sessionCts;
     private CancellationToken SessionToken => sessionCts?.Token ?? lifetimeToken;
     private CrawlerEventDispatch? suiteDispatcher;

@@ -63,6 +63,7 @@ public sealed class CrawlerWidgetPanel : UserControl
         gallery.DpiChangedAfterParent += (_, _) => ResizeGalleryCards();
         Theme.Changed += ApplyTheme;
         Theme.HostAccentChanged += ApplyTheme;
+        if (kind == "news") host.NewsWidgetUpdated += RequestRefresh;
         Loc.Changed += RefreshSafe;
         timer.Tick += (_, _) => RefreshSafe();
         eventSubscription = SuiteEventHub.Subscribe(e =>
@@ -331,6 +332,7 @@ public sealed class CrawlerWidgetPanel : UserControl
             eventSubscription.Dispose();
             Theme.Changed -= ApplyTheme;
             Theme.HostAccentChanged -= ApplyTheme;
+            if (kind == "news") host.NewsWidgetUpdated -= RequestRefresh;
             Loc.Changed -= RefreshSafe;
             ClearGallery();
             scaledFont = null;

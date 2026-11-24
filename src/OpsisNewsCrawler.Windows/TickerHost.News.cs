@@ -36,10 +36,9 @@ public sealed partial class TickerHost
                         WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId,
                         category, StringComparison.OrdinalIgnoreCase))
                     {
-                        // Refresh the visible News widget through the same bounded
-                        // event pipeline already used for active RSS news.
-                        PublishSuiteEvent(new SuiteEvent(SuiteEventKind.News, "crawler",
-                            "widget-category:" + category, category, DateTimeOffset.UtcNow));
+                        // A UI-only invalidation must not create a synthetic
+                        // news item on the cross-app SuiteEventHub.
+                        NewsWidgetUpdated?.Invoke();
                     }
                     PushAll();
                 }
