@@ -183,8 +183,8 @@ internal sealed class TickerController
         weatherProvider = provider;
         if (_host is null) return; // host sets these before Start(), no eager UI
         _host.HostSafeMode = safeMode;
-        _host.SetHostShellHold(hold);
         _host.HostWeatherProvider = provider;
+        _host.SetHostShellHold(hold);
         if (safeMode) _host.Stop();
     }
 

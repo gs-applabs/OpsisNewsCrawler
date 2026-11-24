@@ -17,7 +17,9 @@ public static class HostWeatherPayload
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Object ||
-                !root.TryGetProperty("ok", out var ok) || ok.ValueKind != JsonValueKind.True) return null;
+                !root.TryGetProperty("ok", out var ok) || ok.ValueKind != JsonValueKind.True ||
+                (root.TryGetProperty("stale", out var stale) && stale.ValueKind == JsonValueKind.True))
+                return null;
             if (!TryNumber(root, "temp", out var temp) || temp is < -100 or > 70 ||
                 !TryNumber(root, "wind", out var wind) || wind is < 0 or > 400 ||
                 !TryNumber(root, "code", out var code) || code is < 0 or > 99)

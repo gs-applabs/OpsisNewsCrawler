@@ -19,8 +19,15 @@ $hostExe = Join-Path $HostFolder 'Opsis.exe'
 if (!(Test-Path -LiteralPath $hostExe -PathType Leaf)) { throw "Missing Opsis host executable: $hostExe" }
 $version = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path -LiteralPath $hostExe).Path).ProductVersion
 if (!$version -or !$version.StartsWith('2.8.')) { throw "Expected Opsis 2.8.x; found $version" }
-$hostContract = Join-Path $HostFolder 'OpsisNewsCrawler.Plugin.Abstractions.dll'
-$hostUi = Join-Path $HostFolder 'Opsis.UI.dll'
+function HostDll([string]$name) {
+  foreach ($folder in @($HostFolder, (Join-Path $HostFolder 'lib'), (Join-Path $HostFolder 'libs'))) {
+    $candidate = Join-Path $folder $name
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+  }
+  throw "Opsis host DLL missing from root/lib/libs: $name"
+}
+$hostContract = HostDll 'OpsisNewsCrawler.Plugin.Abstractions.dll'
+$hostUi = HostDll 'Opsis.UI.dll'
 $pluginDll = Join-Path $PluginFolder 'OpsisNewsCrawler.OpsisPlugin.dll'
 $pluginContract = Join-Path $PluginFolder 'OpsisNewsCrawler.Plugin.Abstractions.dll'
 $pluginUi = Join-Path $PluginFolder 'Opsis.UI.dll'

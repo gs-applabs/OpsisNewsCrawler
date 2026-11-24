@@ -919,7 +919,7 @@ public sealed partial class TickerHost : IDisposable
     {
         Config.Position = position;
         if (position == TickerPosition.TaskbarIntegrated) Config.SecondBarEnabled = false;
-        Window.SetPosition(position);
+        Window.SetPosition(EffectiveMainPosition);
         ApplyConfig();
         SaveConfig();
     }

@@ -21,6 +21,7 @@ public sealed class HostWeatherPayloadTests
 
     [Theory]
     [InlineData("""{"ok":false,"temp":20,"wind":8,"code":0,"observedAt":"2026-11-24T11:57:00Z"}""")]
+    [InlineData("""{"ok":true,"stale":true,"temp":20,"wind":8,"code":0,"observedAt":"2026-11-24T11:57:00Z"}""")]
     [InlineData("""{"ok":true,"temp":75,"wind":8,"code":0,"observedAt":"2026-11-24T11:57:00Z"}""")]
     [InlineData("""{"ok":true,"temp":20,"wind":8,"code":0,"observedAt":"2026-11-24T11:00:00Z"}""")]
     [InlineData("""{"ok":true,"temp":20,"wind":8,"code":0,"observedAt":"2026-11-24T13:00:00Z"}""")]
