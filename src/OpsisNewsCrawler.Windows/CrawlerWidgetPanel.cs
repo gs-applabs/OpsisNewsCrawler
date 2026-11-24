@@ -35,7 +35,7 @@ public sealed class CrawlerWidgetPanel : UserControl
         {
             var selected = items.SelectedIndex;
             items.AccessibleDescription = selected >= 0 && selected < visible.Count
-                ? $"{visible[selected].Title}. {visible[selected].Summary}" : heading.Text;
+                ? SafeAccessibilityText($"{visible[selected].Title}. {visible[selected].Summary}") : heading.Text;
         };
         items.DoubleClick += (_, _) => OpenSelected();
         items.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { OpenSelected(); e.Handled = true; } };
@@ -94,7 +94,10 @@ public sealed class CrawlerWidgetPanel : UserControl
                 if (!IsDisposed) RefreshSafe();
             }));
         }
-        catch (InvalidOperationException) { Interlocked.Exchange(ref refreshQueued, 0); }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            Interlocked.Exchange(ref refreshQueued, 0);
+        }
     }
 
     private void RefreshSafe()
@@ -103,7 +106,7 @@ public sealed class CrawlerWidgetPanel : UserControl
         if (InvokeRequired)
         {
             try { BeginInvoke(new Action(RefreshSafe)); }
-            catch (InvalidOperationException) { }
+            catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException) { }
             return;
         }
         var profile = WidgetStudio.Resolve(host.Config.WidgetProfiles, kind);
@@ -123,6 +126,12 @@ public sealed class CrawlerWidgetPanel : UserControl
                 : string.Join(". ", visible.Take(3).Select(x => x.Title));
         }
         finally { items.EndUpdate(); }
+    }
+
+    private static string SafeAccessibilityText(string input)
+    {
+        var normalized = input.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        return normalized.Length > 512 ? normalized[..511] + "…" : normalized;
     }
 
     private void OpenSelected()

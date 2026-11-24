@@ -34,8 +34,9 @@ public sealed class P1LiveVideoStudioTests
         Assert.Equal(100, clean.Priority);
         Assert.Empty(clean.Region);
         Assert.Equal(new[] { "urgent" }, clean.EventKeywords);
-        Assert.DoesNotContain(LiveVideoStudio.CleanAll(new[] { original, new LiveFeed("Invalid", "file:///etc/passwd") }),
-            x => x.Url.StartsWith("file:", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(LiveVideoStudio.CleanAll(new[] { original, new LiveFeed("Invalid", "file:///etc/passwd"),
+            new LiveFeed("Overlong", "https://example.org/" + new string('x', 3000)) }),
+            x => x.Url.StartsWith("file:", StringComparison.OrdinalIgnoreCase) || x.Url.Length > 2048);
     }
 
     [Fact]

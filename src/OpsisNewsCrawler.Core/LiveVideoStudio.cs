@@ -30,7 +30,8 @@ public static class LiveVideoStudio
     public static List<LiveFeed> CleanAll(IEnumerable<LiveFeed>? raw)
     {
         return (raw ?? Enumerable.Empty<LiveFeed>())
-            .Where(f => f is not null && Breaking.ToPlayableUrl(f.Url) is not null)
+            .Where(f => f is not null && f.Url is { Length: > 0 and <= 2048 } &&
+                Breaking.ToPlayableUrl(f.Url) is not null)
             .DistinctBy(f => Breaking.ToPlayableUrl(f.Url), StringComparer.OrdinalIgnoreCase)
             .Take(64).Select(Clean).ToList();
     }
