@@ -6,7 +6,7 @@ namespace OpsisNewsCrawler.Core;
 /// </summary>
 public sealed record HostContextSnapshot(
     int Schema, long Revision, bool Hosted, string Language, bool? IsDark,
-    string PerformanceTier, int UiScalePercent, bool? SafeMode);
+    string PerformanceTier, int UiScalePercent, bool? SafeMode, bool? ShellHold = null);
 
 public sealed class HostContextState
 {
@@ -21,6 +21,11 @@ public sealed class HostContextState
     public HostContextSnapshot Snapshot { get { lock (gate) return snapshot; } }
 
     public void AcceptTheme(bool dark) => Change(s => s with { IsDark = dark });
+
+    /// <summary>Host-confirmed safety policy; unknown (null) never means 'safe'.</summary>
+    public void AcceptSafeMode(bool value) => Change(s => s with { SafeMode = value });
+
+    public void AcceptShellHold(bool value) => Change(s => s with { ShellHold = value });
 
     public void AcceptUiScale(int percent)
     {

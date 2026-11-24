@@ -12,6 +12,10 @@ public sealed class P0HostContextTests
         Assert.True(ctx.Snapshot.Hosted);
         Assert.Equal(1, ctx.Snapshot.Schema);
         Assert.Null(ctx.Snapshot.SafeMode);
+        Assert.Null(ctx.Snapshot.ShellHold);
+        ctx.AcceptSafeMode(false);
+        ctx.AcceptShellHold(true);
+        Assert.True(ctx.Snapshot.ShellHold);
         ctx.AcceptLanguage("EL-gr");
         ctx.AcceptTier("Low");
         ctx.AcceptTheme(false);
@@ -20,13 +24,13 @@ public sealed class P0HostContextTests
         Assert.Equal("el-gr", ctx.Snapshot.Language);
         Assert.Equal("Low", ctx.Snapshot.PerformanceTier);
         Assert.False(ctx.Snapshot.IsDark);
-        Assert.Equal(4, ctx.Snapshot.Revision);
+        Assert.Equal(6, ctx.Snapshot.Revision);
         ctx.AcceptTheme(false);
         ctx.AcceptTier("low");
         ctx.AcceptLanguage("el-GR");
         ctx.AcceptUiScale(125);
         ctx.AcceptUiScale(500);
-        Assert.Equal(4, ctx.Snapshot.Revision);
+        Assert.Equal(6, ctx.Snapshot.Revision);
         Assert.DoesNotContain(typeof(HostContextSnapshot).GetProperties(),
             p => p.Name.Contains("Location", StringComparison.OrdinalIgnoreCase));
     }

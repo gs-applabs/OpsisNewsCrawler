@@ -472,14 +472,14 @@ public sealed partial class TickerHost : IDisposable
         Theme.SetMode(Config.ThemeMode, Config.OpacityPercent / 100.0, Config.ThemeFollowAccent);
         UpdateHotkey();
 
-        ConfigureWindow(Window, Config.Position, main: true);
+        ConfigureWindow(Window, EffectiveMainPosition, main: true);
         Window.SetBackdropStyle(Config.BarBackdrop);
         Window.SetBarColor(Config.BarColorMode, Config.BarCustomColor);
-        Window.ReserveSpace = EffectiveReserveSpace;
+        Window.ReserveSpace = EffectiveReserveSpace && !HostShellHold;
         Window.SetCustomBounds(GetCustomBounds());
-        Window.SetPosition(Config.Position);
+        Window.SetPosition(EffectiveMainPosition);
 
-        var wantSecond = Config.SecondBarEnabled && Config.Position != TickerPosition.TaskbarIntegrated;
+        var wantSecond = !HostShellHold && Config.SecondBarEnabled && Config.Position != TickerPosition.TaskbarIntegrated;
         if (wantSecond && SecondWindow is null)
         {
             SecondWindow = new TickerWindow(State2, hostWindowDetector);
@@ -644,7 +644,22 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>Set by the Opsis plugin before the first ApplyConfig: Opsis widgets, DeskStrip and DeskZones follow the work area.</summary>
     public bool HostedByOpsis { get; set; }
 
-    public bool EffectiveReserveSpace => Config.ReserveScreenSpace ?? HostedByOpsis;
+    /// <summary>Temporary host arbitration; never overwrites the user's saved positioning.</summary>
+    public bool HostShellHold { get; private set; }
+    public bool HostSafeMode { get; set; }
+
+    public void SetHostShellHold(bool value)
+    {
+        if (HostShellHold == value || disposed) return;
+        HostShellHold = value;
+        ApplyConfig(); // recompute window positions, but do not call SaveConfig()
+    }
+
+    private TickerPosition EffectiveMainPosition =>
+        HostedByOpsis && HostShellHold && Config.Position == TickerPosition.TaskbarIntegrated
+            ? TickerPosition.BottomTaskbar : Config.Position;
+
+    public bool EffectiveReserveSpace => !HostShellHold && (Config.ReserveScreenSpace ?? HostedByOpsis);
 
     public void SaveConfig() => Config.Save(configPath);
 
@@ -708,6 +723,8 @@ public sealed partial class TickerHost : IDisposable
     public void Start()
     {
         if (disposed || started) return;
+        // In Safe Mode the Opsis host must not activate a Crawler bar.
+        if (HostedByOpsis && HostSafeMode) return;
         started = true;
         unchecked { startEpoch++; }
         EvaluatePerformance();

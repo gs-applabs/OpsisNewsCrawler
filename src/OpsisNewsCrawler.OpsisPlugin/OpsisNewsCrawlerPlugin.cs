@@ -72,6 +72,17 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
 
     public void SetHardwareProfile(string tier) => _controller.SetHostTier(tier);
 
+    /// <summary>Optional Opsis host P0 handshake. No plugin contract ABI change:
+    /// the trusted host discovers this method by name and supplies its own
+    /// cached WeatherHub callback for the cities configured in Crawler.</summary>
+    public void SetOpsisP0Environment(bool safeMode, bool shellHold, Func<double, double, Task<string>> weatherProvider)
+    {
+        ArgumentNullException.ThrowIfNull(weatherProvider);
+        _controller.Context.AcceptSafeMode(safeMode);
+        _controller.Context.AcceptShellHold(shellHold);
+        _controller.ConfigureP0Environment(safeMode, shellHold, weatherProvider);
+    }
+
     /// <summary>Optional Opsis 2.8 host-owned settings. No UI creation,
     /// changes to process-global Opsis.UI or file writes.</summary>
     public void SetHostSettings(PluginHostSettings settings)
@@ -161,6 +172,22 @@ internal sealed class TickerController
     public HostContextState Context { get; } = new(hosted: true);
     public bool IsPaused => _host?.Paused ?? false;
 
+    private bool hostSafeMode;
+    private bool shellHold;
+    private Func<double, double, Task<string>>? weatherProvider;
+
+    public void ConfigureP0Environment(bool safeMode, bool hold, Func<double, double, Task<string>> provider)
+    {
+        hostSafeMode = safeMode;
+        shellHold = hold;
+        weatherProvider = provider;
+        if (_host is null) return; // host sets these before Start(), no eager UI
+        _host.HostSafeMode = safeMode;
+        _host.SetHostShellHold(hold);
+        _host.HostWeatherProvider = provider;
+        if (safeMode) _host.Stop();
+    }
+
     public void SetHostTier(string? tier)
     {
         Context.AcceptTier(tier);
@@ -181,6 +208,9 @@ internal sealed class TickerController
                 _host = new TickerHost { HostedByOpsis = true, LanguageFollowsHost = LanguageFromHost };
                 if (LanguageFromHost) Loc.SetLanguage(Context.Snapshot.Language);
                 _host.SetHostTier(Context.Snapshot.PerformanceTier);
+                _host.HostSafeMode = hostSafeMode;
+                _host.SetHostShellHold(shellHold);
+                _host.HostWeatherProvider = weatherProvider;
                 if (!_host.Config.ThemeIndependentMigrated)
                 {
                     _host.Config.ThemeIndependentMigrated = true;
@@ -207,6 +237,11 @@ internal sealed class TickerController
 
     public void Start()
     {
+        if (hostSafeMode)
+        {
+            Log.Write("Crawler disabled by Opsis Safe Mode.");
+            return;
+        }
         if (!_guard.TryAcquire())
         {
             StandaloneRunning = true;
