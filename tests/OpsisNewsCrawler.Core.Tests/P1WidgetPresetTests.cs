@@ -21,6 +21,8 @@ public sealed class P1WidgetPresetTests
         Assert.All(profile, kv =>
         {
             Assert.InRange(kv.Value.MaxItems, 3, 30);
+            if (kv.Value.Layout == "market-cards")
+                Assert.Equal("markets", kv.Key);
             if (kv.Value.Layout == "gallery")
                 Assert.True(WidgetStudio.CanUseGallery(kv.Key));
             if (kv.Key == "history") Assert.False(kv.Value.ShowTime);

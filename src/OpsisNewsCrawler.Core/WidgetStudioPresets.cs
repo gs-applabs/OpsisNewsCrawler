@@ -49,7 +49,7 @@ public static class WidgetStudioPresets
                 break;
             case "financial":
                 Set("news", "context", 8, source: true, time: true);
-                Set("markets", "context", 20, source: true);
+                Set("markets", "market-cards", 15, source: true, time: true);
                 Set("breaking", "context", 6, source: true, time: true);
                 Set("weather", "context", 4);
                 Set("history", "headlines", 4);

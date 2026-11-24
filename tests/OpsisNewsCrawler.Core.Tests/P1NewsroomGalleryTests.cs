@@ -55,6 +55,35 @@ public sealed class P1NewsroomGalleryTests
     }
 
     [Fact]
+    public void MarketsUseTheExistingQuoteDataWithoutRealtimeClaims()
+    {
+        var quote = WidgetStudio.MarketCardText("Χρυσός", "€ 1.234,50 +1.00% · daily",
+            new DateTimeOffset(2026, 11, 23, 9, 0, 0, TimeSpan.Zero), +1,
+            new WidgetStudioProfile { Layout = "market-cards", ShowTime = true }, true);
+        Assert.Contains("Χρυσός", quote);
+        Assert.Contains("↑", quote);
+        Assert.Contains("Τελευταία αναφορά", quote);
+        Assert.Contains("daily", quote);
+        Assert.DoesNotContain("ζωνταν", quote, StringComparison.OrdinalIgnoreCase);
+        var changed = WidgetStudio.MarketCardText("EUR/USD", "1.12 -0.2%", DateTimeOffset.MinValue, -1, null, false);
+        Assert.Contains("↓", changed);
+        Assert.DoesNotContain("Last reported", changed);
+    }
+
+    [Fact]
+    public void UnknownMarketCardLayoutsCannotLeakToOtherWidgets()
+    {
+        var input = new Dictionary<string, WidgetStudioProfile>
+        {
+            ["markets"] = new() { Layout = "market-cards" },
+            ["breaking"] = new() { Layout = "market-cards" }
+        };
+        var cleaned = WidgetStudio.CleanAll(input);
+        Assert.Equal("market-cards", cleaned["markets"].Layout);
+        Assert.Equal("headlines", cleaned["breaking"].Layout);
+    }
+
+    [Fact]
     public void RelatedReportCountIsProvenanceNotVerification()
     {
         var text = WidgetStudio.GalleryCardText("<b>Story</b>",

@@ -26,7 +26,7 @@ public static class WidgetStudio
 
     public static WidgetStudioProfile Clean(WidgetStudioProfile? raw) => new()
     {
-        Layout = raw?.Layout is "context" or "gallery" ? raw.Layout : "headlines",
+        Layout = raw?.Layout is "context" or "gallery" or "market-cards" ? raw.Layout : "headlines",
         MaxItems = Math.Clamp(raw?.MaxItems ?? 12, 3, 30),
         FontScalePercent = Math.Clamp(raw?.FontScalePercent ?? 100, 80, 160),
         ShowSource = raw?.ShowSource ?? false,
@@ -48,6 +48,7 @@ public static class WidgetStudio
                 var clean = Clean(candidate.Value);
                 if (key == "history") clean.ShowTime = false; // historical year != publication time
                 if (!CanUseGallery(key) && clean.Layout == "gallery") clean.Layout = "headlines";
+                if (key != "markets" && clean.Layout == "market-cards") clean.Layout = "headlines";
                 result[key] = clean;
             }
         }
@@ -56,6 +57,9 @@ public static class WidgetStudio
 
     public static bool CanUseGallery(string kind) =>
         kind is "news" or "breaking" or "history";
+
+    public static bool CanUseMarketCards(string kind) =>
+        string.Equals(kind, "markets", StringComparison.OrdinalIgnoreCase);
 
     public static WidgetStudioProfile Resolve(
         IDictionary<string, WidgetStudioProfile>? configured, string kind)
@@ -73,6 +77,32 @@ public static class WidgetStudio
         ("history", true) => "Σαν Σήμερα", ("history", false) => "On This Day",
         _ => kind
     };
+
+    /// <summary>
+    /// A market card from the exact NewsItem produced by the existing QuoteService.
+    /// Delayed/daily/change-from-open labels are already part of NewsItem.Title,
+    /// so do not discard those distinctions or claim that a quote is realtime.
+    /// No HTTP, trading APIs, portfolio mutations or second quote scheduler.
+    /// </summary>
+    public static string MarketCardText(string? instrument, string? quoteText,
+        DateTimeOffset asOf, int trend, WidgetStudioProfile? configured, bool greek)
+    {
+        var p = Clean(configured);
+        var symbol = CleanText(instrument, 72);
+        var price = CleanText(quoteText, 190);
+        var direction = trend switch
+        {
+            > 0 => "↑ ", < 0 => "↓ ", _ => "• "
+        };
+        var result = new List<string>();
+        if (symbol.Length > 0) result.Add(symbol);
+        result.Add(direction + price);
+        if (p.ShowTime && asOf != DateTimeOffset.MinValue &&
+            asOf <= DateTimeOffset.UtcNow.AddMinutes(5))
+            result.Add((greek ? "Τελευταία αναφορά: " : "Last reported: ") +
+                asOf.ToLocalTime().ToString("dd/MM/yyyy HH:mm"));
+        return string.Join(Environment.NewLine, result);
+    }
 
     /// <summary>Deterministic, text-only gallery cards. Summaries and metadata
     /// are clipped and stripped of control characters; no remote images or HTML

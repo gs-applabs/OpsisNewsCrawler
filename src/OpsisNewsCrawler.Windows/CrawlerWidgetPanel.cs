@@ -145,7 +145,8 @@ public sealed class CrawlerWidgetPanel : UserControl
         }
         var profile = WidgetStudio.Resolve(host.Config.WidgetProfiles, kind);
         ApplyFontScale(profile.FontScalePercent);
-        var galleryMode = profile.Layout == "gallery" && WidgetStudio.CanUseGallery(kind);
+        var galleryMode = (profile.Layout == "gallery" && WidgetStudio.CanUseGallery(kind))
+            || (profile.Layout == "market-cards" && WidgetStudio.CanUseMarketCards(kind));
         items.Visible = !galleryMode;
         gallery.Visible = galleryMode;
         visible.Clear();
@@ -197,10 +198,13 @@ public sealed class CrawlerWidgetPanel : UserControl
     {
         // Fixed-size, in-memory signatures avoid rebuilding 30 WinForms controls
         // on each timer tick and reduce GDI pressure in an always-running host.
-        var cards = visible.Select(x => WidgetStudio.GalleryCardText(
-            x.Title, x.Summary, x.Source, x.PublishedAt, profile,
-            Loc.IsGreek, x.Breaking || kind == "breaking", kind == "history",
-            relatedReports: x.StoryReports?.Count ?? 0)).ToArray();
+        var cards = visible.Select(x => kind == "markets"
+            ? WidgetStudio.MarketCardText(x.Summary ?? x.Source, x.Title,
+                x.PublishedAt, x.Trend, profile, Loc.IsGreek)
+            : WidgetStudio.GalleryCardText(
+                x.Title, x.Summary, x.Source, x.PublishedAt, profile,
+                Loc.IsGreek, x.Breaking || kind == "breaking", kind == "history",
+                relatedReports: x.StoryReports?.Count ?? 0)).ToArray();
         var signature = string.Join("\u001e", cards) + "\u001f" +
             string.Join("\u001e", visible.Select(x => x.Url ?? ""));
         if (gallerySignature == signature && gallery.Controls.Count == cards.Length) return;
@@ -227,6 +231,7 @@ public sealed class CrawlerWidgetPanel : UserControl
                 };
                 StyleGalleryCard(card);
                 var url = snapshot.Url;
+                card.Enabled = NetGuard.IsPublicHttpUrl(url);
                 card.Click += (_, _) => OpenUrl(url);
                 gallery.Controls.Add(card);
             }
