@@ -78,7 +78,6 @@ jobs:
           name: OpsisNewsCrawler-0.28.0-candidate
           path: package
       - uses: actions/setup-dotnet@v4
-        if: matrix.scenario == 'integrated'
         with:
           dotnet-version: 11.0.x
       - name: Build the exact P3 host ABI for integrated installer gate
