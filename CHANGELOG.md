@@ -1,5 +1,11 @@
 # Changelog
 
+### P2/P3 personalized digest exports (2026-11-24)
+
+- Existing Intelligence center offers a digest date and all-news or enabled-watchlist scope for daily and seven-day HTML exports. Date filtering precedes existing TopicMatcher, preserving source ordering and local-only operation. Exports cover only available cached stories, not an exhaustive archive.
+- Daily and weekly links share NetGuard public-URL validation; weekly export uses the existing SafeFile writer. No additional cache, scheduler, history database, mailer or background writes. Windows validation deferred.
+
+
 ### P2/P3 story comparison refinement (2026-11-24)
 
 - Existing StoryExplorer caches anchor tokens per cluster during each grouping pass and bounds the comparison window to 1–72 hours. Distinct reports without URLs are not all collapsed into one solely because their URLs are empty.

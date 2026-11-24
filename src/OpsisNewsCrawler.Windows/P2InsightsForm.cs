@@ -12,6 +12,8 @@ public sealed class P2InsightsForm : Form
     private readonly FlatComboBox views = new() { Width=300 };
     private readonly FlatButton export = new();
     private readonly FlatButton exportWeekly = new();
+    private readonly FlatComboBox digestScope = new() { Width=250 };
+    private readonly DateTimePicker digestDate = new() { Format=DateTimePickerFormat.Short, Width=125 };
     private readonly FlatButton importCalendar = new();
     private readonly FlatButton exportCalendar = new();
     private readonly FlatButton evidence = new();
@@ -56,6 +58,13 @@ public sealed class P2InsightsForm : Form
         export.Click+=(_,_)=>ExportDigest();
         exportWeekly.Text=Loc.IsGreek?"Εβδομάδα HTML":"Weekly HTML";
         exportWeekly.Click+=(_,_)=>ExportWeeklyDigest();
+        digestScope.SetItems(Loc.IsGreek ? new[]{ "Σύνοψη: όλες οι ειδήσεις", "Σύνοψη: ενεργά θέματα" }
+            : new[]{ "Digest: all news", "Digest: enabled watchlists" },0);
+        digestScope.AccessibleName=Loc.IsGreek?"Περιεχόμενο σύνοψης":"Digest scope";
+        digestDate.AccessibleName=Loc.IsGreek?"Ημερομηνία λήξης σύνοψης":"Digest ending date";
+        digestDate.MinDate=DateTime.Today.AddYears(-5);
+        digestDate.MaxDate=DateTime.Today;
+        digestDate.Value=DateTime.Today;
         importCalendar.Text=Loc.IsGreek?"Εισαγωγή ημερολογίου":"Import calendar";
         importCalendar.Click+=(_,_)=>ImportCalendar();
         exportCalendar.Text="ICS";
@@ -69,9 +78,9 @@ public sealed class P2InsightsForm : Form
         newTransaction.Click+=(_,_)=>AddTransaction();
         mediaPlaylist.Text=Loc.IsGreek?"Media Suite · M3U":"Media Suite · M3U";
         mediaPlaylist.Click+=(_,_)=>ExportMediaPlaylist();
-        bar.Controls.Add(exportWeekly);bar.Controls.Add(importCalendar);bar.Controls.Add(exportCalendar);
+        bar.Controls.Add(exportWeekly);bar.Controls.Add(digestScope);bar.Controls.Add(digestDate);bar.Controls.Add(importCalendar);bar.Controls.Add(exportCalendar);
         bar.Controls.Add(evidence);bar.Controls.Add(newTransaction);bar.Controls.Add(mediaPlaylist);
-        bar.Height=155;
+        bar.Height=195;
         Controls.Add(lines);Controls.Add(summary);Controls.Add(bar);
         lines.DoubleClick+=(_,_)=>OpenSelected();
         lines.KeyDown+=(_,e)=>{if(e.KeyCode==Keys.Enter){OpenSelected();e.Handled=true;}};
@@ -166,19 +175,38 @@ public sealed class P2InsightsForm : Form
         catch(Exception ex) when(ex is InvalidOperationException or Win32Exception){}
     }
 
+    private NewsItem[] DigestItems(DateOnly ending, bool weekly)
+    {
+        var first=weekly?ending.AddDays(-6):ending;
+        var rows=host.RecentNews.Where(n=>n.Kind==NewsItemKind.News &&
+            DateOnly.FromDateTime(n.PublishedAt.LocalDateTime) is var day && day>=first && day<=ending)
+            .OrderByDescending(n=>n.PublishedAt).Take(1000).ToArray();
+        if(digestScope.SelectedIndex!=1)return rows;
+        var matches=TopicMatcher.Find(rows,host.Config.TopicWatches).Select(x=>x.Item).ToHashSet();
+        return rows.Where(matches.Contains).ToArray();
+    }
+
+    private string DigestTitle(bool weekly)
+    {
+        var title=weekly?(Loc.IsGreek?"Εβδομαδιαία σύνοψη":"Weekly digest")
+            :(Loc.IsGreek?"Ημερήσια σύνοψη":"Daily digest");
+        return title+(digestScope.SelectedIndex==1?(Loc.IsGreek?" · Θέματα παρακολούθησης":" · Watched topics"):"");
+    }
+
     private void ExportDigest()
     {
+        var ending=DateOnly.FromDateTime(digestDate.Value);
+        var data=DigestItems(ending,false);
         using var save=new SaveFileDialog
         {
             Title=Loc.IsGreek?"Εξαγωγή ημερήσιας σύνοψης":"Export daily digest",
             Filter="HTML (*.html)|*.html",DefaultExt="html",
-            FileName="OpsisNewsCrawler-"+DateTime.Today.ToString("yyyyMMdd")+".html"
+            FileName="OpsisNewsCrawler-"+ending.ToString("yyyyMMdd")+".html"
         };
         if(save.ShowDialog(this)!=DialogResult.OK)return;
         try
         {
-            NewsDigest.SaveHtml(save.FileName,host.RecentNews,
-                DateOnly.FromDateTime(DateTime.Today),Loc.IsGreek?"Ημερήσια σύνοψη":"Daily digest");
+            NewsDigest.SaveHtml(save.FileName,data,ending,DigestTitle(false));
             summary.Text=save.FileName;
         }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException)
@@ -232,18 +260,19 @@ public sealed class P2InsightsForm : Form
 
     private void ExportWeeklyDigest()
     {
+        var ending=DateOnly.FromDateTime(digestDate.Value);
+        var data=DigestItems(ending,true);
         using var save=new SaveFileDialog
         {
             Title=Loc.IsGreek?"Εβδομαδιαία σύνοψη":"Weekly digest",
             Filter="HTML (*.html)|*.html",DefaultExt="html",
-            FileName="OpsisWeekly-"+DateTime.Today.ToString("yyyyMMdd")+".html"
+            FileName="OpsisWeekly-"+ending.ToString("yyyyMMdd")+".html"
         };
         if(save.ShowDialog(this)!=DialogResult.OK)return;
         try
         {
-            var html=WeeklyDigest.Html(host.RecentNews,DateOnly.FromDateTime(DateTime.Today),
-                Loc.IsGreek?"Εβδομαδιαία σύνοψη":"Weekly digest");
-            File.WriteAllText(save.FileName,html);
+            var html=WeeklyDigest.Html(data,ending,DigestTitle(true));
+            SafeFile.WriteAllText(save.FileName,html);
             summary.Text=save.FileName;
         }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException)
