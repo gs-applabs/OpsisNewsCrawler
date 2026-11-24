@@ -380,6 +380,10 @@ Name: "startup"; Description: "{cm:StartWithWindows}"; Flags: unchecked; Check: 
 Name: "desktopicon"; Description: "{cm:DesktopShortcut}"; Flags: unchecked; Check: IsSeparate
 
 [Files]
+; P0 preflight: extract data-only copies to {tmp} before touching an Opsis plugin.
+; Same sources are still installed by the wildcard entry below.
+Source: "{#BinDir}\plugins\{#PluginFolder}\OpsisNewsCrawler.Plugin.Abstractions.dll"; DestDir: "{tmp}"; DestName: "crawler-contract-check.dll"; Flags: dontcopy; Check: IsIntegrated
+Source: "{#BinDir}\plugins\{#PluginFolder}\Opsis.UI.dll"; DestDir: "{tmp}"; DestName: "crawler-ui-check.dll"; Flags: dontcopy; Check: IsIntegrated
 ; Separate install: the program (the plugin copy stays out, Opsis must not load a second crawler next to the stand-alone one)
 Source: "{#BinDir}\*"; DestDir: "{app}"; Excludes: "plugins";Flags: recursesubdirs createallsubdirs ignoreversion; Check: IsSeparate
 ; Integrated install: only the plugin folder, into the folder Opsis scans ({app} is set to it on the wizard page)
@@ -654,20 +658,49 @@ end;
 
 // ABI safety: an integrated Crawler plugin cannot bind to an Opsis host still loading
 // the 0.8.0.0 plugin contract. Standalone installation remains available in all cases.
-function CompatibleOpsisContract(): Boolean;
+function OpsisSharedFile(const Name: String): String;
 var
-  Root, Probe, V: String;
+  Root, Probe: String;
 begin
-  Result := False;
+  Result := '';
   Root := OpsisInstallDir();
   if Root = '' then
     Root := ExpandConstant('{localappdata}\Programs\Opsis - Desktop Customization');
-  Probe := AddBackslash(Root) + 'OpsisNewsCrawler.Plugin.Abstractions.dll';
+  Probe := AddBackslash(Root) + Name;
   if not FileExists(Probe) then
-    Probe := AddBackslash(Root) + 'libs\OpsisNewsCrawler.Plugin.Abstractions.dll';
-  if not FileExists(Probe) then Exit;
-  if GetVersionNumbersString(Probe, V) then
-    Result := CompareText(V, '1.0.0.0') = 0;
+    Probe := AddBackslash(Root) + 'lib\' + Name;
+  if not FileExists(Probe) then
+    Probe := AddBackslash(Root) + 'libs\' + Name;
+  if FileExists(Probe) then Result := Probe;
+end;
+
+function CompatibleOpsisContract(): Boolean;
+var
+  Probe, V: String;
+begin
+  Result := False;
+  Probe := OpsisSharedFile('OpsisNewsCrawler.Plugin.Abstractions.dll');
+  if Probe = '' then Exit;
+  if not GetVersionNumbersString(Probe, V) then Exit;
+  if CompareText(V, '1.0.0.0') <> 0 then Exit;
+  ExtractTemporaryFile('crawler-contract-check.dll');
+  // ABI 1.0.0.0 is not sufficient: require the exact same contract bytes.
+  Result := CompareText(GetSHA256OfFile(Probe),
+    GetSHA256OfFile(ExpandConstant('{tmp}\crawler-contract-check.dll'))) = 0;
+end;
+
+function CompatibleOpsisUi(): Boolean;
+var
+  Probe, V: String;
+begin
+  Result := False;
+  Probe := OpsisSharedFile('Opsis.UI.dll');
+  if Probe = '' then Exit;
+  if not GetVersionNumbersString(Probe, V) then Exit;
+  if CompareText(V, '0.6.0.0') <> 0 then Exit;
+  ExtractTemporaryFile('crawler-ui-check.dll');
+  Result := CompareText(GetSHA256OfFile(Probe),
+    GetSHA256OfFile(ExpandConstant('{tmp}\crawler-ui-check.dll'))) = 0;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -678,9 +711,16 @@ begin
   if IsIntegrated() and not CompatibleOpsisContract() then
   begin
     // Keep #13#10 away from a line-start: Inno Setup ISPP otherwise treats it as a directive.
-    Result := 'Opsis host plugin contract 1.0.0.0 is required before integrated installation.';
-    Result := Result + #13#10 + 'Απαιτείται ενημέρωση του Opsis με το κοινό συμβόλαιο 1.0.0.0 πριν από την ενσωμάτωση.';
+    Result := 'Opsis host needs the exact same plugin contract binary (ABI 1.0.0.0 / SHA256) before integration.';
+    Result := Result + #13#10 + 'Απαιτείται ακριβώς το ίδιο DLL συμβολαίου (ABI 1.0.0.0 / SHA256) στον Opsis.';
     Result := Result + #13#10 + 'The standalone installation mode is still available.';
+    Exit;
+  end;
+  if IsIntegrated() and not CompatibleOpsisUi() then
+  begin
+    Result := 'Opsis.UI 0.6.0 DLL must match the integrated Crawler plugin exactly (SHA256).';
+    Result := Result + #13#10 + 'Απαιτείται κοινή βιβλιοθήκη Opsis.UI 0.6.0 με ταυτόσημο SHA256.';
+    Result := Result + #13#10 + 'The standalone installation mode remains available.';
     Exit;
   end;
   Left := RemovePerUserInstall;
