@@ -109,3 +109,16 @@ public sealed class AuditM3uTests
         Assert.Equal("https://example.com/a.mp4", lines[2]);
     }
 }
+
+public sealed class AuditTopicTests
+{
+    [Fact]
+    public void NullTermsFromAHandEditedConfigAreIgnoredAndCaseDoesNotMatter()
+    {
+        var item = new NewsItem("Earthquake in ATHENS", "https://example.org/a", "Source", new DateTimeOffset(2026, 11, 24, 8, 0, 0, TimeSpan.Zero));
+        var topic = new TopicWatch { Name = "Quakes", Terms = new List<string> { null!, "  ", "earthquake" }, Region = "Athens" };
+        var hit = Assert.Single(TopicMatcher.Find(new[] { item }, new[] { topic }));
+        Assert.Equal(35, hit.Score);
+        Assert.Empty(TopicMatcher.Find(new[] { item }, new[] { new TopicWatch { Name = "x", Terms = null! } }));
+    }
+}
