@@ -678,6 +678,9 @@ public sealed partial class TickerHost : IDisposable
 
     public void SaveConfig() => Config.Save(configPath);
 
+    /// <summary>True only when the settings file was really written (used where a failed save must be rolled back).</summary>
+    public bool TrySaveConfig() => Config.TrySave(configPath);
+
     private bool BarsOn => started && Config.BarsEnabled && !snoozed;
 
     // ---- performance tier (Low / Balanced / High) -------------------------------------------------------

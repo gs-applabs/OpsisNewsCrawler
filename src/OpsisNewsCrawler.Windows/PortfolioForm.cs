@@ -205,8 +205,12 @@ internal sealed class PortfolioForm : Form
             PortfolioLedger.Calculate(new[]{opening});
             entries.Add(opening);
             host.Config.Portfolio.RemoveAt(index);
-            try {host.SaveConfig();}
-            catch {host.Config.Portfolio.Insert(index,position);entries.Remove(opening);throw;}
+            if(!host.TrySaveConfig())
+            {
+                host.Config.Portfolio.Insert(index,position);entries.Remove(opening);
+                MessageBox.Show(this,Loc.IsGreek?"Η αποθήκευση απέτυχε· η θέση παρέμεινε όπως ήταν.":"Saving failed; the holding was left as it was.",Text);
+                return;
+            }
             _=ShowAsync();
         }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or IOException or UnauthorizedAccessException)

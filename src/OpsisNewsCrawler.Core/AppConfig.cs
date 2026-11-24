@@ -526,17 +526,21 @@ public sealed class AppConfig
         }
     }
 
-    public void Save(string? path = null)
+    public void Save(string? path = null) => TrySave(path);
+
+    /// <summary>Saves like <see cref="Save"/> (a failure never crashes the ticker) but tells the caller whether the file was really written, so a multi-step change can roll back.</summary>
+    public bool TrySave(string? path = null)
     {
         path ??= DefaultPath;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             SafeFile.WriteAllText(path, JsonSerializer.Serialize(this, JsonOptions));
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Settings that cannot be saved must not crash the ticker.
+            return false;
         }
     }
 
