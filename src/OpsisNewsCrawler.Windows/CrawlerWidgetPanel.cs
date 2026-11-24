@@ -28,6 +28,7 @@ public sealed class CrawlerWidgetPanel : UserControl
         AccessibleRole = AccessibleRole.StaticText
     };
     private string gallerySignature = "";
+    private bool highContrast;
     private bool newsVisibilityRegistered;
     private Font? scaledFont;
     private int appliedFontScale = -1;
@@ -129,17 +130,20 @@ public sealed class CrawlerWidgetPanel : UserControl
                 catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException) { }
             return;
         }
-        BackColor = Theme.Surface;
-        ForeColor = Theme.Text;
-        var accent = WidgetAccent();
-        heading.ForeColor = GalleryColorContrast.ContrastRatio(accent, Theme.Surface) >= 4.5
-            ? accent : Theme.Text;
-        heading.BackColor = Theme.Surface;
-        items.BackColor = Theme.Surface;
-        items.ForeColor = Theme.Text;
-        gallery.BackColor = Theme.Background;
+        highContrast = SystemInformation.HighContrast;
+        var surface = highContrast ? SystemColors.Window : Theme.Surface;
+        var foreground = highContrast ? SystemColors.WindowText : GalleryColorContrast.Readable(Theme.Text, surface);
+        BackColor = surface;
+        ForeColor = foreground;
+        var accent = highContrast ? SystemColors.Highlight : WidgetAccent();
+        heading.ForeColor = GalleryColorContrast.ContrastRatio(accent, surface) >= 4.5 && !highContrast
+            ? accent : foreground;
+        heading.BackColor = surface;
+        items.BackColor = surface;
+        items.ForeColor = foreground;
+        gallery.BackColor = highContrast ? SystemColors.Window : Theme.Background;
         breakingBanner.BackColor = accent;
-        breakingBanner.ForeColor = GalleryColorContrast.Foreground(accent);
+        breakingBanner.ForeColor = highContrast ? SystemColors.HighlightText : GalleryColorContrast.Foreground(accent);
         // Theme changes do not rebuild the data or create redundant network traffic.
         foreach (Control card in gallery.Controls)
             StyleGalleryCard(card);
@@ -175,6 +179,7 @@ public sealed class CrawlerWidgetPanel : UserControl
             catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException) { }
             return;
         }
+        if (highContrast != SystemInformation.HighContrast) ApplyTheme();
         var profile = WidgetStudio.Resolve(host.Config.WidgetProfiles, kind);
         ApplyFontScale(profile.FontScalePercent);
         var galleryMode = (profile.Layout == "gallery" && WidgetStudio.CanUseGallery(kind))
@@ -182,6 +187,8 @@ public sealed class CrawlerWidgetPanel : UserControl
             || (profile.Layout == "weather-cards" && WidgetStudio.CanUseWeatherCards(kind));
         items.Visible = !galleryMode;
         gallery.Visible = galleryMode;
+        var selectedIndex = items.SelectedIndex;
+        var selected = selectedIndex >= 0 && selectedIndex < visible.Count ? visible[selectedIndex] : null;
         visible.Clear();
         visible.AddRange(host.WidgetSnapshot(kind).Take(profile.MaxItems));
         items.BeginUpdate();
@@ -191,6 +198,11 @@ public sealed class CrawlerWidgetPanel : UserControl
             foreach (var line in visible)
                 items.Items.Add(WidgetStudio.FormatLine(line.Title, line.Source, line.PublishedAt,
                     profile, allowTime: kind != "history"));
+            if (selected is not null)
+            {
+                var index = visible.FindIndex(x => x.Title == selected.Title && x.Url == selected.Url && x.Source == selected.Source);
+                if (index >= 0) items.SelectedIndex = index;
+            }
             items.ItemHeight = Math.Max(profile.Layout == "context" ? 26 : 23,
                 items.Font.Height + 6);
             heading.Text = WidgetStudio.Title(kind, Loc.IsGreek);
@@ -252,7 +264,7 @@ public sealed class CrawlerWidgetPanel : UserControl
             for (var i = 0; i < cards.Length; i++)
             {
                 var snapshot = visible[i];
-                var size = GalleryColorContrast.CardHeightForDpi(gallery.DeviceDpi);
+                var size = GalleryColorContrast.CardHeightForDpi(gallery.DeviceDpi, appliedFontScale);
                 // Quotes and other items without a permitted destination are
                 // text cards, not disabled or deceptive clickable buttons.
                 var url = snapshot.Url;
@@ -301,7 +313,7 @@ public sealed class CrawlerWidgetPanel : UserControl
     {
         if (IsDisposed) return;
         var width = GalleryCardWidth();
-        var height = GalleryColorContrast.CardHeightForDpi(gallery.DeviceDpi);
+        var height = GalleryColorContrast.CardHeightForDpi(gallery.DeviceDpi, appliedFontScale);
         foreach (Control card in gallery.Controls)
         {
             if (card.Width != width) card.Width = width;
@@ -318,14 +330,16 @@ public sealed class CrawlerWidgetPanel : UserControl
 
     private void StyleGalleryCard(Control card)
     {
-        card.BackColor = Theme.Surface;
-        card.ForeColor = Theme.Text;
+        card.BackColor = highContrast ? SystemColors.Window : Theme.Surface;
+        card.ForeColor = highContrast ? SystemColors.WindowText : GalleryColorContrast.Readable(Theme.Text, card.BackColor);
         if (card is Button button)
         {
             button.FlatAppearance.BorderSize = 1;
-            button.FlatAppearance.BorderColor = kind == "breaking" ? WidgetAccent() : Theme.Border;
-            button.FlatAppearance.MouseOverBackColor = Theme.Background;
-            button.FlatAppearance.MouseDownBackColor = Theme.Background;
+            button.FlatAppearance.BorderColor = highContrast ? SystemColors.WindowText : kind == "breaking" ? WidgetAccent() : Theme.Border;
+            var hover = highContrast ? SystemColors.Window : Theme.Background;
+            if (GalleryColorContrast.ContrastRatio(card.ForeColor, hover) < 4.5) hover = card.BackColor;
+            button.FlatAppearance.MouseOverBackColor = hover;
+            button.FlatAppearance.MouseDownBackColor = hover;
         }
         else if (card is Label label)
         {

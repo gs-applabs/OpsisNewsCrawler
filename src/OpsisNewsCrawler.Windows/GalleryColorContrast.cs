@@ -9,6 +9,12 @@ public static class GalleryColorContrast
     public static int CardHeightForDpi(int dpi) =>
         Math.Clamp((int)Math.Round(100 * Math.Clamp(dpi, 96, 384) / 96.0), 100, 400);
 
+    public static int CardHeightForDpi(int dpi, int fontScale) =>
+        (int)Math.Ceiling(CardHeightForDpi(dpi) * Math.Max(100, Math.Clamp(fontScale, 80, 160)) / 100.0);
+
+    public static Color Readable(Color preferred, Color background) =>
+        ContrastRatio(preferred, background) >= 4.5 ? preferred : Foreground(background);
+
     public static double ContrastRatio(Color foreground, Color background)
     {
         static double Lum(Color color)

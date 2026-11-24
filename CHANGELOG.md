@@ -1,5 +1,11 @@
 # Changelog
 
+### P1 accessibility refinement (2026-11-24)
+
+- Existing widgets respect Windows High Contrast colors and use a contrast-safe fallback for normal theme text; card height scales with font size and monitor DPI. Preserve selected list item during refresh; sanitize plain-text headline rows using the existing bounded sanitizer.
+- Performance Dashboard and monitor placement remain Opsis host responsibilities, not new Crawler screens. Windows validation deferred; this is source-only development.
+
+
 ### P1 weather cards and widget lifetime refinement (2026-11-24)
 
 - Optional Weather cards in the existing Widget Studio; Weather & Hazards preset selects them. Reuses existing weather snapshot and gallery controls, without extra network calls, ABI changes or new widgets. Cards show bounded plain text, optional source and reported time; no inferred forecast.

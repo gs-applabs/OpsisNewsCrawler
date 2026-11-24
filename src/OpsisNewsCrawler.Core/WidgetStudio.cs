@@ -202,14 +202,13 @@ public static class WidgetStudio
         DateTimeOffset publishedAt, WidgetStudioProfile? configured, bool allowTime = true)
     {
         var p = Clean(configured);
-        var headline = (title ?? "").Trim().Replace('\r', ' ').Replace('\n', ' ');
-        if (headline.Length > 160) headline = headline[..159] + "…";
+        var headline = CleanText(title, 160);
         if (p.Layout == "headlines") return headline;
         var metadata = new List<string>(2);
         if (p.ShowSource && !string.IsNullOrWhiteSpace(source))
         {
-            var label = source.Trim().Replace('\r', ' ').Replace('\n', ' ');
-            metadata.Add(label.Length > 38 ? label[..38] + "…" : label);
+            var label = CleanText(source, 38);
+            if (label.Length > 0) metadata.Add(label);
         }
         if (allowTime && p.ShowTime && publishedAt != DateTimeOffset.MinValue &&
             publishedAt <= DateTimeOffset.UtcNow.AddMinutes(5) &&
