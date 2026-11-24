@@ -752,7 +752,7 @@ public sealed partial class TickerHost : IDisposable
         if (Config.BarsEnabled) StartBars();
         // Widgets without ticker bars can still request one existing RSS category
         // only while their News widget is visible.
-        if (newsWidgetUsers > 0 && !Config.BarsEnabled) NewsWidgetCategoryChanged();
+        if (newsWidgetUsers > 0) NewsWidgetCategoryChanged();
         _ = FirstUpdateCheckAsync(startEpoch);
         updateTimer.Tick -= OnUpdateTimer;
         updateTimer.Tick += OnUpdateTimer;
