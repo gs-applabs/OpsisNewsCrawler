@@ -115,6 +115,11 @@ $assets = "$r\release\$ver-assets"
 if (Test-Path $assets) { Remove-Item $assets -Recurse -Force }
 New-Item -ItemType Directory -Force $assets | Out-Null
 Copy-Item "$r\Output\OpsisNewsCrawler-Setup.exe", "$r\Output\OpsisNewsCrawler-Setup.exe.sha256", $portable, "$portable.sha256" $assets
+# Ship the explicit rollback helper; it never runs silently during setup.
+Copy-Item "$r\tools\restore-opsis-crawler.ps1" "$assets\OpsisNewsCrawler-$ver-rollback.ps1"
+$rollbackHash = (Get-FileHash "$assets\OpsisNewsCrawler-$ver-rollback.ps1" -Algorithm SHA256).Hash.ToLowerInvariant()
+[IO.File]::WriteAllText("$assets\OpsisNewsCrawler-$ver-rollback.ps1.sha256", "$rollbackHash  OpsisNewsCrawler-$ver-rollback.ps1" + [Environment]::NewLine)
+
 # Additional unambiguous name for this .NET 11 candidate. Preserve canonical E2E filename.
 $net11Setup = "$assets\OpsisNewsCrawler-$ver-NET11-Setup.exe"
 Copy-Item "$assets\OpsisNewsCrawler-Setup.exe" $net11Setup
