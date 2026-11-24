@@ -11,7 +11,22 @@ public static class Theme
 {
     public static event Action? Changed;
 
-    static Theme() => OpsisTheme.Use(new SharedTokens());
+    // The Opsis 2.8 loader shares Opsis.UI across all plugin load contexts.
+    // Do not replace the host's singleton theme with this plugin's adapter.
+    internal static bool UsesHostSharedTheme =>
+        AppDomain.CurrentDomain.GetAssemblies().Any(a =>
+            string.Equals(a.GetName().Name, "Opsis", StringComparison.OrdinalIgnoreCase));
+
+    static Theme()
+    {
+        if (!UsesHostSharedTheme) OpsisTheme.Use(new SharedTokens());
+    }
+
+    private static void AnnouncePaletteChanged()
+    {
+        Changed?.Invoke();
+        if (!UsesHostSharedTheme) OpsisTheme.NotifyChanged();
+    }
 
     /// <summary>What the shared controls of Opsis.UI read: always the current values of this class (no copy).</summary>
     private sealed class SharedTokens : IOpsisTheme
@@ -69,7 +84,7 @@ public static class Theme
             IsDark = p.Dark;
             Background = p.Background; Surface = p.Surface; Border = p.Border; Text = p.Text; TextMuted = p.Muted;
             Accent = followAccent ? WindowsAccent() ?? p.Accent : p.Accent;
-            Changed?.Invoke();
+            AnnouncePaletteChanged();
             return;
         }
         var dark = currentMode.ToLowerInvariant() switch
@@ -100,7 +115,7 @@ public static class Theme
     {
         IsDark = p.Dark;
         Background = p.Background; Surface = p.Surface; Border = p.Border; Text = p.Text; TextMuted = p.Muted; Accent = p.Accent;
-        Changed?.Invoke();
+        AnnouncePaletteChanged();
     }
 
     private static void ApplyPalette(bool dark)
@@ -123,7 +138,7 @@ public static class Theme
             Text = Color.FromArgb(28, 28, 32);
             TextMuted = Color.FromArgb(96, 96, 108);
         }
-        Changed?.Invoke();
+        AnnouncePaletteChanged();
     }
 
     public static bool SystemUsesLightTheme()

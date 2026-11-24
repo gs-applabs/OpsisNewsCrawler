@@ -41,6 +41,7 @@ public sealed partial class TickerHost : IDisposable
     private bool hasQuotes;
     private bool disposed;
     private bool started;
+    private int startEpoch; // discard delayed checks from a stopped session
 
     // breaking news
     private readonly System.Windows.Forms.Timer breakingTimer = new() { Interval = 5000 };
@@ -171,12 +172,12 @@ public sealed partial class TickerHost : IDisposable
         catch (OperationCanceledException) { }
     }
 
-    private async Task FirstUpdateCheckAsync()
+    private async Task FirstUpdateCheckAsync(int epoch)
     {
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(30), lifetimeToken).ConfigureAwait(true);
-            _ = AutoCheckForUpdatesAsync();
+            if (started && !disposed && startEpoch == epoch) _ = AutoCheckForUpdatesAsync();
         }
         catch (OperationCanceledException) { }
     }
@@ -435,7 +436,7 @@ public sealed partial class TickerHost : IDisposable
     private void OnLanguageChanged()
     {
         // Texts built from the language (placeholders, quote labels) are rebuilt.
-        _ = RefreshQuotesAsync(force: true);
+        if (started) _ = RefreshQuotesAsync(force: true);
         PushAll();
         UpdateMiniWeather();
     }
@@ -706,15 +707,16 @@ public sealed partial class TickerHost : IDisposable
 
     public void Start()
     {
-        if (disposed) return;
+        if (disposed || started) return;
         started = true;
+        unchecked { startEpoch++; }
         EvaluatePerformance();
         performanceTimer.Tick -= OnPerformanceTimer;
         performanceTimer.Tick += OnPerformanceTimer;
         performanceTimer.Start();
         PushAll();
         if (Config.BarsEnabled) StartBars();
-        _ = FirstUpdateCheckAsync();
+        _ = FirstUpdateCheckAsync(startEpoch);
         updateTimer.Tick -= OnUpdateTimer;
         updateTimer.Tick += OnUpdateTimer;
         updateTimer.Start();
@@ -812,7 +814,9 @@ public sealed partial class TickerHost : IDisposable
 
     public void Stop()
     {
+        if (disposed || !started) return;
         started = false;
+        unchecked { startEpoch++; }
         // Plugin unload must stop *all* periodic work, not just the visible news bars.
         performanceTimer.Stop();
         updateTimer.Stop();
@@ -860,6 +864,7 @@ public sealed partial class TickerHost : IDisposable
 
     public void Refresh()
     {
+        if (disposed || !started) return;
         _ = RefreshAsync(force: true);
         _ = RefreshQuotesAsync(force: true);
     }

@@ -63,15 +63,19 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
     public void SetMode(string mode) => _controller.SetMode(TickerParsing.ParseMode(mode));
     public void SetPosition(string position) => _controller.SetPosition(TickerParsing.ParsePosition(position));
 
-    public void SetTheme(bool dark, int background, int surface, int border, int text, int textMuted, int accent, double opacity) =>
+    public void SetTheme(bool dark, int background, int surface, int border, int text, int textMuted, int accent, double opacity)
+    {
+        _controller.Context.AcceptTheme(dark);
         Theme.SetColors(dark, Color.FromArgb(background), Color.FromArgb(surface), Color.FromArgb(border),
-            Color.FromArgb(text), Color.FromArgb(textMuted), Color.FromArgb(accent), Theme.Opacity); // the strip keeps its own transparency setting
+            Color.FromArgb(text), Color.FromArgb(textMuted), Color.FromArgb(accent), Theme.Opacity);
+    }
 
-    public void SetHardwareProfile(string tier) => _controller.Host.SetHostTier(tier);
+    public void SetHardwareProfile(string tier) => _controller.SetHostTier(tier);
 
     public void SetLanguage(string code)
     {
         _controller.LanguageFromHost = true;
+        _controller.Context.AcceptLanguage(code);
         Loc.SetLanguage(code);
     }
 
@@ -92,7 +96,7 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
 
     public IReadOnlyList<PluginMenuItem> GetTrayMenuItems() => BuildTrayMenu(
         () => NavigationRequested?.Invoke(NavigationKey), Refresh,
-        () => { if (_controller.Host.Paused) Resume(); else Pause(); }, CloseCrawler, OpenCrawler);
+        () => { if (_controller.IsPaused) Resume(); else Pause(); }, CloseCrawler, OpenCrawler);
 
     /// <summary>
     /// The commands the crawler adds to Opsis' tray menu. The welcome guide and the Opsis family window are NOT here: inside Opsis the host offers them itself,
@@ -140,6 +144,15 @@ internal sealed class TickerController
     private TickerHost? _host;
     private SettingsForm? _fallbackSettings;
 
+    public HostContextState Context { get; } = new(hosted: true);
+    public bool IsPaused => _host?.Paused ?? false;
+
+    public void SetHostTier(string? tier)
+    {
+        Context.AcceptTier(tier);
+        _host?.SetHostTier(Context.Snapshot.PerformanceTier);
+    }
+
     /// <summary>The host (Opsis) told us its language: the crawler's own language setting is then ignored.</summary>
     public bool LanguageFromHost { get; set; }
 
@@ -152,6 +165,8 @@ internal sealed class TickerController
             if (_host is null)
             {
                 _host = new TickerHost { HostedByOpsis = true, LanguageFollowsHost = LanguageFromHost };
+                if (LanguageFromHost) Loc.SetLanguage(Context.Snapshot.Language);
+                _host.SetHostTier(Context.Snapshot.PerformanceTier);
                 if (!_host.Config.ThemeIndependentMigrated)
                 {
                     _host.Config.ThemeIndependentMigrated = true;
@@ -185,7 +200,8 @@ internal sealed class TickerController
             return;
         }
         StandaloneRunning = false;
-        Host.Start();
+        try { Host.Start(); }
+        catch { _guard.Release(); throw; }
     }
 
     public void Stop()

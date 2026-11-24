@@ -1,7 +1,7 @@
 name: .NET 11 / Opsis 2.8.x real plugin host smoke
 on:
   push:
-    branches: ['feat/net11-opsis-280-ui6-compat']
+    branches: ['feat/net11-opsis-280-ui6-compat', 'feat/p0-opsis-28-coordinated-host-20261124']
   pull_request:
     branches: ['release/p3-v0.28.0-contract1-20261123']
   workflow_dispatch:
