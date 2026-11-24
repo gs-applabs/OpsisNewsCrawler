@@ -44,4 +44,5 @@ foreach ($item in $items) {
         Write-Host "Would delete: $($item.Name)"
     }
 }
-Write-Host "Release retention: keep $KeepVersion; removed $($(if ($Apply) {$items.Count} else {0})) generated item(s); preview mode=$(-not $Apply)."
+$removed = if ($Apply) { $items.Count } else { 0 }
+Write-Host "Release retention: keep $KeepVersion; removed $removed generated item(s); preview mode=$(-not $Apply)."
