@@ -1017,6 +1017,7 @@ public sealed partial class TickerHost : IDisposable
         var category = WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId;
         if (category.Length == 0 || Config.FindCategory(category) is null ||
             IsActiveCategory(category)) return;
+        if (refreshingExtra) return; // do not count a discarded overlapping attempt
         // The visible widget reuses its existing 30s paint timer, but its RSS
         // network refresh is throttled to at least two minutes. Hidden widgets
         // cannot start network refreshes; no second always-running scheduler.

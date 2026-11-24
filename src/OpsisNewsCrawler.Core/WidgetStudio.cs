@@ -156,8 +156,18 @@ public static class WidgetStudio
         var decoded = WebUtility.HtmlDecode(clipped);
         // Display only safe plain text, never HTML/WebView content in the
         // background desktop widget. The input size and match length are bounded.
-        var plain = Regex.Replace(decoded, @"<[^<>]{0,256}>", " ",
-            RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(50));
+        string plain;
+        try
+        {
+            plain = Regex.Replace(decoded, @"<[^<>]{0,256}>", " ",
+                RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(50));
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            // RSS payload is untrusted. A regex timeout must not crash
+            // the always-visible desktop widget.
+            plain = decoded.Replace('<', ' ').Replace('>', ' ');
+        }
         var s = new string(plain.Trim().Select(ch => char.IsControl(ch) ? ' ' : ch).ToArray());
         s = string.Join(' ', s.Split(' ', StringSplitOptions.RemoveEmptyEntries));
         return s.Length > max ? s[..(max - 1)] + "…" : s;

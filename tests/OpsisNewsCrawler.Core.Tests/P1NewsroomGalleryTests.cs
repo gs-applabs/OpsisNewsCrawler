@@ -44,6 +44,18 @@ public sealed class P1NewsroomGalleryTests
     }
 
     [Fact]
+    public void OversizedOrMalformedHtmlNeverProducesLiveHtmlControls()
+    {
+        var text = WidgetStudio.GalleryCardText("<script>alert(1)</script> Example",
+            "<bad-tag>" + new string('X', 8000) + "</bad-tag>",
+            "Agency", DateTimeOffset.UtcNow, new WidgetStudioProfile { Layout = "gallery" },
+            false, false, false);
+        Assert.DoesNotContain("<script>", text);
+        Assert.DoesNotContain("<bad-tag>", text);
+        Assert.InRange(text.Length, 10, 300);
+    }
+
+    [Fact]
     public void BreakingCardsAreClearlyLabeledWithoutTruthScore()
     {
         var text = WidgetStudio.GalleryCardText("Earthquake", "Reported by media", "Agency",
