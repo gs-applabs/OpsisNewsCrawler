@@ -11,7 +11,7 @@
 <a href="../../releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/gs-applabs/OpsisNewsCrawler"/></a>
 <a href="LICENSE"><img alt="license MIT" src="https://img.shields.io/badge/license-MIT-blue"/></a>
 <img alt="Windows 11" src="https://img.shields.io/badge/Windows-11-0078d4"/>
-<img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512bd4"/>
+<img alt=".NET 10" src="https://img.shields.io/badge/.NET-11-512bd4"/>
 <img alt="14 languages" src="https://img.shields.io/badge/languages-14-green"/>
 </p>
 
@@ -76,7 +76,7 @@
 
 ### Εγκατάσταση
 
-**Απαιτήσεις:** Windows 11 (64-bit· τα Windows 10 δεν έχουν δοκιμαστεί), [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (ο installer το προτείνει και το κατεβάζει μόνο αν το επιτρέψετε), προαιρετικά WebView2 Runtime (ζωντανό βίντεο έκτακτων).
+**Απαιτήσεις:** Windows 11 (64-bit· τα Windows 10 δεν έχουν δοκιμαστεί), [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (ο installer το προτείνει και το κατεβάζει μόνο αν το επιτρέψετε), προαιρετικά WebView2 Runtime (ζωντανό βίντεο έκτακτων).
 
 1. Κατεβάστε από τα [Releases](../../releases/latest) το `OpsisNewsCrawler-Setup.exe` (ή το `…-portable.zip`) και το αντίστοιχο `.sha256`.
 2. **Ελέγξτε το αρχείο** (PowerShell, στον φάκελο λήψεων):
@@ -112,7 +112,7 @@ dotnet test  OpsisNewsCrawler.sln -c Release
 powershell -ExecutionPolicy Bypass -File tools\release.ps1     # publish + installer + portable + SHA-256 στο release\<έκδοση>-assets
 ```
 
-Χρειάζεται .NET 10 SDK και Inno Setup 6/7. Δομή: `src/OpsisNewsCrawler.Core` (μοντέλα, ρυθμίσεις, RSS, τιμές, καιρός, γλώσσες), `src/OpsisNewsCrawler.Windows` (WinForms UI, Win32), `src/OpsisNewsCrawler.App` (αυτόνομη εφαρμογή), `src/OpsisNewsCrawler.OpsisPlugin` + `…Plugin.Abstractions` (plugin του Opsis), `tests/` (xUnit), `installer/`, `tools/`, `docs/`.
+Χρειάζεται .NET 11 SDK και Inno Setup 6/7. Δομή: `src/OpsisNewsCrawler.Core` (μοντέλα, ρυθμίσεις, RSS, τιμές, καιρός, γλώσσες), `src/OpsisNewsCrawler.Windows` (WinForms UI, Win32), `src/OpsisNewsCrawler.App` (αυτόνομη εφαρμογή), `src/OpsisNewsCrawler.OpsisPlugin` + `…Plugin.Abstractions` (plugin του Opsis), `tests/` (xUnit), `installer/`, `tools/`, `docs/`.
 
 ---
 
@@ -171,7 +171,7 @@ Dark and light themes (all of them: [`docs/screenshots`](docs/screenshots)).
 
 ### Installation
 
-**Requirements:** Windows 11 (64-bit; Windows 10 is untested), the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (the installer offers it and downloads it only if you allow), optionally the WebView2 Runtime (live video of breaking news).
+**Requirements:** Windows 11 (64-bit; Windows 10 is untested), the [.NET 11 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (the installer offers it and downloads it only if you allow), optionally the WebView2 Runtime (live video of breaking news).
 
 1. Download `OpsisNewsCrawler-Setup.exe` (or `…-portable.zip`) and the matching `.sha256` from [Releases](../../releases/latest).
 2. **Verify the file** (PowerShell, in the download folder):
@@ -207,7 +207,7 @@ dotnet test  OpsisNewsCrawler.sln -c Release
 powershell -ExecutionPolicy Bypass -File tools\release.ps1     # publish + installer + portable + SHA-256 into release\<version>-assets
 ```
 
-Needs the .NET 10 SDK and Inno Setup 6/7. Layout: `src/OpsisNewsCrawler.Core` (models, settings, RSS, prices, weather, languages), `src/OpsisNewsCrawler.Windows` (WinForms UI, Win32), `src/OpsisNewsCrawler.App` (stand-alone app), `src/OpsisNewsCrawler.OpsisPlugin` + `…Plugin.Abstractions` (Opsis plugin), `tests/` (xUnit), `installer/`, `tools/`, `docs/`.
+Needs the .NET 11 SDK and Inno Setup 6/7. Layout: `src/OpsisNewsCrawler.Core` (models, settings, RSS, prices, weather, languages), `src/OpsisNewsCrawler.Windows` (WinForms UI, Win32), `src/OpsisNewsCrawler.App` (stand-alone app), `src/OpsisNewsCrawler.OpsisPlugin` + `…Plugin.Abstractions` (Opsis plugin), `tests/` (xUnit), `installer/`, `tools/`, `docs/`.
 
 ---
 
