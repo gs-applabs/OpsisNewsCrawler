@@ -1,5 +1,13 @@
 # Changelog
 
+### Final audit pass on the .NET 11 build (2026-11-24)
+
+- Merged the a05ffa3 head (P1 widget studio, P2/P3 portfolio, digests, alerts, UI6) with the 0.25.0 and P3 lines. The shared ABI is the compiled `libs/OpsisNewsCrawler.Plugin.Abstractions.dll` (SHA-256 `514f2a3e…`, same bytes as the Opsis host); no parallel contract is built or shipped. Opsis.UI is the 0.6.0 build in `libs/`.
+- Fixed: the UI project could not compile (`SafeFile` was internal in Core but used by the weekly-digest export); the gallery card text now breaks lines with `\n` only (it used `Environment.NewLine`, so the text carried a CR).
+- Fixed: the opening-balance migration rolled back only on an exception, but `AppConfig.Save` swallows I/O failures, so a failed save looked like success. New `AppConfig.TrySave` / `TickerHost.TrySaveConfig` report the real result and the migration restores the holding when the file was not written. Test added.
+- Fixed: ICS export now folds content lines at 75 octets without splitting a UTF-8 character (RFC 5545). Test added.
+- Requires the .NET 11 Desktop Runtime. Not verified: real Windows install/upgrade/rollback, multi-monitor/DPI, real Opsis 2.8 host load, GitHub CI.
+
 ### P2/P3 explicit legacy portfolio migration (2026-11-24)
 
 - Existing portfolio window can move a selected holding into the transaction ledger as an explicitly confirmed opening balance at the migration timestamp, preserving quantity and average cost, without inventing historical trades. Rejects overlapping ledger positions and warns about legacy overlap; transaction editor blocks new entries for matching legacy holdings until reconciliation. No automatic merge, shared totals or new database. Windows validation deferred.

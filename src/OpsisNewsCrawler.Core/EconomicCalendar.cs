@@ -65,6 +65,21 @@ public static class EconomicCalendar
         !string.IsNullOrWhiteSpace(entry.Source) && entry.Source.Length <= 300 &&
         entry.Impact is >= 0 and <= 3;
 
+    /// <summary>RFC 5545 3.1: content lines are folded at 75 octets (CRLF + one space); a UTF-8 character is never split.</summary>
+    public static string Fold(string line)
+    {
+        var sb = new StringBuilder();
+        var octets = 0;
+        foreach (var rune in line.EnumerateRunes())
+        {
+            var n = rune.Utf8SequenceLength;
+            if (octets + n > 75) { sb.Append("\r\n "); octets = 1; }
+            sb.Append(rune.ToString());
+            octets += n;
+        }
+        return sb.ToString();
+    }
+
     public static string ExportIcs(IEnumerable<EconomicEvent> entries)
     {
         static string Clean(string s)=>s.Replace("\\","\\\\").Replace(";","\\;")
@@ -77,8 +92,8 @@ public static class EconomicCalendar
             sb.Append("BEGIN:VEVENT\r\nUID:").Append(id).Append("@opsis.local\r\nDTSTAMP:")
                 .Append(DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'",CultureInfo.InvariantCulture))
                 .Append("\r\nDTSTART:").Append(x.StartsAt.UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'",CultureInfo.InvariantCulture))
-                .Append("\r\nSUMMARY:").Append(Clean(x.Title)).Append("\r\nDESCRIPTION:")
-                .Append(Clean(x.Source)).Append("\r\nEND:VEVENT\r\n");
+                .Append("\r\n").Append(Fold("SUMMARY:" + Clean(x.Title)))
+                .Append("\r\n").Append(Fold("DESCRIPTION:" + Clean(x.Source))).Append("\r\nEND:VEVENT\r\n");
         }
         return sb.Append("END:VCALENDAR\r\n").ToString();
     }

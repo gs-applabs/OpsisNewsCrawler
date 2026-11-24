@@ -16,6 +16,15 @@ public sealed class P3ServicesTests
         Assert.Contains("BEGIN:VEVENT",ics);Assert.Contains("GDP\\; preliminary",ics);
         Assert.DoesNotContain("SUMMARY:Past",ics);
     }
+    [Fact]public void IcsLinesAreFoldedAt75OctetsWithoutSplittingCharacters()
+    {
+        var e=new EconomicEvent("9",new string('Ω',120),"GR",Now.AddDays(1),"Office");
+        var ics=EconomicCalendar.ExportIcs(new[]{e});
+        var lines=ics.Split("\r\n",StringSplitOptions.RemoveEmptyEntries);
+        Assert.All(lines,l=>Assert.True(System.Text.Encoding.UTF8.GetByteCount(l)<=75,l));
+        var summary=string.Concat(lines.SkipWhile(l=>!l.StartsWith("SUMMARY:")).TakeWhile((l,i)=>i==0||l.StartsWith(' ')).Select((l,i)=>i==0?l:l[1..]));
+        Assert.Equal("SUMMARY:"+new string('Ω',120),summary);
+    }
     [Fact]public void EvidenceAssistantDoesNotMakeTruthClaims()
     {
         var record=new NewsItem("Example","https://example.org/story","Source",Now);
