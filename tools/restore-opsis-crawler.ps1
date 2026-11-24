@@ -33,7 +33,7 @@ $BackupRoot = Full $BackupRoot
 # Files, per-user AppData, or an explicitly selected PLUGINROOT.
 # A typo must never rename/delete another Opsis plugin or arbitrary folder.
 $expectedLeaf = 'Opsis - Desktop Customization'
-$actualLeaf = Split-Path $PluginFolder.TrimEnd([char[]]@('\', '/')) -Leaf
+$actualLeaf = Split-Path -Path ($PluginFolder.TrimEnd([char[]]@('\', '/'))) -Leaf
 if ($PluginFolder -eq $HostFolder -or
     ![string]::Equals($actualLeaf, $expectedLeaf, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Invalid Crawler plugin destination: $PluginFolder (expected leaf $expectedLeaf)"
