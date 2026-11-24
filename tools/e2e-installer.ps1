@@ -90,6 +90,16 @@ if ($Scenario -eq 'integrated') {
     Check (-not (Test-Path (Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'))) 'refused install did not write plugin DLL'
     Copy-Item $ContractFile $hostContract -Force
     Copy-Item $uiSource $hostUi -Force
+    # The Opsis 2.8 host holds Local\Opsis.SingleInstance while running.
+    # Integrated setup must not write DLLs before it has exited.
+    $hostMutex = [Threading.Mutex]::new($false, 'Local\Opsis.SingleInstance')
+    try {
+        $runningHost = Run-Setup $NewSetup $setupArgs 'integrated-host-running-denied.log'
+        Check ($runningHost -ne 0) 'integrated setup refuses live Opsis host mutex'
+        Check (-not (Test-Path (Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'))) 'live host rejection changed no Crawler files'
+    } finally {
+        $hostMutex.Dispose()
+    }
     # A DLL may claim the right FileVersion while its bytes differ.
     # The integrated installer must reject that case before copying anything.
     $modified = [IO.File]::ReadAllBytes($hostUi)
