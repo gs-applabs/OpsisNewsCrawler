@@ -3,7 +3,7 @@ on:
   push:
     branches: ['feat/net11-opsis-280-ui6-compat', 'feat/p0-opsis-28-coordinated-host-20261124']
   pull_request:
-    branches: ['release/p3-v0.28.0-contract1-20261123']
+    branches: ['release/p3-v0.28.0-contract1-20261123', 'feat/net11-opsis-280-ui6-compat']
   workflow_dispatch:
 permissions:
   contents: read
