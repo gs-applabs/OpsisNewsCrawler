@@ -65,7 +65,11 @@ public sealed class CrawlerWidgetPanel : UserControl
         Theme.HostAccentChanged += ApplyTheme;
         if (kind == "news") host.NewsWidgetUpdated += RequestRefresh;
         Loc.Changed += RefreshSafe;
-        timer.Tick += (_, _) => RefreshSafe();
+        timer.Tick += (_, _) =>
+        {
+            if (kind == "news") host.NewsWidgetCategoryChanged();
+            RefreshSafe();
+        };
         eventSubscription = SuiteEventHub.Subscribe(e =>
         {
             if (e.Kind.ToString().Equals(kind switch { "markets" => "Market", "history" => "Calendar", _ => kind }, StringComparison.OrdinalIgnoreCase))
@@ -83,6 +87,16 @@ public sealed class CrawlerWidgetPanel : UserControl
             timer.Start();
             UpdateNewsWidgetVisibility();
         }
+    }
+
+    protected override void OnHandleDestroyed(EventArgs e)
+    {
+        if (newsVisibilityRegistered)
+        {
+            newsVisibilityRegistered = false;
+            host.SetNewsWidgetVisible(false);
+        }
+        base.OnHandleDestroyed(e);
     }
 
     protected override void OnVisibleChanged(EventArgs e)

@@ -43,6 +43,9 @@ public sealed partial class TickerHost : IDisposable
     private bool started;
     private int startEpoch; // discard delayed checks from a stopped session
     private int newsWidgetUsers; // visible instances only, including across monitors
+    private readonly Dictionary<string, DateTimeOffset> newsWidgetFetchAttempt =
+        new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Local only: a changed RSS category refreshes the visible News widget
     /// without broadcasting a fake headline to Chronikologio/other plugins.</summary>
     public event Action? NewsWidgetUpdated;
@@ -1014,6 +1017,16 @@ public sealed partial class TickerHost : IDisposable
         var category = WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId;
         if (category.Length == 0 || Config.FindCategory(category) is null ||
             IsActiveCategory(category)) return;
+        // The visible widget reuses its existing 30s paint timer, but its RSS
+        // network refresh is throttled to at least two minutes. Hidden widgets
+        // cannot start network refreshes; no second always-running scheduler.
+        var now = DateTimeOffset.UtcNow;
+        var minGap = TimeSpan.FromSeconds(Math.Max(120, Config.RefreshIntervalSeconds));
+        if (newsWidgetFetchAttempt.TryGetValue(category, out var attempted) &&
+            now - attempted < minGap) return;
+        if (extraNewsAt.TryGetValue(category, out var lastFetched) &&
+            now - lastFetched.ToUniversalTime() < minGap) return;
+        newsWidgetFetchAttempt[category] = now;
         _ = RefreshExtraNewsAsync();
     }
 
