@@ -16,6 +16,10 @@ public sealed class PriceAlert
     public string Metric { get; set; } = "price";
     public decimal Threshold { get; set; }
     public bool Enabled { get; set; } = true;
+    /// <summary>Optional re-arm margin in price units or percentage points.</summary>
+    public decimal RearmMargin { get; set; }
+    /// <summary>Optional maximum observation age in minutes; zero keeps legacy behavior.</summary>
+    public int MaxAgeMinutes { get; set; }
 
     /// <summary>True while the limit is passed and the alert was already shown; re-arms when the price comes back. Not saved.</summary>
     [JsonIgnore]
@@ -24,7 +28,7 @@ public sealed class PriceAlert
     public PriceAlert Clone() => new()
     {
         Source = Source, Code = Code, Market = Market, Label = Label, Above = Above, Threshold = Threshold,
-        Enabled = Enabled, Fired = Fired, Metric = Metric
+        Enabled = Enabled, Fired = Fired, Metric = Metric, RearmMargin = RearmMargin, MaxAgeMinutes = MaxAgeMinutes
     };
 
     public bool Matches(QuoteInstrument instrument) =>
@@ -43,6 +47,7 @@ public static class PriceAlertCheck
         IEnumerable<PriceAlert> alerts, IReadOnlyList<(QuoteInstrument Instrument, MarketQuote Quote)> prices)
     {
         var hits = new List<(PriceAlert, MarketQuote)>();
+        var now = DateTimeOffset.UtcNow;
         foreach (var alert in alerts)
         {
             if (!alert.Enabled || (alert.Metric == "changePercent" ? alert.Threshold is < -100 or > 100 : alert.Threshold <= 0)) continue;
@@ -50,16 +55,24 @@ public static class PriceAlertCheck
             foreach (var (instrument, candidate) in prices)
                 if (alert.Matches(instrument)) { quote = candidate; break; }
             if (quote is null) continue;
+            if (alert.MaxAgeMinutes > 0 && (quote.AsOf > now.AddMinutes(5) ||
+                now - quote.AsOf > TimeSpan.FromMinutes(Math.Clamp(alert.MaxAgeMinutes, 1, 10080)))) continue;
 
             var observed = alert.Metric == "changePercent" ? quote.ChangePercent : quote.Price;
-            if (observed is null) { alert.Fired = false; continue; }
+            if (observed is null) continue; // missing data must not re-arm an already fired rule
             var passed = alert.Above ? observed.Value >= alert.Threshold : observed.Value <= alert.Threshold;
             if (passed && !alert.Fired)
             {
                 alert.Fired = true;
                 hits.Add((alert, quote));
             }
-            else if (!passed) alert.Fired = false;
+            else if (!passed)
+            {
+                var margin = Math.Clamp(alert.RearmMargin, 0m, 1_000_000m);
+                // Compare distances without adding a margin to potentially extreme thresholds.
+                if (margin == 0 || (alert.Above ? (double)alert.Threshold - (double)observed.Value :
+                    (double)observed.Value - (double)alert.Threshold) >= (double)margin) alert.Fired = false;
+            }
         }
         return hits;
     }

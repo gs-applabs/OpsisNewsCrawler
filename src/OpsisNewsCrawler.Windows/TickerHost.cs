@@ -42,6 +42,13 @@ public sealed partial class TickerHost : IDisposable
     private bool disposed;
     private bool started;
     private int startEpoch; // discard delayed checks from a stopped session
+    private int newsWidgetUsers; // visible instances only, including across monitors
+    private readonly Dictionary<string, DateTimeOffset> newsWidgetFetchAttempt =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Local only: a changed RSS category refreshes the visible News widget
+    /// without broadcasting a fake headline to Chronikologio/other plugins.</summary>
+    public event Action? NewsWidgetUpdated;
     private CancellationTokenSource? sessionCts;
     private CancellationToken SessionToken => sessionCts?.Token ?? lifetimeToken;
     private CrawlerEventDispatch? suiteDispatcher;
@@ -62,12 +69,12 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>One in-memory-only snapshot for a host desktop widget; no network requests.</summary>
     public IReadOnlyList<NewsItem> WidgetSnapshot(string widget) => widget switch
     {
-        "news" => allItems.Where(x => x.Kind == NewsItemKind.News).Take(12).ToArray(),
-        "markets" => stockItems.Where(x => x.Kind == NewsItemKind.Quote).Take(12).ToArray(),
-        "weather" => WeatherForDisplay().Where(x => x.Kind == NewsItemKind.Weather).Take(8).ToArray(),
-        "breaking" => breakingItems.Take(10).ToArray(),
-        "history" => OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.AllRich().FirstOrDefault() is { } rich
-            ? PluginFeedForDisplay(rich.Key).Take(12).ToArray() : Array.Empty<NewsItem>(),
+        "news" => NewsWidgetSnapshot(),
+        "markets" => stockItems.Where(x => x.Kind == NewsItemKind.Quote).Take(30).ToArray(),
+        "weather" => WeatherForDisplay().Where(x => x.Kind == NewsItemKind.Weather).Take(30).ToArray(),
+        "breaking" => breakingItems.Take(30).ToArray(),
+        "history" => PluginFeeds.FindRich("san-simera") is not null || PluginFeeds.Find("san-simera") is not null
+            ? PluginFeedForDisplay("san-simera").Take(30).ToArray() : Array.Empty<NewsItem>(),
         _ => Array.Empty<NewsItem>()
     };
 
@@ -743,6 +750,9 @@ public sealed partial class TickerHost : IDisposable
         performanceTimer.Start();
         PushAll();
         if (Config.BarsEnabled) StartBars();
+        // Widgets without ticker bars can still request one existing RSS category
+        // only while their News widget is visible.
+        if (newsWidgetUsers > 0) NewsWidgetCategoryChanged();
         _ = FirstUpdateCheckAsync(startEpoch);
         updateTimer.Tick -= OnUpdateTimer;
         updateTimer.Tick += OnUpdateTimer;
@@ -967,10 +977,59 @@ public sealed partial class TickerHost : IDisposable
 
     private bool IsActiveCategory(string? id) => string.IsNullOrWhiteSpace(id) || string.Equals(id, Config.ActiveCategory, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>News categories other than the active one that some bar shows (a half of a split bar, or a whole bar).</summary>
-    private List<string> ExtraNewsCategories() => AllBarSlots().SelectMany(slots => slots.All())
-        .Where(slot => slot.Kind == SlotKind.News && !IsActiveCategory(slot.Category))
-        .Select(slot => slot.Category!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    /// <summary>The existing category RSS provider is shared by bars and
+    /// visible News widgets. No separate feed engine or background daemon.</summary>
+    private List<string> ExtraNewsCategories()
+    {
+        var categories = AllBarSlots().SelectMany(slots => slots.All())
+            .Where(slot => slot.Kind == SlotKind.News && !IsActiveCategory(slot.Category))
+            .Select(slot => slot.Category!).ToList();
+        var widgetCategory = WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId;
+        if (newsWidgetUsers > 0 && widgetCategory.Length > 0 &&
+            Config.FindCategory(widgetCategory) is not null && !IsActiveCategory(widgetCategory))
+            categories.Add(widgetCategory);
+        return categories.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private IReadOnlyList<NewsItem> NewsWidgetSnapshot()
+    {
+        var profile = WidgetStudio.Resolve(Config.WidgetProfiles, "news");
+        var category = profile.NewsCategoryId;
+        // Use the same cached category and existing P2 TopicMatcher; filter before the display limit.
+        if (category.Length == 0 || IsActiveCategory(category) || Config.FindCategory(category) is null)
+            return WidgetStudio.FilterNews(allItems, Config.TopicWatches, profile);
+        return WidgetStudio.FilterNews(CategoryNewsForDisplay(category), Config.TopicWatches, profile);
+    }
+
+    /// <summary>Called only on UI thread when the already-registered News
+    /// widget becomes visible or hidden. Refresh uses the existing provider.</summary>
+    public void SetNewsWidgetVisible(bool visible)
+    {
+        if (disposed) return;
+        newsWidgetUsers = visible ? Math.Min(64, newsWidgetUsers + 1)
+            : Math.Max(0, newsWidgetUsers - 1);
+        if (visible && newsWidgetUsers == 1) NewsWidgetCategoryChanged();
+    }
+
+    public void NewsWidgetCategoryChanged()
+    {
+        if (disposed || !started || newsWidgetUsers == 0) return;
+        var category = WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId;
+        if (category.Length == 0 || Config.FindCategory(category) is null ||
+            IsActiveCategory(category)) return;
+        if (refreshingExtra) return; // do not count a discarded overlapping attempt
+        // The visible widget reuses its existing 30s paint timer, but its RSS
+        // network refresh is throttled to at least two minutes. Hidden widgets
+        // cannot start network refreshes; no second always-running scheduler.
+        var now = DateTimeOffset.UtcNow;
+        var minGap = TimeSpan.FromSeconds(Math.Max(120, Config.RefreshIntervalSeconds));
+        if (newsWidgetFetchAttempt.TryGetValue(category, out var attempted) &&
+            now - attempted < minGap) return;
+        if (extraNewsAt.TryGetValue(category, out var lastFetched) &&
+            now - lastFetched.ToUniversalTime() < minGap) return;
+        newsWidgetFetchAttempt[category] = now;
+        _ = RefreshExtraNewsAsync();
+    }
 
     // ---- no internet / a provider is down: the last stored data plus a message ----------------
 
@@ -1120,6 +1179,16 @@ public sealed partial class TickerHost : IDisposable
 
     private bool HasLive => Config.LiveFeeds.Any(f => f.Enabled && Breaking.ToPlayableUrl(f.Url) is not null);
 
+    /// <summary>Current in-memory breaking headline used for offline selection of
+    /// user-supplied live feeds in the P1 Settings preview. Never starts playback.</summary>
+    public string BreakingVideoContext => breakingVideoContext ?? "";
+
+    private IReadOnlyList<BreakingAssessment> breakingEvidence = Array.Empty<BreakingAssessment>();
+
+    /// <summary>Latest local ranking evidence for the P1 read-only inspector.
+    /// This is NOT a fact-check or an assertion of story authenticity.</summary>
+    public IReadOnlyList<BreakingAssessment> BreakingEvidence => breakingEvidence;
+
     /// <summary>The settings button "forget my choices": the muted sources / topics and the "not breaking" answers are cleared.</summary>
     public void ForgetBreakingFeedback()
     {
@@ -1136,7 +1205,13 @@ public sealed partial class TickerHost : IDisposable
         // Several signals, not one word: confirmation by other publishers, speed, freshness, source reliability, disaster data, negative filters (see BreakingEngine).
         // All headlines take part (the read ones too), so that a story keeps its confirmations; only unread ones are announced.
         var candidates = items.Where(i => !NewsKeywordFilter.IsMuted(i, Config.MutedNewsKeywords)).ToList();
-        var urgent = engine.Urgent(candidates, hazardEvents, DateTimeOffset.Now)
+        var assessments = engine.Assess(candidates, hazardEvents, DateTimeOffset.Now)
+            .OrderByDescending(a => a.Score).ToList();
+        breakingEvidence = assessments
+            .Where(a => !string.IsNullOrWhiteSpace(a.Item.Url))
+            .DistinctBy(a => a.Item.Url, StringComparer.OrdinalIgnoreCase)
+            .Take(30).ToArray();
+        var urgent = assessments.Where(a => a.IsBreaking)
             .Where(a => !readStore.IsRead(a.Item.Url))
             .Select(a => a.Item with { Breaking = true, Why = BreakingWhy.Detailed(a, BreakingEngine.ParseSensitivity(Config.BreakingSensitivity)) }).ToList();
         if (urgent.Count == 0) return;
@@ -1171,6 +1246,9 @@ public sealed partial class TickerHost : IDisposable
             var text = alert.Metric == "changePercent"
                 ? $"{label}: {(quote.ChangePercent ?? 0m):+0.##;-0.##;0}% ({(alert.Above ? "≥" : "≤")}{alert.Threshold:0.##}%)"
                 : Loc.T(alert.Above ? "alert.above" : "alert.below", label, alert.Threshold.ToString("0.00##", culture), quote.Price.ToString("0.00##", culture));
+            if (alert.Metric == "changePercent" && quote.ChangeFromOpen)
+                text += Loc.IsGreek ? " · από άνοιγμα" : " · from open";
+            text += $" · {quote.AsOf.ToLocalTime():dd/MM HH:mm}" + (quote.Delayed ? (Loc.IsGreek ? " · καθυστέρηση" : " · delayed") : "");
             breakingItems.Add(new NewsItem(text, "", Loc.T("pk.price.alert"), DateTimeOffset.Now,
                 Summary: label, Kind: NewsItemKind.News, Trend: alert.Above ? 1 : -1, Breaking: true));
         }

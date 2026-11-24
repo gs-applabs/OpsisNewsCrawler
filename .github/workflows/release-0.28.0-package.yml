@@ -1,9 +1,9 @@
 name: Package and verify Opsis News Crawler 0.28.0
 on:
   push:
-    branches: ['release/p2-v0.28.0-*', 'release/p3-v0.28.0-*', 'feat/net11-opsis-280-ui6-compat']
+    branches: ['release/p2-v0.28.0-*', 'release/p3-v0.28.0-*', 'feat/net11-opsis-280-ui6-compat', 'feat/p0-opsis-28-coordinated-host-20261124', 'feat/p1-news-widget-studio-20261124']
   pull_request:
-    branches: ['feat/p1-opsis-integration-live-video-20261123', 'release/p2-v0.28.0-20261123', 'release/p3-v0.28.0-contract1-20261123', 'feat/net11-opsis-280-ui6-compat']
+    branches: ['feat/p1-opsis-integration-live-video-20261123', 'release/p2-v0.28.0-20261123', 'release/p3-v0.28.0-contract1-20261123', 'feat/net11-opsis-280-ui6-compat', 'feat/p0-opsis-28-coordinated-host-20261124']
   workflow_dispatch:
 
 permissions:

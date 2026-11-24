@@ -32,6 +32,14 @@ public sealed partial class TickerHost
                         DataCache.Save("news-" + category, extraNews[category]);
                     }
                     else extraNewsFailed[category] = failedFeeds;
+                    if (newsWidgetUsers > 0 && string.Equals(
+                        WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId,
+                        category, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // A UI-only invalidation must not create a synthetic
+                        // news item on the cross-app SuiteEventHub.
+                        NewsWidgetUpdated?.Invoke();
+                    }
                     PushAll();
                 }
                 if (Window.IsHandleCreated && Window.InvokeRequired) Window.Invoke(new Action(Apply)); else Apply();

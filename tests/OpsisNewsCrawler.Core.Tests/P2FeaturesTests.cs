@@ -52,6 +52,13 @@ public sealed class P2FeaturesTests
         Assert.Equal(19,p.Dividends);
         Assert.Equal(8,p.Fees);
     }
+    [Fact] public void LedgerKeepsCurrenciesSeparateAndExposesAverageCost()
+    {
+        var buy=new PortfolioTransaction("ABC",Day,PortfolioAction.Buy,10,100,5,"eur");
+        var p=PortfolioLedger.Calculate(new[]{buy});
+        Assert.Equal(100.5m,p.AverageUnitCost);
+        Assert.Throws<InvalidOperationException>(()=>PortfolioLedger.Calculate(new[]{buy,buy with {Currency="USD"}}));
+    }
     [Fact] public void OversellingThrows() =>
         Assert.Throws<InvalidOperationException>(()=>PortfolioLedger.Calculate(new[]{
             new PortfolioTransaction("X",Day,PortfolioAction.Sell,1,1)}));
