@@ -42,6 +42,8 @@ public sealed partial class TickerHost : IDisposable
     private bool disposed;
     private bool started;
     private int startEpoch; // discard delayed checks from a stopped session
+    private CancellationTokenSource? sessionCts;
+    private CancellationToken SessionToken => sessionCts?.Token ?? lifetimeToken;
     private CrawlerEventDispatch? suiteDispatcher;
 
     private void PublishSuiteEvent(SuiteEvent message) =>
@@ -127,15 +129,17 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>About 30 seconds after the start and then every 24 hours (GearWin's logic); while offline it asks again after a minute, up to four times.</summary>
     private async Task AutoCheckForUpdatesAsync()
     {
-        if (!Config.CheckForUpdates || autoChecking || disposed) return;
+        if (!started || !Config.CheckForUpdates || autoChecking || disposed) return;
+        var checkEpoch = startEpoch;
         autoChecking = true;
         try
         {
-            for (var attempt = 0; attempt < 4 && !disposed; attempt++)
+            for (var attempt = 0; attempt < 4 && started && checkEpoch == startEpoch && !disposed; attempt++)
             {
                 try
                 {
                     var found = await CheckForUpdatesAsync();
+                    if (!started || checkEpoch != startEpoch) return;
                     // Inside Opsis the balloon is Opsis' job (the card in the settings still shows the update); never while a full-screen app is in front.
                     if (found is not null && !HostedByOpsis && UpdateAnnouncePolicy.ShouldAnnounce(Config.LastNotifiedUpdate, found.Tag))
                     {
@@ -510,7 +514,7 @@ public sealed partial class TickerHost : IDisposable
         EvaluatePerformance();                      // the setting "Performance" may have changed
         ApplyRefreshIntervals();
         PushAll();
-        if (BarsOn)
+        if (started && BarsOn)
         {
             _ = RefreshQuotesAsync();
             _ = RefreshWeatherAsync();
@@ -731,6 +735,7 @@ public sealed partial class TickerHost : IDisposable
         if (HostedByOpsis && HostSafeMode) return;
         started = true;
         unchecked { startEpoch++; }
+        sessionCts = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
         suiteDispatcher ??= new CrawlerEventDispatch(SuiteEventHub.Publish);
         EvaluatePerformance();
         performanceTimer.Tick -= OnPerformanceTimer;
@@ -839,6 +844,10 @@ public sealed partial class TickerHost : IDisposable
         if (disposed || !started) return;
         started = false;
         unchecked { startEpoch++; }
+        var oldSession = sessionCts;
+        sessionCts = null;
+        oldSession?.Cancel();
+        oldSession?.Dispose();
         suiteDispatcher?.Dispose();
         suiteDispatcher = null;
         // Plugin unload must stop *all* periodic work, not just the visible news bars.
@@ -1354,6 +1363,9 @@ public sealed partial class TickerHost : IDisposable
     {
         if (disposed) return;
         disposed = true;
+        sessionCts?.Cancel();
+        sessionCts?.Dispose();
+        sessionCts = null;
         suiteDispatcher?.Dispose();
         suiteDispatcher = null;
         Loc.Changed -= OnLanguageChanged;

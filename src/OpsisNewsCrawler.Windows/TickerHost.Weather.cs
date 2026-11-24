@@ -98,23 +98,23 @@ public sealed partial class TickerHost
     // to an external process or writes an extra cache file for successful results.
     public Func<double, double, Task<string>>? HostWeatherProvider { get; set; }
 
-    private async Task<IReadOnlyList<WeatherReading>> TryHostWeatherAsync(IReadOnlyList<string> ids)
+    private async Task<IReadOnlyList<WeatherReading>> TryHostWeatherAsync(IReadOnlyList<string> ids, CancellationToken ct)
     {
         var provider = HostWeatherProvider;
         if (!HostedByOpsis || provider is null) return Array.Empty<WeatherReading>();
         var readings = new List<WeatherReading>(ids.Count);
         foreach (var cityId in ids.Take(12))
         {
-            lifetimeToken.ThrowIfCancellationRequested();
+            ct.ThrowIfCancellationRequested();
             var city = GreekCities.Find(cityId);
             if (city is null) continue;
             try
             {
-                var json = await provider(city.Lat, city.Lon).WaitAsync(TimeSpan.FromSeconds(12), lifetimeToken);
+                var json = await provider(city.Lat, city.Lon).WaitAsync(TimeSpan.FromSeconds(12), ct);
                 var parsed = HostWeatherPayload.Parse(city.Id, json, DateTimeOffset.UtcNow);
                 if (parsed is not null) readings.Add(parsed);
             }
-            catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested) { throw; }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex) { Log.Write("Opsis shared weather unavailable: " + ex.GetType().Name); }
         }
         return readings;
@@ -144,19 +144,21 @@ public sealed partial class TickerHost
 
     private async Task RefreshWeatherAsync()
     {
-        if (disposed || !NeedsWeather || refreshingWeather) return;
+        if (disposed || !started || !BarsOn || !NeedsWeather || refreshingWeather) return;
+        var epoch = startEpoch;
+        var token = SessionToken;
         refreshingWeather = true;
         try
         {
             var ids = Config.WeatherCities.Distinct().ToList();
             if (!NeedsWeatherForBars) ids = ids.Take(1).ToList();   // only the icon wants it
-            var shared = await TryHostWeatherAsync(ids);
+            var shared = await TryHostWeatherAsync(ids, token);
             var fromHost = shared.Count > 0;
-            var readings = fromHost ? shared : await weather.FetchAsync(ids, lifetimeToken);
+            var readings = fromHost ? shared : await weather.FetchAsync(ids, token);
             var failed = !fromHost && weather.LastFailed;
             void Apply()
             {
-                if (disposed) return;
+                if (disposed || !started || epoch != startEpoch || !BarsOn) return;
                 hasWeather = true;
                 weatherFailed = failed;
                 if (readings.Count > 0)
@@ -177,7 +179,7 @@ public sealed partial class TickerHost
             }
             if (!Window.IsHandleCreated) return;
             if (Window.InvokeRequired) Window.BeginInvoke(new Action(Apply)); else Apply();
-            if (readings.Count == 0 || failed) _ = RetryWeatherLater();
+            if (started && epoch == startEpoch && (readings.Count == 0 || failed)) _ = RetryWeatherLater();
         }
         catch (OperationCanceledException)
         {
@@ -185,9 +187,12 @@ public sealed partial class TickerHost
         catch (Exception ex)
         {
             Log.Write($"weather failed: {ex.GetType().Name}: {ex.Message}");
-            hasWeather = true;
-            weatherFailed = true;
-            _ = RetryWeatherLater();
+            if (started && epoch == startEpoch)
+            {
+                hasWeather = true;
+                weatherFailed = true;
+                _ = RetryWeatherLater();
+            }
         }
         finally
         {
@@ -197,10 +202,12 @@ public sealed partial class TickerHost
 
     private async Task RetryWeatherLater()
     {
+        var epoch = startEpoch;
+        var token = SessionToken;
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(60), lifetimeToken);
-            if (!disposed && BarsOn) _ = RefreshWeatherAsync();
+            await Task.Delay(TimeSpan.FromSeconds(60), token);
+            if (!disposed && started && epoch == startEpoch && BarsOn) _ = RefreshWeatherAsync();
         }
         catch (OperationCanceledException)
         {
