@@ -139,7 +139,7 @@ public sealed class CrawlerWidgetPanel : UserControl
         breakingBanner.BackColor = accent;
         breakingBanner.ForeColor = GalleryColorContrast.Foreground(accent);
         // Theme changes do not rebuild the data or create redundant network traffic.
-        foreach (var card in gallery.Controls.OfType<Button>())
+        foreach (Control card in gallery.Controls)
             StyleGalleryCard(card);
         Invalidate();
     }
@@ -246,23 +246,42 @@ public sealed class CrawlerWidgetPanel : UserControl
             for (var i = 0; i < cards.Length; i++)
             {
                 var snapshot = visible[i];
-                var card = new Button
-                {
-                    AutoSize = false, Height = GalleryColorContrast.CardHeightForDpi(gallery.DeviceDpi),
-                    Width = GalleryCardWidth(),
-                    Margin = new Padding(2, 2, 2, 7),
-                    Padding = new Padding(12, 8, 10, 8),
-                    FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
-                    UseVisualStyleBackColor = false, UseMnemonic = false,
-                    Text = cards[i], TabStop = true,
-                    AccessibleRole = AccessibleRole.PushButton,
-                    AccessibleName = SafeAccessibilityText(snapshot.Title),
-                    AccessibleDescription = SafeAccessibilityText(snapshot.Summary ?? "")
-                };
-                StyleGalleryCard(card);
+                var size = GalleryColorContrast.CardHeightForDpi(gallery.DeviceDpi);
+                // Quotes and other items without a permitted destination are
+                // text cards, not disabled or deceptive clickable buttons.
                 var url = snapshot.Url;
-                card.Enabled = NetGuard.IsPublicHttpUrl(url);
-                card.Click += (_, _) => OpenUrl(url);
+                var navigable = NetGuard.IsPublicHttpUrl(url);
+                Control card;
+                if (navigable)
+                {
+                    var button = new Button
+                    {
+                        AutoSize = false, Height = size, Width = GalleryCardWidth(),
+                        Margin = new Padding(2, 2, 2, 7), Padding = new Padding(12, 8, 10, 8),
+                        FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
+                        UseVisualStyleBackColor = false, UseMnemonic = false,
+                        Text = cards[i], TabStop = true,
+                        AccessibleRole = AccessibleRole.PushButton,
+                        AccessibleName = SafeAccessibilityText(snapshot.Title),
+                        AccessibleDescription = SafeAccessibilityText(snapshot.Summary ?? "")
+                    };
+                    button.Click += (_, _) => OpenUrl(url);
+                    card = button;
+                }
+                else
+                {
+                    card = new Label
+                    {
+                        AutoSize = false, Height = size, Width = GalleryCardWidth(),
+                        Margin = new Padding(2, 2, 2, 7), Padding = new Padding(12, 8, 10, 8),
+                        TextAlign = ContentAlignment.MiddleLeft,
+                        Text = cards[i], TabStop = false, AutoEllipsis = true,
+                        AccessibleRole = AccessibleRole.StaticText,
+                        AccessibleName = SafeAccessibilityText(snapshot.Title),
+                        AccessibleDescription = SafeAccessibilityText(snapshot.Summary ?? "")
+                    };
+                }
+                StyleGalleryCard(card);
                 gallery.Controls.Add(card);
             }
         }
@@ -277,7 +296,7 @@ public sealed class CrawlerWidgetPanel : UserControl
         if (IsDisposed) return;
         var width = GalleryCardWidth();
         var height = GalleryColorContrast.CardHeightForDpi(gallery.DeviceDpi);
-        foreach (var card in gallery.Controls.OfType<Button>())
+        foreach (Control card in gallery.Controls)
         {
             if (card.Width != width) card.Width = width;
             if (card.Height != height) card.Height = height;
@@ -291,14 +310,21 @@ public sealed class CrawlerWidgetPanel : UserControl
             ? Theme.HostAccent : Theme.Accent;
     }
 
-    private void StyleGalleryCard(Button card)
+    private void StyleGalleryCard(Control card)
     {
         card.BackColor = Theme.Surface;
         card.ForeColor = Theme.Text;
-        card.FlatAppearance.BorderSize = 1;
-        card.FlatAppearance.BorderColor = kind == "breaking" ? WidgetAccent() : Theme.Border;
-        card.FlatAppearance.MouseOverBackColor = Theme.Background;
-        card.FlatAppearance.MouseDownBackColor = Theme.Background;
+        if (card is Button button)
+        {
+            button.FlatAppearance.BorderSize = 1;
+            button.FlatAppearance.BorderColor = kind == "breaking" ? WidgetAccent() : Theme.Border;
+            button.FlatAppearance.MouseOverBackColor = Theme.Background;
+            button.FlatAppearance.MouseDownBackColor = Theme.Background;
+        }
+        else if (card is Label label)
+        {
+            label.BorderStyle = BorderStyle.FixedSingle;
+        }
     }
 
     private void ClearGallery()
