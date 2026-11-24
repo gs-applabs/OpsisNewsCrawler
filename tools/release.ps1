@@ -42,6 +42,13 @@ foreach ($name in "OpsisNewsCrawler.OpsisPlugin.dll", "OpsisNewsCrawler.Windows.
 if (Get-ChildItem $pluginDst -Filter "*MotionDesk*" -ErrorAction SilentlyContinue) { throw "old MotionDesk-named files in the plugin payload - delete them" }
 "payload version: $appVersion"
 
+# P0: the plugin must ship the single host-canonical ABI DLL, not a separately compiled same-version assembly.
+$canonicalContract = "$r\libs\OpsisNewsCrawler.Plugin.Abstractions.dll"
+$shippedContract = "$pluginDst\OpsisNewsCrawler.Plugin.Abstractions.dll"
+if (-not (Test-Path $canonicalContract)) { throw 'Missing canonical Opsis 2.8 ABI DLL' }
+if ((Get-FileHash $canonicalContract -Algorithm SHA256).Hash -ne (Get-FileHash $shippedContract -Algorithm SHA256).Hash) {
+  throw 'Plugin payload has a different ABI contract DLL from the pinned Opsis 2.8 source. Do not package.'
+}
 # Guard: the plugin contract keeps the assembly version of the copy that Opsis has loaded (otherwise the plugin cannot bind to it).
 $contract = [Reflection.AssemblyName]::GetAssemblyName("$pluginDst\OpsisNewsCrawler.Plugin.Abstractions.dll").Version
 # The Opsis project folder is a sibling of this one (currently still named MotionDeskStudio on disk; "Opsis" is tried first).

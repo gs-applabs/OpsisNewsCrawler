@@ -80,15 +80,16 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
-      - name: Build the exact P3 host ABI for integrated installer gate
+      - name: Check canonical Opsis 2.8 shared ABI before integrated installer gate
         if: matrix.scenario == 'integrated'
         shell: pwsh
         run: |
-          dotnet build src/OpsisNewsCrawler.Plugin.Abstractions/OpsisNewsCrawler.Plugin.Abstractions.csproj -c Release --nologo
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot stage P3 contract for integrated install' }
+          $file = 'libs/OpsisNewsCrawler.Plugin.Abstractions.dll'
+          if (!(Test-Path $file)) { throw 'Missing canonical Opsis shared contract DLL' }
+          if ([Reflection.AssemblyName]::GetAssemblyName((Resolve-Path $file)).Version.ToString() -ne '1.0.0.0') { throw 'Wrong ABI version' }
       - name: Test real setup install/update/uninstall in Windows VM
         shell: pwsh
-        run: ./tools/e2e-installer.ps1 -Scenario '${{ matrix.scenario }}' -NewSetup "$PWD/package/OpsisNewsCrawler-Setup.exe" -Repository '${{ github.repository }}' -Out "$env:RUNNER_TEMP/e2e" -ContractFile "$PWD/src/OpsisNewsCrawler.Plugin.Abstractions/bin/Release/net11.0-windows/OpsisNewsCrawler.Plugin.Abstractions.dll"
+        run: ./tools/e2e-installer.ps1 -Scenario '${{ matrix.scenario }}' -NewSetup "$PWD/package/OpsisNewsCrawler-Setup.exe" -Repository '${{ github.repository }}' -Out "$env:RUNNER_TEMP/e2e" -ContractFile "$PWD/libs/OpsisNewsCrawler.Plugin.Abstractions.dll"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

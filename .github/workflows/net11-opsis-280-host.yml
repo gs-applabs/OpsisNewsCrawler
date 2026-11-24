@@ -45,16 +45,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Plugin tests failed' }
           dotnet publish src/OpsisNewsCrawler.OpsisPlugin/OpsisNewsCrawler.OpsisPlugin.csproj -c Release -o ../published-crawler -m:1 --nologo
           if ($LASTEXITCODE -ne 0) { throw 'Plugin publish failed' }
-      - name: Stage ABI 1.0.0.0 in disposable Opsis checkout
+      - name: Verify canonical ABI 1.0.0.0 byte parity with real Opsis 2.8 host
         shell: pwsh
         run: |
           $contract = (Resolve-Path published-crawler/OpsisNewsCrawler.Plugin.Abstractions.dll).Path
           $v = [Reflection.AssemblyName]::GetAssemblyName($contract).Version.ToString()
           if ($v -ne '1.0.0.0') { throw "Wrong contract ABI: $v" }
-          Copy-Item -LiteralPath $contract -Destination opsis/lib/OpsisNewsCrawler.Plugin.Abstractions.dll -Force
-          if ((Get-FileHash $contract -Algorithm SHA256).Hash -ne (Get-FileHash opsis/lib/OpsisNewsCrawler.Plugin.Abstractions.dll -Algorithm SHA256).Hash) {
-            throw 'Contract DLL copies differ'
-          }
+          $expected = (Get-FileHash opsis/lib/OpsisNewsCrawler.Plugin.Abstractions.dll -Algorithm SHA256).Hash
+          $actual = (Get-FileHash $contract -Algorithm SHA256).Hash
+          if ($expected -ne $actual) { throw 'Crawler plugin must ship the exact Opsis 2.8 host contract DLL; staging a different DLL is forbidden.' }
       - name: Build actual Opsis 2.8.0.2510 host
         shell: pwsh
         working-directory: opsis
