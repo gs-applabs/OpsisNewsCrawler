@@ -85,7 +85,7 @@ public sealed class RssNewsProvider : IDisposable
 
     public RssNewsProvider(HttpMessageHandler? handler = null)
     {
-        http = handler is null ? new HttpClient() : new HttpClient(handler);
+        http = new HttpClient(handler ?? new RedirectGuardHandler());
         http.Timeout = TimeSpan.FromSeconds(15);
         http.MaxResponseContentBufferSize = MaxFeedBytes;
         http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; OpsisNewsCrawler/0.28.0)");
