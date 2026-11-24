@@ -773,6 +773,15 @@ begin
     Result := 'The previous Crawler plugin could not be backed up safely. Installation was stopped.';
     Exit;
   end;
+  // A crash during copying must never turn a partial folder into a
+  // restore candidate. The recovery tool checks this completion marker.
+  if not SaveStringToFile(AddBackslash(P0BackupPending) + '.backup-complete',
+    'Opsis News Crawler P0 complete rollback snapshot', False) then
+  begin
+    DelTree(P0BackupPending, True, True, True);
+    Result := 'Could not verify the rollback snapshot; installation was stopped.';
+    Exit;
+  end;
   P0BackupPrepared := True;
   Log('P0: backed up the existing Crawler plugin before replacing any files');
 end;
