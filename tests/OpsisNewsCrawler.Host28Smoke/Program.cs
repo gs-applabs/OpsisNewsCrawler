@@ -66,6 +66,11 @@ plugin.SetLanguage("el");
 if (plugin is not IPluginHostSettingsAware hostAware)
     throw new InvalidDataException("Crawler must accept optional Opsis 2.8 host settings.");
 hostAware.SetHostSettings(new PluginHostSettings("el", true, "Low", 125, false));
+// Execute the *actual* Opsis 2.8 PluginHost P0 bridge (no mock).
+var p0 = hostType.GetMethod("PushCrawlerP0Environment",
+    BindingFlags.Static | BindingFlags.NonPublic)
+    ?? throw new MissingMethodException("Opsis 2.8 host P0 shared-weather/shell bridge was not found.");
+p0.Invoke(null, [plugin]);
 if (!ReferenceEquals(owner, Opsis.UI.OpsisTheme.Current))
     throw new InvalidDataException("Crawler replaced the Opsis-owned shared UI6 theme.");
 var controller = plugins[0].GetField("_controller", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(plugin)
@@ -74,6 +79,17 @@ var internalHostField = controller.GetType().GetField("_host", BindingFlags.Inst
     ?? throw new MissingFieldException("Crawler internal host field not found");
 if (internalHostField.GetValue(controller) is not null)
     throw new InvalidDataException("Crawler created a hidden ticker before Opsis invoked Start.");
+var hostState = controller.GetType().GetProperty("Context")?.GetValue(controller)
+    ?? throw new MissingMemberException("Crawler P0 host context missing.");
+var snapshot = hostState.GetType().GetProperty("Snapshot")?.GetValue(hostState)
+    ?? throw new MissingMemberException("Crawler P0 snapshot missing.");
+if (snapshot.GetType().GetProperty("SafeMode")?.GetValue(snapshot) is not bool)
+    throw new InvalidDataException("Opsis P0 bridge did not deliver Safe Mode.");
+if (controller.GetType().GetField("weatherProvider", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(controller)
+    is not Func<double, double, Task<string>>)
+    throw new InvalidDataException("Opsis cached WeatherHub callback was not provided.");
+if (internalHostField.GetValue(controller) is not null)
+    throw new InvalidDataException("Opsis P0 bridge unexpectedly created a Crawler ticker.");
 plugin.GetTrayMenuItems();
 if (internalHostField.GetValue(controller) is not null)
     throw new InvalidDataException("Fetching Opsis tray entries unexpectedly creates a ticker.");
