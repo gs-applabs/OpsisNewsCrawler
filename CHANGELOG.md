@@ -12,6 +12,15 @@ Code is committed in Crawler draft PR #8 and companion Opsis 2.8 host draft PR #
 - CI release gates: net11 build, pinned binary contracts, actual Opsis plugin loader smoke for Crawler AND Chronikologio, installer E2E and mismatch/refusal tests, and repository hygiene.
 - Manual release gates: graphics card, multimonitor and 100/150/200% DPI, UAC/SmartScreen, and multi-day CPU/GDI/SSD soak. Plugin-local rollback does not imply atomic multi-app rollback.
 
+### P1 / News Widget Studio + Breaking transparency (24/11/2026, draft)
+
+- The **same five** Opsis widget keys are reused (news, markets, weather, breaking, on-this-day). No second widget host, tray, wallpaper renderer or new ABI entry point.
+- New `P1 · Widget Studio` page with per-widget layouts (`headlines` or `context`), maximum items (3–30), and optional source/time labels. Existing display is the default. Profiles are validated during config load/import, persisted with the current config (not a new file), and can be individually reset with the normal Opsis.UI flat card affordance.
+- Existing `CrawlerWidgetPanel` adopts the stored profile and accessible list names/selected descriptions, with single-scheduled refresh from SuiteEventHub instead of a backlog of repeated UI-thread callbacks. It uses the existing Opsis/UI6 theme tokens and keeps invisible widget timers stopped.
+- Breaking settings include a read-only **Evidence Inspector**, ranking the latest stories using the existing `BreakingEngine.Assess` results. It displays source-group counts and full positive/negative reasons, explicitly disclaims that score 0–100 is not a truth probability or fact-check. Assessment work is reused (no second scoring pass or network access).
+- Added `P1WidgetStudioTests` for migration/defaults, bad config clamping, title formatting, context metadata and multiline injection. Existing widget ABI tests still require exactly five widgets.
+- Companion Opsis P0 PR #11 and P0 Crawler PR #8 remain draft; P1 is a separate draft branch based on P0. All Windows CI and real host load checks must pass before either is merged.
+
 ## 0.28.0 — .NET 11 / Opsis 2.8 P0 development (2026-11-24, candidate)
 
 > Product version remains **0.28.0**. These entries document work in draft PRs, not a stable published release. See [PR #7](https://github.com/gs-applabs/OpsisNewsCrawler/pull/7) (.NET 11 migration) and [PR #8](https://github.com/gs-applabs/OpsisNewsCrawler/pull/8) (P0 host integration).
