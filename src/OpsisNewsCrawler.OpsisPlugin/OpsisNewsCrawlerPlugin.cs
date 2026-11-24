@@ -9,7 +9,7 @@ namespace OpsisNewsCrawler.OpsisPlugin;
 /// Hosted, the crawler never creates its own tray icon: its commands are offered through <see cref="GetTrayMenuItems"/>
 /// and its settings are a tab of the host.
 /// </summary>
-public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginProfileAware, IPluginWidgetProvider
+public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginProfileAware, IPluginWidgetProvider, IPluginHostSettingsAware
 {
     public const string NavigationKey = "OpsisNewsCrawler";
 
@@ -71,6 +71,20 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
     }
 
     public void SetHardwareProfile(string tier) => _controller.SetHostTier(tier);
+
+    /// <summary>Optional Opsis 2.8 host-owned settings. No UI creation,
+    /// changes to process-global Opsis.UI or file writes.</summary>
+    public void SetHostSettings(PluginHostSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        _controller.Context.AcceptTheme(settings.Dark);
+        _controller.Context.AcceptLanguage(settings.Language);
+        _controller.Context.AcceptTier(settings.HardwareTier);
+        _controller.Context.AcceptUiScale(settings.UiScalePercent);
+        _controller.LanguageFromHost = true;
+        Loc.SetLanguage(_controller.Context.Snapshot.Language);
+        _controller.SetHostTier(settings.HardwareTier);
+    }
 
     public void SetLanguage(string code)
     {

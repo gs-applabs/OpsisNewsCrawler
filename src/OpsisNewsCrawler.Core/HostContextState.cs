@@ -22,6 +22,12 @@ public sealed class HostContextState
 
     public void AcceptTheme(bool dark) => Change(s => s with { IsDark = dark });
 
+    public void AcceptUiScale(int percent)
+    {
+        if (percent is < 50 or > 300) return;
+        Change(s => s with { UiScalePercent = percent });
+    }
+
     public void AcceptLanguage(string? code)
     {
         if (string.IsNullOrWhiteSpace(code) || code.Length > 20 ||

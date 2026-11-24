@@ -63,6 +63,9 @@ plugin.SetTheme(true, unchecked((int)0xff111111), unchecked((int)0xff222222),
     unchecked((int)0xff333333), unchecked((int)0xffffffff),
     unchecked((int)0xffaaaaaa), unchecked((int)0xff00bcd4), 0.94);
 plugin.SetLanguage("el");
+if (plugin is not IPluginHostSettingsAware hostAware)
+    throw new InvalidDataException("Crawler must accept optional Opsis 2.8 host settings.");
+hostAware.SetHostSettings(new PluginHostSettings("el", true, "Low", 125, false));
 if (!ReferenceEquals(owner, Opsis.UI.OpsisTheme.Current))
     throw new InvalidDataException("Crawler replaced the Opsis-owned shared UI6 theme.");
 var controller = plugins[0].GetField("_controller", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(plugin)
