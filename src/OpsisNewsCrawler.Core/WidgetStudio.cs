@@ -29,7 +29,7 @@ public static class WidgetStudio
 
     public static WidgetStudioProfile Clean(WidgetStudioProfile? raw) => new()
     {
-        Layout = raw?.Layout is "context" or "gallery" or "market-cards" ? raw.Layout : "headlines",
+        Layout = raw?.Layout is "context" or "gallery" or "market-cards" or "weather-cards" ? raw.Layout : "headlines",
         MaxItems = Math.Clamp(raw?.MaxItems ?? 12, 3, 30),
         FontScalePercent = Math.Clamp(raw?.FontScalePercent ?? 100, 80, 160),
         ShowSource = raw?.ShowSource ?? false,
@@ -54,6 +54,7 @@ public static class WidgetStudio
                 if (key != "news") clean.NewsCategoryId = "";
                 if (!CanUseGallery(key) && clean.Layout == "gallery") clean.Layout = "headlines";
                 if (key != "markets" && clean.Layout == "market-cards") clean.Layout = "headlines";
+                if (key != "weather" && clean.Layout == "weather-cards") clean.Layout = "headlines";
                 result[key] = clean;
             }
         }
@@ -74,6 +75,28 @@ public static class WidgetStudio
 
     public static bool CanUseMarketCards(string kind) =>
         string.Equals(kind, "markets", StringComparison.OrdinalIgnoreCase);
+
+    public static bool CanUseWeatherCards(string kind) =>
+        string.Equals(kind, "weather", StringComparison.OrdinalIgnoreCase);
+
+    // Existing WeatherForDisplay rows only; no extra network, location or forecast inference.
+    public static string WeatherCardText(string? title, string? summary, string? source,
+        DateTimeOffset reportedAt, WidgetStudioProfile? configured, bool greek)
+    {
+        var p = Clean(configured);
+        var heading = CleanText(title, 160);
+        var detail = CleanText(summary, 170);
+        var lines = new List<string> { heading };
+        if (detail.Length > 0 && !string.Equals(heading, detail, StringComparison.OrdinalIgnoreCase))
+            lines.Add(detail);
+        if (p.ShowSource && !string.IsNullOrWhiteSpace(source))
+            lines.Add(CleanText(source, 38));
+        if (p.ShowTime && reportedAt != DateTimeOffset.MinValue &&
+            reportedAt <= DateTimeOffset.UtcNow.AddMinutes(5))
+            lines.Add((greek ? "Χρόνος αναφοράς: " : "Reported time: ") +
+                reportedAt.ToLocalTime().ToString("dd/MM HH:mm"));
+        return string.Join(Environment.NewLine, lines);
+    }
 
     public static WidgetStudioProfile Resolve(
         IDictionary<string, WidgetStudioProfile>? configured, string kind)

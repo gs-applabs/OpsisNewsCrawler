@@ -83,12 +83,15 @@ public sealed partial class SettingsPanel
             var layout = new FlatComboBox { Width = 260 };
             var offersGallery = WidgetStudio.CanUseGallery(kind);
             var offersMarketCards = WidgetStudio.CanUseMarketCards(kind);
+            var offersWeatherCards = WidgetStudio.CanUseWeatherCards(kind);
             layout.SetItems(Loc.IsGreek
                 ? (offersGallery ? new[] { "Τίτλοι", "Με πληροφορίες", "Κάρτες / Newsroom Gallery" }
                     : offersMarketCards ? new[] { "Τίτλοι", "Με πληροφορίες", "Οικονομικές κάρτες" }
+                    : offersWeatherCards ? new[] { "Τίτλοι", "Με πληροφορίες", "Κάρτες καιρού" }
                     : new[] { "Τίτλοι", "Με πληροφορίες" })
                 : (offersGallery ? new[] { "Headlines", "With context", "Newsroom Gallery cards" }
                     : offersMarketCards ? new[] { "Headlines", "With context", "Market cards" }
+                    : offersWeatherCards ? new[] { "Headlines", "With context", "Weather cards" }
                     : new[] { "Headlines", "With context" }), 0);
             var count = new FlatNumber();
             count.Configure(3, 30, 1);
@@ -134,7 +137,7 @@ public sealed partial class SettingsPanel
         foreach (var (kind, controls) in widgetEditors)
         {
             var p = profiles[kind];
-            controls.Layout.SelectSilently(p.Layout switch { "context" => 1, "gallery" or "market-cards" => 2, _ => 0 });
+            controls.Layout.SelectSilently(p.Layout switch { "context" => 1, "gallery" or "market-cards" or "weather-cards" => 2, _ => 0 });
             controls.Count.SetValueSilently(p.MaxItems);
             if (widgetFontScale.TryGetValue(kind, out var fontScale))
                 fontScale.SetValueSilently(p.FontScalePercent);
@@ -157,6 +160,7 @@ public sealed partial class SettingsPanel
                 "context" => 1,
                 "gallery" when WidgetStudio.CanUseGallery(kind) => 2,
                 "market-cards" when WidgetStudio.CanUseMarketCards(kind) => 2,
+                "weather-cards" when WidgetStudio.CanUseWeatherCards(kind) => 2,
                 _ => 0
             });
             controls.Count.SetValueSilently(profile.MaxItems);
@@ -187,6 +191,7 @@ public sealed partial class SettingsPanel
                     1 => "context",
                     2 when WidgetStudio.CanUseGallery(kind) => "gallery",
                     2 when WidgetStudio.CanUseMarketCards(kind) => "market-cards",
+                    2 when WidgetStudio.CanUseWeatherCards(kind) => "weather-cards",
                     _ => "headlines"
                 },
                 MaxItems = controls.Count.Value,

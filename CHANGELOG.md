@@ -1,5 +1,11 @@
 # Changelog
 
+### P1 weather cards and widget lifetime refinement (2026-11-24)
+
+- Optional Weather cards in the existing Widget Studio; Weather & Hazards preset selects them. Reuses existing weather snapshot and gallery controls, without extra network calls, ABI changes or new widgets. Cards show bounded plain text, optional source and reported time; no inferred forecast.
+- Stop widget timer when its handle is destroyed, clear pending refresh flag and size list rows for the selected text font. Source-only implementation; Windows CI deferred, not release certification.
+
+
 ### P0 compatibility and failure-safety implementation (24/11/2026)
 
 Code is committed in Crawler draft PR #8 and companion Opsis 2.8 host draft PR #11. **This is not a validated or published installer.** Windows Crawler and host CI gates must pass before release; physical GPU/multi-monitor/DPI/UAC/long-soak verification has not occurred.

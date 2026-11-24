@@ -55,7 +55,7 @@ public static class WidgetStudioPresets
                 Set("history", "headlines", 4);
                 break;
             case "weather-hazards":
-                Set("weather", "context", 12, source: true, time: true);
+                Set("weather", "weather-cards", 12, source: true, time: true);
                 Set("breaking", "gallery", 8, source: true);
                 Set("news", "context", 8, source: true);
                 break;

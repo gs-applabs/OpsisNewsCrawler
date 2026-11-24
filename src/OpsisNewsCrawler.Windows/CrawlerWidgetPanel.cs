@@ -96,6 +96,8 @@ public sealed class CrawlerWidgetPanel : UserControl
             newsVisibilityRegistered = false;
             host.SetNewsWidgetVisible(false);
         }
+        timer.Stop();
+        Interlocked.Exchange(ref refreshQueued, 0);
         base.OnHandleDestroyed(e);
     }
 
@@ -176,7 +178,8 @@ public sealed class CrawlerWidgetPanel : UserControl
         var profile = WidgetStudio.Resolve(host.Config.WidgetProfiles, kind);
         ApplyFontScale(profile.FontScalePercent);
         var galleryMode = (profile.Layout == "gallery" && WidgetStudio.CanUseGallery(kind))
-            || (profile.Layout == "market-cards" && WidgetStudio.CanUseMarketCards(kind));
+            || (profile.Layout == "market-cards" && WidgetStudio.CanUseMarketCards(kind))
+            || (profile.Layout == "weather-cards" && WidgetStudio.CanUseWeatherCards(kind));
         items.Visible = !galleryMode;
         gallery.Visible = galleryMode;
         visible.Clear();
@@ -188,7 +191,8 @@ public sealed class CrawlerWidgetPanel : UserControl
             foreach (var line in visible)
                 items.Items.Add(WidgetStudio.FormatLine(line.Title, line.Source, line.PublishedAt,
                     profile, allowTime: kind != "history"));
-            items.ItemHeight = profile.Layout == "context" ? 26 : 23;
+            items.ItemHeight = Math.Max(profile.Layout == "context" ? 26 : 23,
+                items.Font.Height + 6);
             heading.Text = WidgetStudio.Title(kind, Loc.IsGreek);
             breakingBanner.Visible = galleryMode && kind == "breaking" && visible.Count > 0;
             if (breakingBanner.Visible)
@@ -231,6 +235,8 @@ public sealed class CrawlerWidgetPanel : UserControl
         var cards = visible.Select(x => kind == "markets"
             ? WidgetStudio.MarketCardText(x.Summary ?? x.Source, x.Title,
                 x.PublishedAt, x.Trend, profile, Loc.IsGreek)
+            : kind == "weather" ? WidgetStudio.WeatherCardText(x.Title, x.Summary, x.Source,
+                x.PublishedAt, profile, Loc.IsGreek)
             : WidgetStudio.GalleryCardText(
                 x.Title, x.Summary, x.Source, x.PublishedAt, profile,
                 Loc.IsGreek, x.Breaking || kind == "breaking", kind == "history",
