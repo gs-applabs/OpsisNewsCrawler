@@ -12,6 +12,10 @@ public sealed class WidgetStudioProfile
     public int MaxItems { get; set; } = 12;
     public bool ShowSource { get; set; }
     public bool ShowTime { get; set; }
+    /// <summary>"theme" is the existing Crawler palette; "host" is the
+    /// Opsis-provided accent when running as a trusted plugin. Standalone uses
+    /// the local accent, without opening another settings file or process.</summary>
+    public string AccentMode { get; set; } = "theme";
 }
 
 public static class WidgetStudio
@@ -24,7 +28,8 @@ public static class WidgetStudio
         Layout = raw?.Layout is "context" or "gallery" ? raw.Layout : "headlines",
         MaxItems = Math.Clamp(raw?.MaxItems ?? 12, 3, 30),
         ShowSource = raw?.ShowSource ?? false,
-        ShowTime = raw?.ShowTime ?? false
+        ShowTime = raw?.ShowTime ?? false,
+        AccentMode = raw?.AccentMode == "host" ? "host" : "theme"
     };
 
     public static Dictionary<string, WidgetStudioProfile> CleanAll(

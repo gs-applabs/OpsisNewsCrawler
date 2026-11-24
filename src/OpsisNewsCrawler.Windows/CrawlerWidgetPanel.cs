@@ -59,6 +59,7 @@ public sealed class CrawlerWidgetPanel : UserControl
         gallery.Resize += (_, _) => ResizeGalleryCards();
         gallery.DpiChangedAfterParent += (_, _) => ResizeGalleryCards();
         Theme.Changed += ApplyTheme;
+        Theme.HostAccentChanged += ApplyTheme;
         Loc.Changed += RefreshSafe;
         timer.Tick += (_, _) => RefreshSafe();
         eventSubscription = SuiteEventHub.Subscribe(e =>
@@ -90,13 +91,15 @@ public sealed class CrawlerWidgetPanel : UserControl
         if (InvokeRequired) { if (IsHandleCreated) BeginInvoke(new Action(ApplyTheme)); return; }
         BackColor = Theme.Surface;
         ForeColor = Theme.Text;
-        heading.ForeColor = Theme.Accent;
+        var accent = WidgetAccent();
+        heading.ForeColor = GalleryColorContrast.ContrastRatio(accent, Theme.Surface) >= 4.5
+            ? accent : Theme.Text;
         heading.BackColor = Theme.Surface;
         items.BackColor = Theme.Surface;
         items.ForeColor = Theme.Text;
         gallery.BackColor = Theme.Background;
-        breakingBanner.BackColor = Theme.Accent;
-        breakingBanner.ForeColor = GalleryColorContrast.Foreground(Theme.Accent);
+        breakingBanner.BackColor = accent;
+        breakingBanner.ForeColor = GalleryColorContrast.Foreground(accent);
         // Theme changes do not rebuild the data or create redundant network traffic.
         foreach (var card in gallery.Controls.OfType<Button>())
             StyleGalleryCard(card);
@@ -219,12 +222,19 @@ public sealed class CrawlerWidgetPanel : UserControl
         }
     }
 
+    private Color WidgetAccent()
+    {
+        var profile = WidgetStudio.Resolve(host.Config.WidgetProfiles, kind);
+        return host.HostedByOpsis && profile.AccentMode == "host"
+            ? Theme.HostAccent : Theme.Accent;
+    }
+
     private void StyleGalleryCard(Button card)
     {
         card.BackColor = Theme.Surface;
         card.ForeColor = Theme.Text;
         card.FlatAppearance.BorderSize = 1;
-        card.FlatAppearance.BorderColor = kind == "breaking" ? Theme.Accent : Theme.Border;
+        card.FlatAppearance.BorderColor = kind == "breaking" ? WidgetAccent() : Theme.Border;
         card.FlatAppearance.MouseOverBackColor = Theme.Background;
         card.FlatAppearance.MouseDownBackColor = Theme.Background;
     }
@@ -266,6 +276,7 @@ public sealed class CrawlerWidgetPanel : UserControl
             ClearGallery();
             eventSubscription.Dispose();
             Theme.Changed -= ApplyTheme;
+            Theme.HostAccentChanged -= ApplyTheme;
             Loc.Changed -= RefreshSafe;
         }
         base.Dispose(disposing);

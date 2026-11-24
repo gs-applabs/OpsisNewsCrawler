@@ -1427,6 +1427,8 @@ public sealed partial class SettingsPanel : UserControl
                         controls.Count.SetValueSilently(12);
                         controls.Source.Checked = false;
                         controls.Time.Checked = false;
+                        if (widgetAccentOptions.TryGetValue(kind, out var accent))
+                            accent.Checked = false;
                     }
                     finally { loading = false; }
                     MarkDirty();

@@ -6,6 +6,9 @@ namespace OpsisNewsCrawler.Windows;
 /// FlatCard / FlatToggle / FlatComboBox tokens; no duplicate host controls.</summary>
 public sealed partial class SettingsPanel
 {
+    private readonly Dictionary<string, FlatCheckBox> widgetAccentOptions =
+        new(StringComparer.OrdinalIgnoreCase);
+
     private Control BuildWidgetStudio()
     {
         var page = NewPage(out var flow);
@@ -36,6 +39,7 @@ public sealed partial class SettingsPanel
         presetRow.Controls.Add(applyPreset);
         flow.Controls.Add(Row(Loc.IsGreek ? "Έτοιμα προφίλ" : "Ready-made profiles", presetRow, 230));
         widgetEditors.Clear();
+        widgetAccentOptions.Clear();
         foreach (var kind in WidgetStudio.Kinds)
         {
             var card = new FlatCard(WidgetStudio.Title(kind, Loc.IsGreek))
@@ -71,6 +75,13 @@ public sealed partial class SettingsPanel
             options.Controls.Add(Row(Loc.IsGreek ? "Μέγιστες εγγραφές" : "Maximum rows", count, 230));
             options.Controls.Add(showSource);
             options.Controls.Add(showTime);
+            var hostAccent = new FlatToggle
+            {
+                RowWidth = 600, Enabled = host.HostedByOpsis,
+                Text = Loc.IsGreek ? "Χρώμα έμφασης από το Opsis" : "Use Opsis accent for this widget"
+            };
+            options.Controls.Add(hostAccent);
+            widgetAccentOptions[kind] = hostAccent;
             card.Controls.Add(options);
             flow.Controls.Add(card);
             widgetEditors[kind] = (layout, count, showSource, showTime);
@@ -88,6 +99,8 @@ public sealed partial class SettingsPanel
             controls.Count.SetValueSilently(p.MaxItems);
             controls.Source.Checked = p.ShowSource;
             controls.Time.Checked = p.ShowTime;
+            if (widgetAccentOptions.TryGetValue(kind, out var accent))
+                accent.Checked = p.AccentMode == "host";
         }
     }
 
@@ -100,6 +113,8 @@ public sealed partial class SettingsPanel
             controls.Count.SetValueSilently(profile.MaxItems);
             controls.Source.Checked = profile.ShowSource;
             controls.Time.Checked = profile.ShowTime;
+            if (widgetAccentOptions.TryGetValue(kind, out var accent))
+                accent.Checked = profile.AccentMode == "host";
         }
     }
 
@@ -118,7 +133,9 @@ public sealed partial class SettingsPanel
                 },
                 MaxItems = controls.Count.Value,
                 ShowSource = controls.Source.Checked,
-                ShowTime = controls.Time.Checked
+                ShowTime = controls.Time.Checked,
+                AccentMode = widgetAccentOptions.TryGetValue(kind, out var accent) &&
+                    accent.Checked ? "host" : "theme"
             });
         }
         return selected;

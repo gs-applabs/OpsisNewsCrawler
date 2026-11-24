@@ -10,6 +10,9 @@ namespace OpsisNewsCrawler.Windows;
 public static class Theme
 {
     public static event Action? Changed;
+    /// <summary>Fired only when the cached host accent changes while the
+    /// Crawler uses its own theme. Widgets listening here repaint in place.</summary>
+    public static event Action? HostAccentChanged;
 
     // The Opsis 2.8 loader shares Opsis.UI across all plugin load contexts.
     // Do not replace the host's singleton theme with this plugin's adapter.
@@ -54,6 +57,7 @@ public static class Theme
     // The colours the host (Opsis) pushed. They are used ONLY when the user chose "host" (Follow Opsis): the crawler's own themes
     // (Windows / light / dark / Midnight / Forest / Dawn / Contrast) are independent of Opsis.
     private static Palette? hostPalette;
+    public static Color HostAccent => hostPalette?.Accent ?? Accent;
     private static string currentMode = "system";
 
     private static bool followAccent;
@@ -106,9 +110,11 @@ public static class Theme
     /// <summary>Host (Opsis) supplies its own colours.</summary>
     public static void SetColors(bool dark, Color background, Color surface, Color border, Color text, Color textMuted, Color accent, double opacity)
     {
+        var previousAccent = hostPalette?.Accent;
         hostPalette = new Palette(dark, background, surface, border, text, textMuted, accent);
         Opacity = Math.Clamp(opacity, .3, 1.0);
-        if (currentMode == "host") ApplyHost(hostPalette);     // otherwise only remembered: the user's own theme stays
+        if (currentMode == "host") ApplyHost(hostPalette);
+        else if (previousAccent != accent) HostAccentChanged?.Invoke(); // no duplicate palette engine
     }
 
     private static void ApplyHost(Palette p)

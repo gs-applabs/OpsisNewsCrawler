@@ -34,6 +34,9 @@ public sealed class P1WidgetStudioTests
         Assert.Equal("context", cleaned["breaking"].Layout);
         Assert.True(cleaned["breaking"].ShowSource);
         Assert.Equal("headlines", WidgetStudio.Resolve(null, "news").Layout);
+        Assert.Equal("theme", WidgetStudio.Resolve(null, "news").AccentMode);
+        Assert.Equal("theme", WidgetStudio.Clean(new WidgetStudioProfile { AccentMode = "../../../opsys" }).AccentMode);
+        Assert.Equal("host", WidgetStudio.Clean(new WidgetStudioProfile { AccentMode = "host" }).AccentMode);
     }
 
     [Fact]
