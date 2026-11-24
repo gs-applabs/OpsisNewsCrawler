@@ -37,7 +37,7 @@ public class ContractTests
     public void EveryPublicSignatureOfThePluginsContractIsInOurContract()
     {
         // the framework version is part of the printed signature (System.Private.CoreLib, Version=10.0.0.0 vs 11.0.0.0): it must not decide the contract test
-        static string Fx(string s) => System.Text.RegularExpressions.Regex.Replace(s, @"System\.Private\.CoreLib, Version=[\d.]+", "System.Private.CoreLib, Version=<fx>");
+        static string Fx(string s) => System.Text.RegularExpressions.Regex.Replace(s, @"(System\.[A-Za-z.]+), Version=[\d.]+", "$1, Version=<fx>");
         var ours = Surface(typeof(PluginFeeds).Assembly).ToDictionary(kv => kv.Key, kv => kv.Value.Select(Fx).ToHashSet());
         var lines = File.ReadAllLines(SurfaceFile).Where(l => l.Length > 0 && !l.StartsWith('#')).ToList();
         Assert.True(lines.Count > 20, "the reference surface is empty");
