@@ -126,6 +126,10 @@ if (Test-Path "$assets\RELEASE-NOTES.md") {
 }
 "assets: $assets"
 
+# Only after successful package creation: keep the newest generated release artifacts.
+# The cleanup helper has strict path and name checks; no source/backups or GitHub releases are touched.
+& "$PSScriptRoot\prune-generated-releases.ps1" -Root $r -KeepVersion $ver -Apply
+
 # Best effort: bring bin\ (what the Run-...bat starts) up to date too; files in use are skipped.
 robocopy $stage "$r\bin" /MIR /NFL /NDL /NJH /NJS /R:1 /W:1 | Out-Null
 if ($LASTEXITCODE -ge 8) { "note: bin\ could not be refreshed completely (program running?) - the installer is fine" }

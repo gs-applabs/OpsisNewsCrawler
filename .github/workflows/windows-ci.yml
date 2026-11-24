@@ -22,6 +22,22 @@ jobs:
       - name: Repository cleanup and latest-version guard
         shell: pwsh
         run: ./tools/ci-hygiene.ps1
+      - name: Regression test — prune only superseded generated releases
+        shell: pwsh
+        run: |
+          $tmp = Join-Path $env:RUNNER_TEMP ('crawler-prune-' + [guid]::NewGuid().ToString('N'))
+          try {
+            @('release/0.17.0-assets', 'release/0.28.0-assets', 'release/keep-me', 'Output') | ForEach-Object { New-Item -ItemType Directory -Force (Join-Path $tmp $_) | Out-Null }
+            @('OpsisNewsCrawler-0.17.0-portable.zip', 'OpsisNewsCrawler-0.17.0-NET11-Setup.exe.sha256', 'OpsisNewsCrawler-0.28.0-portable.zip', 'user-data.txt') | ForEach-Object { Set-Content -LiteralPath (Join-Path $tmp ('Output/' + $_)) -Value 'fixture' }
+            ./tools/prune-generated-releases.ps1 -Root $tmp -KeepVersion 0.28.0
+            if (-not (Test-Path (Join-Path $tmp 'release/0.17.0-assets'))) { throw 'Dry run unexpectedly deleted files' }
+            ./tools/prune-generated-releases.ps1 -Root $tmp -KeepVersion 0.28.0 -Apply
+            if (Test-Path (Join-Path $tmp 'release/0.17.0-assets')) { throw 'Old release folder retained' }
+            if (Test-Path (Join-Path $tmp 'Output/OpsisNewsCrawler-0.17.0-portable.zip')) { throw 'Old portable package retained' }
+            foreach ($safe in @('release/0.28.0-assets', 'release/keep-me', 'Output/OpsisNewsCrawler-0.28.0-portable.zip', 'Output/user-data.txt')) {
+              if (-not (Test-Path (Join-Path $tmp $safe))) { throw "Unsafe release pruning deleted $safe" }
+            }
+          } finally { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }
       - name: Verify Opsis.UI 0.6.0 host parity
         shell: pwsh
         run: |
