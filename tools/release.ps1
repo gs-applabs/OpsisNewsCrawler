@@ -38,6 +38,11 @@ $opsisCopy = @("$r\..\Opsis\lib", "$r\..\Opsis\libs", "$r\..\MotionDeskStudio\li
 if ($opsisCopy) {
   $opsisVersion = [Reflection.AssemblyName]::GetAssemblyName($opsisCopy).Version
   if ($contract -ne $opsisVersion) { throw "plugin contract is $contract but the copy in Opsis\libs is $opsisVersion" }
+  $contractHash = (Get-FileHash "$pluginDst\OpsisNewsCrawler.Plugin.Abstractions.dll" -Algorithm SHA256).Hash
+  $opsisHash = (Get-FileHash $opsisCopy -Algorithm SHA256).Hash
+  if ($contractHash -ne $opsisHash) {
+    throw 'Opsis and Crawler have different contract binaries even though their AssemblyVersion matches. Use a coordinated Opsis 2.8 + Crawler + Chronikologio rollout.'
+  }
 }
 "contract version: $contract"
 # Opsis 2.8.x shares Opsis.UI from its default AssemblyLoadContext. The plugin
