@@ -33,6 +33,18 @@ public static class PortfolioLedger
         return (value,pnl,position.CostBasis>0?Math.Round(pnl/position.CostBasis*100,2):null);
     }
 
+    public static bool HasTransactions(PortfolioPosition position, IEnumerable<PortfolioTransaction> entries)
+        => entries.Any(t=>string.Equals(t.InstrumentKey?.Trim(),position.Key,StringComparison.OrdinalIgnoreCase)
+            && string.Equals(t.Currency?.Trim(),position.Currency,StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Explicit opening balance, not a reconstructed historic trade.</summary>
+    public static PortfolioTransaction OpeningBalance(PortfolioPosition position, DateTimeOffset asOf)
+    {
+        if(position.Quantity<=0 || position.AvgCost<0) throw new ArgumentException("Invalid opening balance.");
+        return new PortfolioTransaction(position.Key,asOf,PortfolioAction.Buy,position.Quantity,
+            position.AvgCost,0,NormalizeCurrency(position.Currency));
+    }
+
     public static string NormalizeCurrency(string? currency)
     {
         var code=(currency??"").Trim().ToUpperInvariant();

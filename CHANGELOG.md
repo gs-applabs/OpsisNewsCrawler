@@ -1,5 +1,10 @@
 # Changelog
 
+### P2/P3 explicit legacy portfolio migration (2026-11-24)
+
+- Existing portfolio window can move a selected holding into the transaction ledger as an explicitly confirmed opening balance at the migration timestamp, preserving quantity and average cost, without inventing historical trades. Rejects overlapping ledger positions and warns about legacy overlap; transaction editor blocks new entries for matching legacy holdings until reconciliation. No automatic merge, shared totals or new database. Windows validation deferred.
+
+
 ### P2/P3 cached ledger valuation and existing market tools (2026-11-24)
 
 - Transaction view reads existing QuoteService.LatestByKey, shows native-currency market value and unrealized P/L when a matching configured instrument and explicit currency unit are available; otherwise reports unavailable. EUR Athens is supported by its configured euro symbol; ambiguous units are not inferred. Shows quote timestamp and delay, no new quote requests or FX assumptions. Existing portfolio and analysis windows linked from the transaction view rather than adding charts or another portfolio engine. No automatic migration or merging of legacy holdings. Windows validation deferred.

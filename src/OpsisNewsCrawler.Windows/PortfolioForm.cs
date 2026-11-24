@@ -34,9 +34,10 @@ internal sealed class PortfolioForm : Form
         var edit = new FlatButton { Text = Loc.T("btn.editPosition") };
         var remove = new FlatButton { Text = Loc.T("btn.removePosition") };
         var refresh = new FlatButton { Text = Loc.T("tray.refresh") };
+        var migrate = new FlatButton { Text = Loc.IsGreek ? "Μεταφορά στο ιστορικό συναλλαγών" : "Move to transaction ledger" };
         add.SetPrimary(true);
         var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(10, 10, 10, 4), WrapContents = false };
-        bar.Controls.AddRange(new Control[] { add, edit, remove, refresh });
+        bar.Controls.AddRange(new Control[] { add, edit, remove, refresh, migrate });
 
         var summaryHost = new Panel { Dock = DockStyle.Bottom, Height = 44, Padding = new Padding(14, 0, 14, 0) };
         summary.Font = new Font("Segoe UI Semibold", 11f);
@@ -57,6 +58,7 @@ internal sealed class PortfolioForm : Form
         edit.Click += (_, _) => EditSelected();
         remove.Click += (_, _) => RemoveSelected();
         refresh.Click += (_, _) => host.RefreshPortfolio();
+        migrate.Click += (_, _) => MigrateSelected();
         grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) EditSelected(); };
         grid.KeyDown += (_, e) => { if (e.KeyCode == Keys.Delete) RemoveSelected(); };
         KeyPreview = true;
@@ -147,6 +149,7 @@ internal sealed class PortfolioForm : Form
             var rates = await host.Ecb.GetAsync(CancellationToken.None);
             if (IsDisposed) return;
             var positions = host.Config.Portfolio;
+            var overlaps = positions.Count(p => PortfolioLedger.HasTransactions(p,host.Config.PortfolioTransactions));
             var result = PortfolioCalc.Compute(positions, host.QuoteService.LatestByKey, rates, p => host.QuoteService.Store.History(p.StoreKey));
             var greek = Loc.IsGreek;
             var selected = grid.CurrentRow?.Index ?? -1;
@@ -173,8 +176,8 @@ internal sealed class PortfolioForm : Form
                 else if (row.Signal.StartsWith("▼")) grid.Rows[i].Cells["signal"].Style.ForeColor = down;
             }
             if (selected >= 0 && selected < grid.Rows.Count) grid.CurrentCell = grid.Rows[selected].Cells[0];
-            hint.Visible = positions.Count == 0 || !result.Complete;
-            hint.Text = positions.Count == 0 ? Loc.T("portfolio.empty") : Loc.T("portfolio.incomplete");
+            hint.Visible = positions.Count == 0 || !result.Complete || overlaps > 0;
+            hint.Text = overlaps > 0 ? (Loc.IsGreek ? "Υπάρχουν κοινές θέσεις με το ιστορικό συναλλαγών. Μην αθροίζετε τις δύο προβολές." : "Positions overlap the transaction ledger. Do not add the two views together.") : positions.Count == 0 ? Loc.T("portfolio.empty") : Loc.T("portfolio.incomplete");
             summary.Text = positions.Count == 0 ? "" : Loc.T("portfolio.summary", Money(result.Value) + " €", Signed(result.Pnl) + " €", result.PnlPercent.ToString("0.00", Gr), Signed(result.DayChange) + " €");
             summary.ForeColor = result.Pnl > 0 ? Color.FromArgb(46, 190, 100) : result.Pnl < 0 ? Color.FromArgb(235, 80, 80) : Theme.Text;
         }
@@ -182,6 +185,32 @@ internal sealed class PortfolioForm : Form
         {
             refreshing = false;
         }
+    }
+
+    private void MigrateSelected()
+    {
+        var index=grid.CurrentRow?.Index??-1;
+        if(index<0||index>=host.Config.Portfolio.Count)return;
+        var position=host.Config.Portfolio[index];
+        var entries=host.Config.PortfolioTransactions;
+        if(PortfolioLedger.HasTransactions(position,entries))
+        {
+            MessageBox.Show(this,Loc.IsGreek?"Υπάρχει ήδη ιστορικό για αυτή τη θέση. Απαιτείται χειροκίνητη συμφωνία.":"An existing ledger overlaps this position. Reconcile manually.",Text);
+            return;
+        }
+        if(MessageBox.Show(this,Loc.IsGreek?"Μεταφορά ως αρχικό υπόλοιπο σήμερα, χωρίς ανακατασκευή παλαιών συναλλαγών; Η θέση θα αφαιρεθεί από την παλιά λίστα.":"Move as an opening balance today, without reconstructing historical trades? The old holding will be removed.",Text,MessageBoxButtons.YesNo,MessageBoxIcon.Question)!=DialogResult.Yes)return;
+        try
+        {
+            var opening=PortfolioLedger.OpeningBalance(position,DateTimeOffset.Now);
+            PortfolioLedger.Calculate(new[]{opening});
+            entries.Add(opening);
+            host.Config.Portfolio.RemoveAt(index);
+            try {host.SaveConfig();}
+            catch {host.Config.Portfolio.Insert(index,position);entries.Remove(opening);throw;}
+            _=ShowAsync();
+        }
+        catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or IOException or UnauthorizedAccessException)
+        {MessageBox.Show(this,ex.Message,Text);}
     }
 
     private void EditSelected()

@@ -66,6 +66,8 @@ public sealed class P3TransactionForm : Form
             status.Text=Loc.IsGreek?"Έλεγξε κλειδί, νόμισμα και αριθμητικά ποσά.":"Check instrument, currency and numerical fields.";
             return;
         }
+        if(host.Config.Portfolio.Any(p=>string.Equals(p.Key,key,StringComparison.OrdinalIgnoreCase) && string.Equals(p.Currency,cur,StringComparison.OrdinalIgnoreCase)))
+        {status.Text=Loc.IsGreek?"Η θέση υπάρχει στο παλιό χαρτοφυλάκιο. Μεταφέρετέ την πρώτα από εκεί.":"Holding exists in the legacy portfolio. Move it there first.";return;}
         var action=(PortfolioAction)Math.Clamp(operation.SelectedIndex,0,3);
         if(action==PortfolioAction.Split && (value!=0 || fee!=0))
         {status.Text=Loc.IsGreek?"Split: τιμή και προμήθειες μηδέν.":"Split: zero price and fees.";return;}
