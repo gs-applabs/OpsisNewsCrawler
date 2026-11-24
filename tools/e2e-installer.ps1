@@ -101,7 +101,22 @@ if ($Scenario -eq 'integrated') {
     Copy-Item $uiSource $hostUi -Force
     $hostVersion = [Reflection.AssemblyName]::GetAssemblyName($hostContract).Version.ToString()
     Check ($hostVersion -eq '1.0.0.0') "staged host ABI identity is $hostVersion"
+    # Existing installed plugin is replaced; P0 must back it up *before* copying
+    # anything. This is a data-only fixture under the runner's isolated root.
+    New-Item -ItemType Directory -Force $pluginDir | Out-Null
+    $oldPlugin = Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'
+    Set-Content -LiteralPath $oldPlugin -Value 'pre-p0-plugin-fixture' -Encoding utf8
+    Copy-Item $hostContract (Join-Path $pluginDir 'OpsisNewsCrawler.Plugin.Abstractions.dll') -Force
+    Copy-Item $hostUi (Join-Path $pluginDir 'Opsis.UI.dll') -Force
+    $rollbackRoot = Join-Path $env:ProgramData 'Opsis\CrawlerRollback'
+    if (Test-Path (Join-Path $rollbackRoot 'pending')) {
+        throw 'Disposable runner should not have an unfinished rollback snapshot'
+    }
     $installed = Run-Setup $NewSetup $setupArgs 'integrated-installed.log'
+    $previous = Join-Path $rollbackRoot 'previous'
+    Check (Test-Path (Join-Path $previous '.backup-complete')) 'integrated upgrade has a completed rollback snapshot'
+    Check ((Test-Path (Join-Path $previous 'OpsisNewsCrawler.OpsisPlugin.dll')) -and
+           ((Get-Content (Join-Path $previous 'OpsisNewsCrawler.OpsisPlugin.dll') -Raw) -match 'pre-p0-plugin-fixture')) 'old plugin bytes are preserved for rollback'
     Check ($installed -eq 0) "integrated installation succeeds against host ABI 1.0.0.0 (exit $installed)"
     $dll = Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'
     Check (Test-Path $dll) 'integrated setup installs the real Crawler plugin in Opsis plugin root'
