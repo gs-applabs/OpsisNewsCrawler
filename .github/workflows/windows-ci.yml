@@ -56,7 +56,7 @@ jobs:
           try {
             $opsisHost = Join-Path $root 'host'
             $hostLib = Join-Path $opsisHost 'lib'
-            $plugin = Join-Path $root 'plugins/Crawler'
+            $plugin = Join-Path $root 'plugins/Opsis - Desktop Customization'
             $snapshot = Join-Path $root 'backup/previous'
             New-Item -ItemType Directory -Force $hostLib,$plugin,$snapshot | Out-Null
             Copy-Item libs/Opsis.UI.dll $hostLib/Opsis.UI.dll
@@ -68,11 +68,27 @@ jobs:
             Copy-Item $dll.FullName $snapshot/OpsisNewsCrawler.OpsisPlugin.dll
             Set-Content -LiteralPath (Join-Path $snapshot '.backup-complete') -Value 'completed'
             Set-Content -LiteralPath (Join-Path $plugin 'old.txt') -Value 'superseded candidate'
+            $wrong = Join-Path $root 'plugins/UnrelatedPlugin'
+            New-Item -ItemType Directory -Force $wrong | Out-Null
+            $wrongDenied = $false
+            try {
+              ./tools/restore-opsis-crawler.ps1 -Mode Inspect -HostFolder $opsisHost -PluginFolder $wrong -BackupRoot (Join-Path $root 'backup') -Confirm:$false
+            } catch { $wrongDenied = $true }
+            if (!$wrongDenied) { throw 'Rollback helper accepted an unrelated plugin folder' }
+            $mutex = [Threading.Mutex]::new($false, 'Local\Opsis.SingleInstance')
+            try {
+              $liveDenied = $false
+              try {
+                ./tools/restore-opsis-crawler.ps1 -Mode Restore -HostFolder $opsisHost -PluginFolder $plugin -BackupRoot (Join-Path $root 'backup') -Confirm:$false
+              } catch { $liveDenied = $true }
+              if (!$liveDenied) { throw 'Rollback helper accepted a live Opsis host mutex' }
+            } finally { $mutex.Dispose() }
             ./tools/restore-opsis-crawler.ps1 -Mode Inspect -HostFolder $opsisHost -PluginFolder $plugin -BackupRoot (Join-Path $root 'backup') -Confirm:$false
             ./tools/restore-opsis-crawler.ps1 -Mode Restore -HostFolder $opsisHost -PluginFolder $plugin -BackupRoot (Join-Path $root 'backup') -Confirm:$false
             if (!(Test-Path (Join-Path $plugin 'OpsisNewsCrawler.OpsisPlugin.dll'))) { throw 'Compatible plugin was not restored' }
             if (Test-Path (Join-Path $plugin 'old.txt')) { throw 'Superseded candidate was left behind' }
             if (!(Test-Path (Join-Path $snapshot '.backup-complete'))) { throw 'Recovery destroyed its source snapshot' }
+            if (Test-Path (Join-Path $plugin '.backup-complete')) { throw 'Backup marker leaked into the active plugin folder' }
           } finally { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
       - name: Run core tests
         run: dotnet test tests/OpsisNewsCrawler.Core.Tests/OpsisNewsCrawler.Core.Tests.csproj --configuration Release
