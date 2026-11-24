@@ -3,7 +3,7 @@ on:
   push:
     branches: ['release/p2-v0.28.0-*', 'release/p3-v0.28.0-*', 'feat/net11-opsis-280-ui6-compat']
   pull_request:
-    branches: ['feat/p1-opsis-integration-live-video-20261123', 'release/p2-v0.28.0-20261123', 'release/p3-v0.28.0-contract1-20261123']
+    branches: ['feat/p1-opsis-integration-live-video-20261123', 'release/p2-v0.28.0-20261123', 'release/p3-v0.28.0-contract1-20261123', 'feat/net11-opsis-280-ui6-compat']
   workflow_dispatch:
 
 permissions:
