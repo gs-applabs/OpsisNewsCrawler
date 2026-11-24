@@ -36,7 +36,9 @@ public class ContractTests
     [Fact]
     public void EveryPublicSignatureOfThePluginsContractIsInOurContract()
     {
-        var ours = Surface(typeof(PluginFeeds).Assembly);
+        // the framework version is part of the printed signature (System.Private.CoreLib, Version=10.0.0.0 vs 11.0.0.0): it must not decide the contract test
+        static string Fx(string s) => System.Text.RegularExpressions.Regex.Replace(s, @"System\.Private\.CoreLib, Version=[\d.]+", "System.Private.CoreLib, Version=<fx>");
+        var ours = Surface(typeof(PluginFeeds).Assembly).ToDictionary(kv => kv.Key, kv => kv.Value.Select(Fx).ToHashSet());
         var lines = File.ReadAllLines(SurfaceFile).Where(l => l.Length > 0 && !l.StartsWith('#')).ToList();
         Assert.True(lines.Count > 20, "the reference surface is empty");
         foreach (var line in lines)
@@ -46,6 +48,7 @@ public class ContractTests
                 .Replace("OpsisNewsCrawler.Plugin.Abstractions, Version=0.8.0.0",
                          "OpsisNewsCrawler.Plugin.Abstractions, Version=1.0.0.0", StringComparison.Ordinal);
             Assert.True(ours.ContainsKey(type), "missing type " + type);
+            member = Fx(member);
             if (member.Length > 0) Assert.True(ours[type].Contains(member), $"{type}: signature {member} is not in our contract");
         }
     }

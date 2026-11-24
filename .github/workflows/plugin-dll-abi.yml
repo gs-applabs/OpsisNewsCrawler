@@ -16,7 +16,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '11.0.x'
       - name: Run plugin contract and version regression tests
         shell: pwsh
         run: |
