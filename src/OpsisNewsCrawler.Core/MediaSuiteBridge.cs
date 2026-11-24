@@ -7,6 +7,7 @@ public static class MediaSuiteBridge
 {
     public static bool IsSafeRemoteAsset(MediaSuiteAsset asset)
     {
+        if(asset.SourceUrl is null || asset.SourceUrl.Length>2048 || asset.SourceUrl.Any(c=>char.IsControl(c)||char.IsWhiteSpace(c)))return false;   // one line per entry: no CR/LF or spaces smuggled into the playlist
         if(!Uri.TryCreate(asset.SourceUrl,UriKind.Absolute,out var uri))return false;
         if(uri.Scheme!=Uri.UriSchemeHttps || string.IsNullOrWhiteSpace(asset.DisplayTitle))return false;
         if(!NetGuard.IsPublicHost(uri.Host)) return false;
@@ -25,9 +26,10 @@ public static class MediaSuiteBridge
         {
             var title = (asset.Attribution is { Length: > 0 } ? asset.Attribution + " — " : "") +
                         asset.DisplayTitle;
-            title = title.Replace('\r', ' ').Replace('\n', ' ');
+            title = new string(title.Select(c => char.IsControl(c) ? ' ' : c).ToArray());
+            if (title.Length > 300) title = title[..300];
             text.Append("#EXTINF:-1,").Append(title).Append('\n')
-                .Append(asset.SourceUrl).Append('\n');
+                .Append(new Uri(asset.SourceUrl).AbsoluteUri).Append('\n');
         }
         return text.ToString();
     }

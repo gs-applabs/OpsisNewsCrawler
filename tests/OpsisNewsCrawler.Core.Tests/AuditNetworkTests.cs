@@ -91,3 +91,21 @@ public sealed class AuditPriceAlertTests
         Assert.True(rule.Fired);   // a bad value did not re-arm it
     }
 }
+
+public sealed class AuditM3uTests
+{
+    [Fact]
+    public void PlaylistCannotBeInjectedThroughUrlOrTitle()
+    {
+        var evil = new MediaSuiteAsset("https://example.com/a.mp4\n#EXTINF:-1,Fake\nhttps://evil.example/x", "ok", null, "video/mp4");
+        Assert.False(MediaSuiteBridge.IsSafeRemoteAsset(evil));
+        var spaced = new MediaSuiteAsset("https://example.com/a b.mp4", "ok", null, null);
+        Assert.False(MediaSuiteBridge.IsSafeRemoteAsset(spaced));
+        var good = new MediaSuiteAsset("https://example.com/a.mp4", "T\r\n#EXTINF:-1,Fake\u0007" + new string('x', 400), "Agency", "video/mp4");
+        var lines = MediaSuiteBridge.ExportM3u(new[] { evil, good }).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(3, lines.Length);   // #EXTM3U, one #EXTINF, one URL
+        Assert.StartsWith("#EXTINF:-1,Agency", lines[1]);
+        Assert.True(lines[1].Length <= 12 + 400 + 300);
+        Assert.Equal("https://example.com/a.mp4", lines[2]);
+    }
+}
