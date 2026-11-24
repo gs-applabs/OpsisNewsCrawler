@@ -4,9 +4,9 @@ using System.Runtime.Loader;
 using OpsisNewsCrawler.Plugin.Abstractions;
 
 // Tests the actual nested Opsis 2.8 PluginLoadContext, not a substitute mock loader.
-if (args.Length != 2)
+if (args.Length is < 2 or > 3)
 {
-    Console.Error.WriteLine("Usage: Host28Smoke <Opsis.dll> <OpsisNewsCrawler.OpsisPlugin.dll>");
+    Console.Error.WriteLine("Usage: Host28Smoke <Opsis.dll> <OpsisNewsCrawler.OpsisPlugin.dll> [Chronikologio.OpsisPlugin.dll]");
     return 2;
 }
 
@@ -100,5 +100,23 @@ if (plugin is not IPluginWidgetProvider widgetProvider || widgetProvider.GetWidg
 if (plugin.GetNavigationItems().Count == 0 || plugin.GetTrayMenuItems().Count == 0)
     throw new InvalidDataException("Plugin navigation or tray menu is missing.");
 
+if (args.Length == 3)
+{
+    var chronPath = Path.GetFullPath(args[2]);
+    if (!File.Exists(chronPath)) throw new FileNotFoundException("Chronikologio plugin missing", chronPath);
+    var chronLoader = (AssemblyLoadContext)constructor.Invoke([chronPath]);
+    var chronAssembly = chronLoader.LoadFromAssemblyPath(chronPath);
+    var chronTypes = chronAssembly.GetTypes().Where(t =>
+        !t.IsAbstract && typeof(IOpsisNewsCrawlerPlugin).IsAssignableFrom(t)).ToList();
+    if (chronTypes.Count != 1)
+        throw new InvalidDataException("Chronikologio no longer loads through the real Opsis 2.8 host contract.");
+    var chron = (IOpsisNewsCrawlerPlugin)Activator.CreateInstance(chronTypes[0])!;
+    if (chron is not IPluginWidgetProvider || chron is not IPluginHostSettingsAware chronAware)
+        throw new InvalidDataException("Chronikologio optional Opsis 2.8 capabilities are missing.");
+    chronAware.SetHostSettings(new PluginHostSettings("el", true, "Balanced", 100, true));
+    if (!ReferenceEquals(owner, Opsis.UI.OpsisTheme.Current))
+        throw new InvalidDataException("Chronikologio took ownership of the host theme.");
+    Console.WriteLine("PASS: Chronikologio loads using the same shared ABI 1.0.0.0 and UI6.");
+}
 Console.WriteLine($"PASS: Opsis {hostVersion} loaded Crawler {plugin.Version}, ABI 1.0.0.0, UI 0.6.0, 5 widgets.");
 return 0;

@@ -25,6 +25,12 @@ jobs:
           ref: feat/p0-crawler-28-bridge-20261124
           path: opsis
           persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: gs-applabs/san-shmera
+          ref: main
+          path: chronikologio
+          persist-credentials: false
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
@@ -57,6 +63,17 @@ jobs:
           $expected = (Get-FileHash opsis/lib/OpsisNewsCrawler.Plugin.Abstractions.dll -Algorithm SHA256).Hash
           $actual = (Get-FileHash $contract -Algorithm SHA256).Hash
           if ($expected -ne $actual) { throw 'Crawler plugin must ship the exact Opsis 2.8 host contract DLL; staging a different DLL is forbidden.' }
+      - name: Test Chronikologio against the same Opsis 2.8 contract and UI6
+        shell: pwsh
+        run: |
+          $contract = (Resolve-Path crawler/libs/OpsisNewsCrawler.Plugin.Abstractions.dll).Path
+          $chronContract = (Resolve-Path chronikologio/libs/OpsisNewsCrawler.Plugin.Abstractions.dll).Path
+          if ((Get-FileHash $contract -Algorithm SHA256).Hash -ne (Get-FileHash $chronContract -Algorithm SHA256).Hash) {
+            throw 'Chronikologio has different ABI bytes; coordinated update required.'
+          }
+          Copy-Item crawler/libs/Opsis.UI.dll chronikologio/libs/Opsis.UI.dll -Force
+          dotnet publish chronikologio/src/Chronikologio.OpsisPlugin/Chronikologio.OpsisPlugin.csproj -c Release -o published-chronikologio -m:1 --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'Chronikologio does not build against shared Opsis.UI 0.6.0' }
       - name: Build actual Opsis 2.8.0.2510 host
         shell: pwsh
         working-directory: opsis
@@ -70,7 +87,8 @@ jobs:
           $hostDll = (Get-ChildItem ../opsis/bin/Release -Filter Opsis.dll -Recurse | Select-Object -First 1).FullName
           if (-not $hostDll) { throw 'Compiled Opsis.dll missing' }
           $plugin = (Resolve-Path '../published-crawler/OpsisNewsCrawler.OpsisPlugin.dll').Path
-          dotnet run --project tests/OpsisNewsCrawler.Host28Smoke/OpsisNewsCrawler.Host28Smoke.csproj -c Release -- "$hostDll" "$plugin"
+          $chron = (Resolve-Path '../published-chronikologio/Chronikologio.OpsisPlugin.dll').Path
+          dotnet run --project tests/OpsisNewsCrawler.Host28Smoke/OpsisNewsCrawler.Host28Smoke.csproj -c Release -- "$hostDll" "$plugin" "$chron"
           if ($LASTEXITCODE -ne 0) { throw 'Real host load smoke failed' }
       - uses: actions/upload-artifact@v4
         if: success()
