@@ -99,6 +99,21 @@ if ($Scenario -eq 'integrated') {
     Check ($mismatch -ne 0) 'integrated installer rejects mismatched Opsis.UI SHA256'
     Check (-not (Test-Path (Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'))) 'UI6 SHA mismatch did not deploy the plugin'
     Copy-Item $uiSource $hostUi -Force
+    # A separately installed Chronikologio with the wrong ABI bytes must not
+    # be damaged by attempting an integrated Crawler update.
+    $chronDir = Join-Path $env:APPDATA 'Opsis\plugins\Chronikologio'
+    New-Item -ItemType Directory -Force $chronDir | Out-Null
+    Set-Content (Join-Path $chronDir 'Chronikologio.OpsisPlugin.dll') 'CI-only stub plugin' -Encoding utf8
+    $chronContract = Join-Path $chronDir 'OpsisNewsCrawler.Plugin.Abstractions.dll'
+    Copy-Item $hostContract $chronContract -Force
+    $modified = [IO.File]::ReadAllBytes($chronContract)
+    $modified[$modified.Length - 1] = $modified[$modified.Length - 1] -bxor 1
+    [IO.File]::WriteAllBytes($chronContract, $modified)
+    $chronDenied = Run-Setup $NewSetup $setupArgs 'integrated-chron-abi-denied.log'
+    Check ($chronDenied -ne 0) 'integrated setup refuses the wrong Chronikologio shared ABI'
+    Check (-not (Test-Path (Join-Path $pluginDir 'OpsisNewsCrawler.OpsisPlugin.dll'))) 'incompatible Chronikologio did not cause Crawler replacement'
+    Remove-Item $chronDir -Recurse -Force
+
     $hostVersion = [Reflection.AssemblyName]::GetAssemblyName($hostContract).Version.ToString()
     Check ($hostVersion -eq '1.0.0.0') "staged host ABI identity is $hostVersion"
     # Existing installed plugin is replaced; P0 must back it up *before* copying
