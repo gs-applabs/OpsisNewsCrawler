@@ -16,6 +16,7 @@ public sealed class CrawlerWidgetPanel : UserControl
     private readonly Label heading = new() { Dock = DockStyle.Top, Height = 36, AutoEllipsis = true };
     private readonly ListBox items = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, IntegralHeight = false };
     private readonly List<NewsItem> visible = new();
+    private int refreshQueued;
     private readonly IDisposable eventSubscription;
 
     public CrawlerWidgetPanel(TickerHost host, string kind)
@@ -30,6 +31,12 @@ public sealed class CrawlerWidgetPanel : UserControl
         heading.AccessibleRole = AccessibleRole.StaticText;
         items.AccessibleRole = AccessibleRole.List;
         items.AccessibleName = "Opsis " + kind + " feed";
+        items.SelectedIndexChanged += (_, _) =>
+        {
+            var selected = items.SelectedIndex;
+            items.AccessibleDescription = selected >= 0 && selected < visible.Count
+                ? $"{visible[selected].Title}. {visible[selected].Summary}" : heading.Text;
+        };
         items.DoubleClick += (_, _) => OpenSelected();
         items.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { OpenSelected(); e.Handled = true; } };
         Controls.Add(items);
@@ -40,7 +47,7 @@ public sealed class CrawlerWidgetPanel : UserControl
         eventSubscription = SuiteEventHub.Subscribe(e =>
         {
             if (e.Kind.ToString().Equals(kind switch { "markets" => "Market", "history" => "Calendar", _ => kind }, StringComparison.OrdinalIgnoreCase))
-                RefreshSafe();
+                RequestRefresh();
         }, replay: false);
         ApplyTheme();
     }
@@ -73,6 +80,23 @@ public sealed class CrawlerWidgetPanel : UserControl
         Invalidate();
     }
 
+    // SuiteEventHub observers run off the UI thread. One pending BeginInvoke at
+    // most: a breaking-news burst must not enqueue thousands of UI messages.
+    private void RequestRefresh()
+    {
+        if (IsDisposed || !IsHandleCreated || !Visible || Interlocked.Exchange(ref refreshQueued, 1) != 0)
+            return;
+        try
+        {
+            BeginInvoke(new Action(() =>
+            {
+                Interlocked.Exchange(ref refreshQueued, 0);
+                if (!IsDisposed) RefreshSafe();
+            }));
+        }
+        catch (InvalidOperationException) { Interlocked.Exchange(ref refreshQueued, 0); }
+    }
+
     private void RefreshSafe()
     {
         if (IsDisposed || !Visible || !IsHandleCreated) return;
@@ -82,14 +106,20 @@ public sealed class CrawlerWidgetPanel : UserControl
             catch (InvalidOperationException) { }
             return;
         }
+        var profile = WidgetStudio.Resolve(host.Config.WidgetProfiles, kind);
         visible.Clear();
-        visible.AddRange(host.WidgetSnapshot(kind).Take(12));
+        visible.AddRange(host.WidgetSnapshot(kind).Take(profile.MaxItems));
         items.BeginUpdate();
         try
         {
             items.Items.Clear();
             foreach (var line in visible)
-                items.Items.Add(line.Title.Length > 160 ? line.Title[..160] + "…" : line.Title);
+                items.Items.Add(WidgetStudio.FormatLine(line.Title, line.Source, line.PublishedAt, profile));
+            items.ItemHeight = profile.Layout == "context" ? 26 : 23;
+            heading.Text = WidgetStudio.Title(kind, Loc.IsGreek);
+            items.AccessibleDescription = visible.Count == 0
+                ? (Loc.IsGreek ? "Δεν υπάρχουν διαθέσιμα δεδομένα" : "No data available")
+                : string.Join(". ", visible.Take(3).Select(x => x.Title));
         }
         finally { items.EndUpdate(); }
     }

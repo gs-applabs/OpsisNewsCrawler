@@ -62,12 +62,12 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>One in-memory-only snapshot for a host desktop widget; no network requests.</summary>
     public IReadOnlyList<NewsItem> WidgetSnapshot(string widget) => widget switch
     {
-        "news" => allItems.Where(x => x.Kind == NewsItemKind.News).Take(12).ToArray(),
-        "markets" => stockItems.Where(x => x.Kind == NewsItemKind.Quote).Take(12).ToArray(),
-        "weather" => WeatherForDisplay().Where(x => x.Kind == NewsItemKind.Weather).Take(8).ToArray(),
-        "breaking" => breakingItems.Take(10).ToArray(),
+        "news" => allItems.Where(x => x.Kind == NewsItemKind.News).Take(30).ToArray(),
+        "markets" => stockItems.Where(x => x.Kind == NewsItemKind.Quote).Take(30).ToArray(),
+        "weather" => WeatherForDisplay().Where(x => x.Kind == NewsItemKind.Weather).Take(30).ToArray(),
+        "breaking" => breakingItems.Take(30).ToArray(),
         "history" => OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.AllRich().FirstOrDefault() is { } rich
-            ? PluginFeedForDisplay(rich.Key).Take(12).ToArray() : Array.Empty<NewsItem>(),
+            ? PluginFeedForDisplay(rich.Key).Take(30).ToArray() : Array.Empty<NewsItem>(),
         _ => Array.Empty<NewsItem>()
     };
 

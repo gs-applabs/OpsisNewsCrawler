@@ -76,6 +76,10 @@ public sealed class AppConfig
     public bool ShowIcons { get; set; } = true;
     public bool HideRead { get; set; } = true;
 
+    /// <summary>P1 Opsis Widget Studio. Keys are the existing five host widget kinds.
+    /// No new plugin contract, background process, or wallpaper/DeskStrip surface.</summary>
+    public Dictionary<string, WidgetStudioProfile> WidgetProfiles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Discard dated RSS items older than this many hours. Undated items are retained.</summary>
     public int NewsMaxAgeHours { get; set; } = 168;
 
@@ -650,6 +654,7 @@ public sealed class AppConfig
         foreach (var m in MonitorBars ??= new()) { m.SlotA = BarSpec.Clean(m.SlotA, Exists); m.SlotB = BarSpec.Clean(m.SlotB, Exists); }
         WeatherFields = (WeatherFields ?? new()).Select(f => (f ?? "").Trim().ToLowerInvariant())
             .Where(f => f is "wind" or "humidity" or "feels" or "rain" or "cloud" or "pressure" or "gusts").Distinct().ToList();
+        WidgetProfiles = WidgetStudio.CleanAll(WidgetProfiles);
         Feeds = new(); // migrated; not written back
     }
 }

@@ -165,6 +165,9 @@ public sealed partial class SettingsPanel : UserControl
     private FlatComboBox barBackdrop = null!;
     private FlatComboBox taskbarBackdrop = null!;
 
+    // P1: edit existing Opsis desktop widgets, never register duplicate widget keys.
+    private readonly Dictionary<string, (FlatComboBox Layout, FlatNumber Count, FlatCheckBox Source, FlatCheckBox Time)> widgetEditors = new();
+
     // Breaking
     private FlatCheckBox breakingEnabled = null!;
     private FlatCheckBox breakingSound = null!;
@@ -370,6 +373,7 @@ public sealed partial class SettingsPanel : UserControl
                 (Loc.T("pk.desktop.bar.a.free"), BuildDesktopBar()),
                 (Loc.T("pk.other.monitors.one.bar"), BuildMonitors()))),
             (L("tab.look"), BuildLook()),
+            (Loc.IsGreek ? "P1 · Στούντιο widgets" : "P1 · Widget Studio", BuildWidgetStudio()),
             (L("tab.breaking"), BuildBreaking()));
         AddGroup(L("tab.sources"),
             (Loc.T("pk.news.flow"), Combine((null, BuildSources()), (L("tab.readLater"), BuildReadLater()))),
@@ -1190,6 +1194,7 @@ public sealed partial class SettingsPanel : UserControl
             workTopics = (c.TopicWatches ?? new()).Select(t=>new TopicWatch {
                 Name=t.Name, Terms=t.Terms.ToList(), Region=t.Region, Enabled=t.Enabled }).ToList();
             RebuildTopics();
+            LoadWidgetStudio();
             var langs = Loc.Available();
             language.SelectSilently(Math.Max(0, langs.ToList().FindIndex(l => l.Code == Loc.Language)));
             perfMode.SelectSilently((int)PerformanceClassifier.ParseMode(c.PerformanceMode));
@@ -1623,6 +1628,7 @@ public sealed partial class SettingsPanel : UserControl
     private void ApplySettings()
     {
         var c = host.Config;
+        c.WidgetProfiles = ReadWidgetStudio();
         c.TopicWatches = workTopics.Select(t => new TopicWatch { Name=t.Name, Terms=t.Terms.ToList(),
             Region=t.Region, Enabled=t.Enabled }).ToList();
         var mutedKeywords = mutedNewsKeywords.Value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).Take(100).ToList();
