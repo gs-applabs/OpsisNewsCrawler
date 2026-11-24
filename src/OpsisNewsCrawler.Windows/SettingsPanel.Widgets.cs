@@ -15,7 +15,10 @@ public sealed partial class SettingsPanel
         widgetEditors.Clear();
         foreach (var kind in WidgetStudio.Kinds)
         {
-            var card = new FlatCard(WidgetStudio.Title(kind, Loc.IsGreek));
+            var card = new FlatCard(WidgetStudio.Title(kind, Loc.IsGreek))
+            {
+                Tag = "p1-widget-" + kind
+            };
             var options = new FlowLayoutPanel
             {
                 AutoSize = true, FlowDirection = FlowDirection.TopDown,

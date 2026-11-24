@@ -1120,6 +1120,12 @@ public sealed partial class TickerHost : IDisposable
 
     private bool HasLive => Config.LiveFeeds.Any(f => f.Enabled && Breaking.ToPlayableUrl(f.Url) is not null);
 
+    private IReadOnlyList<BreakingAssessment> breakingEvidence = Array.Empty<BreakingAssessment>();
+
+    /// <summary>Latest local ranking evidence for the P1 read-only inspector.
+    /// This is NOT a fact-check or an assertion of story authenticity.</summary>
+    public IReadOnlyList<BreakingAssessment> BreakingEvidence => breakingEvidence;
+
     /// <summary>The settings button "forget my choices": the muted sources / topics and the "not breaking" answers are cleared.</summary>
     public void ForgetBreakingFeedback()
     {
@@ -1136,7 +1142,13 @@ public sealed partial class TickerHost : IDisposable
         // Several signals, not one word: confirmation by other publishers, speed, freshness, source reliability, disaster data, negative filters (see BreakingEngine).
         // All headlines take part (the read ones too), so that a story keeps its confirmations; only unread ones are announced.
         var candidates = items.Where(i => !NewsKeywordFilter.IsMuted(i, Config.MutedNewsKeywords)).ToList();
-        var urgent = engine.Urgent(candidates, hazardEvents, DateTimeOffset.Now)
+        var assessments = engine.Assess(candidates, hazardEvents, DateTimeOffset.Now)
+            .OrderByDescending(a => a.Score).ToList();
+        breakingEvidence = assessments
+            .Where(a => !string.IsNullOrWhiteSpace(a.Item.Url))
+            .DistinctBy(a => a.Item.Url, StringComparer.OrdinalIgnoreCase)
+            .Take(30).ToArray();
+        var urgent = assessments.Where(a => a.IsBreaking)
             .Where(a => !readStore.IsRead(a.Item.Url))
             .Select(a => a.Item with { Breaking = true, Why = BreakingWhy.Detailed(a, BreakingEngine.ParseSensitivity(Config.BreakingSensitivity)) }).ToList();
         if (urgent.Count == 0) return;

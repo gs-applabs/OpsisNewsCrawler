@@ -1410,6 +1410,26 @@ public sealed partial class SettingsPanel : UserControl
         foreach (var card in Descendants(tabs).OfType<FlatCard>())
         {
             if (!Descendants(card).Any(IsSettingControl)) continue;
+            if (card.Tag is string tag && tag.StartsWith("p1-widget-", StringComparison.Ordinal))
+            {
+                var kind = tag["p1-widget-".Length..];
+                card.ShowReset = true;
+                card.ResetRequested += (_, _) =>
+                {
+                    if (!widgetEditors.TryGetValue(kind, out var controls)) return;
+                    loading = true;
+                    try
+                    {
+                        controls.Layout.SelectSilently(0);
+                        controls.Count.SetValueSilently(12);
+                        controls.Source.Checked = false;
+                        controls.Time.Checked = false;
+                    }
+                    finally { loading = false; }
+                    MarkDirty();
+                };
+                continue;
+            }
             card.ShowReset = true;
             card.ResetRequested += (_, _) => ResetCard(card);
         }

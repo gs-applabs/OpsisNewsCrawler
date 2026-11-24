@@ -6,6 +6,38 @@ namespace OpsisNewsCrawler.Windows;
 /// <summary>P0 extracted Breaking settings pages. Shares the existing instance fields and theme infrastructure.</summary>
 public sealed partial class SettingsPanel
 {
+    private FlatList breakingEvidenceList = null!;
+    private Label breakingEvidenceDetails = null!;
+    private List<BreakingAssessment> breakingEvidenceRows = new();
+
+    private void RefreshBreakingEvidence()
+    {
+        if (breakingEvidenceList is null || breakingEvidenceList.IsDisposed) return;
+        breakingEvidenceRows = host.BreakingEvidence.Take(30).ToList();
+        breakingEvidenceList.ClearRows();
+        foreach (var a in breakingEvidenceRows)
+        {
+            var title = a.Item.Title.Length > 82 ? a.Item.Title[..82] + "…" : a.Item.Title;
+            breakingEvidenceList.AddRow($"{a.Score}/100 · {a.Publishers} {(Loc.IsGreek ? "ομάδες πηγών" : "source groups")} · {title}");
+        }
+        breakingEvidenceDetails.Text = breakingEvidenceRows.Count == 0
+            ? (Loc.IsGreek ? "Δεν υπάρχουν ακόμη αξιολογήσεις. Οι ειδήσεις αξιολογούνται με τις επόμενες ανανεώσεις."
+                : "No assessments yet. Breaking evaluation runs on the next news refresh.")
+            : (Loc.IsGreek ? "Επιλέξτε μια εγγραφή για αναλυτική αιτιολόγηση." : "Select an item for its scoring evidence.");
+    }
+
+    private void ShowBreakingEvidenceDetails()
+    {
+        var index = breakingEvidenceList.SelectedIndex;
+        if (index < 0 || index >= breakingEvidenceRows.Count) return;
+        var assessment = breakingEvidenceRows[index];
+        breakingEvidenceDetails.Text =
+            BreakingWhy.Detailed(assessment, BreakingEngine.ParseSensitivity(host.Config.BreakingSensitivity)) +
+            Environment.NewLine +
+            (Loc.IsGreek ? "Η βαθμολογία δεν πιστοποιεί ότι το γεγονός είναι αληθές."
+                : "The score does not certify that the story is true.");
+    }
+
     private Control BuildBreaking()
     {
         var page = NewPage(out var flow);
@@ -48,6 +80,32 @@ public sealed partial class SettingsPanel
         var test = new FlatButton { Text = L("btn.testBreaking") };
         test.Click += (_, _) => host.SimulateBreaking(Loc.T("pk.breaking.test.headline.to"));
         flow.Controls.Add(test);
+
+        // P1: explain algorithm scores and independent publisher groups without
+        // implying that a ranked story has been fact-checked or confirmed true.
+        var evidenceCard = new FlatCard(Loc.IsGreek ? "Τεκμηρίωση έκτακτων ειδήσεων" : "Breaking evidence");
+        var evidenceFlow = new FlowLayoutPanel
+        {
+            AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false
+        };
+        evidenceFlow.Controls.Add(Note(Loc.IsGreek
+            ? "Ο δείκτης 0–100 είναι εκτίμηση προτεραιότητας, ΟΧΙ πιθανότητα αλήθειας ή ανεξάρτητη επαλήθευση."
+            : "The 0–100 score ranks priority. It is NOT a truth probability or independent fact-check.", 680));
+        breakingEvidenceList = new FlatList { Width = 640, Height = 150 };
+        evidenceFlow.Controls.Add(breakingEvidenceList);
+        var evidenceButtons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
+        var refreshEvidence = new FlatButton { Text = Loc.IsGreek ? "Ενημέρωση αξιολογήσεων" : "Refresh assessments" };
+        refreshEvidence.Click += (_, _) => RefreshBreakingEvidence();
+        var detailsEvidence = new FlatButton { Text = Loc.IsGreek ? "Γιατί βαθμολογήθηκε έτσι;" : "Explain selected score" };
+        detailsEvidence.Click += (_, _) => ShowBreakingEvidenceDetails();
+        evidenceButtons.Controls.Add(refreshEvidence);
+        evidenceButtons.Controls.Add(detailsEvidence);
+        evidenceFlow.Controls.Add(evidenceButtons);
+        breakingEvidenceDetails = Note("", 680);
+        evidenceFlow.Controls.Add(breakingEvidenceDetails);
+        evidenceCard.Controls.Add(evidenceFlow);
+        flow.Controls.Add(evidenceCard);
+        RefreshBreakingEvidence();
 
         var card = new FlatCard(L("card.live"));
         var inner = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
