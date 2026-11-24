@@ -291,17 +291,20 @@ public sealed class CrawlerWidgetPanel : UserControl
 
     protected override void Dispose(bool disposing)
     {
+        // Dispose the owned font only after WinForms has disposed child controls
+        // which may still reference the same Font object.
+        var releaseFont = disposing ? scaledFont : null;
         if (disposing)
         {
             timer.Stop(); timer.Dispose();
-            ClearGallery();
-            scaledFont?.Dispose();
-            scaledFont = null;
             eventSubscription.Dispose();
             Theme.Changed -= ApplyTheme;
             Theme.HostAccentChanged -= ApplyTheme;
             Loc.Changed -= RefreshSafe;
+            ClearGallery();
+            scaledFont = null;
         }
         base.Dispose(disposing);
+        releaseFont?.Dispose();
     }
 }
