@@ -1,4 +1,4 @@
-# Opsis News Crawler 0.28.0 — P0 + P1 + P2 + P3 (release, 24/11/2026)
+# Opsis News Crawler 0.28.0 — P0 + P1 + P2 + P3 (24/11/2026)
 
 ## Ελληνικά
 
@@ -59,5 +59,5 @@ The P3 shared contract and Crawler plugin both use AssemblyVersion and FileVersi
 
 ## Κατάσταση δημοσίευσης / Release status (24/11/2026)
 
-- **Ελληνικά:** δημοσιεύεται ως **pre-release**. Έχουν περάσει build, 687 + 55 tests, ci-audit (en, el, de, ar) και compile του installer. **Δεν** έχουν γίνει ακόμη: εγκατάσταση/αναβάθμιση/απεγκατάσταση σε καθαρό Windows, πραγματική φόρτωση σε Opsis 2.8, multi-monitor/DPI, υπογραφή Authenticode. Απαιτεί .NET 11 Desktop Runtime.
-- **English:** published as a **pre-release**. Build, 687 + 55 tests, ci-audit (en, el, de, ar) and the installer compile pass. **Not yet done:** install/upgrade/uninstall on a clean Windows machine, a real load in Opsis 2.8, multi-monitor/DPI, Authenticode signing. Needs the .NET 11 Desktop Runtime.
+- **Ελληνικά:** σταθερή έκδοση. Έχουν περάσει build, 687 + 57 tests, ci-audit και Windows CI στο GitHub. **Δεν** έχουν γίνει ακόμη: εγκατάσταση/αναβάθμιση/απεγκατάσταση σε καθαρό Windows, πραγματική φόρτωση σε Opsis 2.8/3.0, multi-monitor/DPI, υπογραφή Authenticode. Απαιτεί .NET 11 Desktop Runtime.
+- **English:** stable release. Build, 687 + 57 tests, ci-audit and the GitHub Windows CI pass. **Not yet done:** install/upgrade/uninstall on a clean Windows machine, a real load in Opsis 2.8/3.0, multi-monitor/DPI, Authenticode signing. Needs the .NET 11 Desktop Runtime.
