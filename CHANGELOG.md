@@ -1,5 +1,9 @@
 # Changelog
 
+### Opsis 3.0 compatibility (2026-11-25)
+
+- The plugin works with Opsis 3.0.0.3200 as well as 2.8: the host's shared plugin contract and Opsis.UI are byte-identical to the ones pinned in `libs/` (SHA-256 `514f2a3e…` and `9c50aa3b…`), the plugin DLL is still ABI 1.0.0.0, and the installer already finds the host DLLs in `lib` or `libs`. New: `opsis-permissions.json` next to the plugin DLL (network, audio, local files) which the Opsis 3.0 plugin page shows as the plugin's declared capabilities; older hosts ignore it. Test added. Not verified: a live load inside Opsis 3.0 (it would use the real user profile).
+
 ### 0.28.0 release preparation (2026-11-24)
 
 - README (el + en) lists every capability of 0.28.0 and the Opsis 2.8 / .NET 11 compatibility; the in-app Version history and Help (14 languages) have a 0.28.0 entry; the release note states the pre-release status and what is still unverified.

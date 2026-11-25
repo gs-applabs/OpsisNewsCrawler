@@ -4,4 +4,6 @@
   <ItemGroup><Reference Include="Opsis.UI"><HintPath>..\..\libs\Opsis.UI.dll</HintPath><Private>true</Private></Reference></ItemGroup>
   <!-- Canonical ABI 1.0.0.0 DLL byte-identical to Opsis 2.8.0.2510; do not build a parallel contract into the plugin payload. -->
   <ItemGroup><Reference Include="OpsisNewsCrawler.Plugin.Abstractions"><HintPath>..\..\libs\OpsisNewsCrawler.Plugin.Abstractions.dll</HintPath><Private>true</Private></Reference></ItemGroup>
+  <!-- Opsis 3.0 shows this declaration (not a sandbox) next to the plugin: network = feeds, prices, weather and live-video embeds; audio = the optional live video (muted by default); localFiles = settings, caches, digests and exports in the user profile. Older hosts ignore the file. -->
+  <ItemGroup><None Include="opsis-permissions.json" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>

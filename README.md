@@ -89,7 +89,7 @@
 
 **Απαιτήσεις:** Windows 11 (64-bit· τα Windows 10 δεν έχουν δοκιμαστεί), [.NET 11 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (ο installer το προτείνει και το κατεβάζει μόνο αν το επιτρέψετε), προαιρετικά WebView2 Runtime (ζωντανό βίντεο έκτακτων).
 
-**Συμβατότητα 0.28.0:** ως plugin απαιτεί **Opsis 2.8** (κοινό συμβόλαιο plugin 1.0.0.0, ακριβώς το ίδιο DLL με το host, και Opsis.UI 0.6.0)· ο installer αρνείται την ενσωμάτωση αν το DLL του host διαφέρει και τότε εγκαθίσταται αυτόνομα. Όλες οι εφαρμογές της οικογένειας τρέχουν σε .NET 11. Οι ρυθμίσεις σας διατηρούνται κατά την αναβάθμιση και ο installer κρατά αντίγραφο επαναφοράς του προηγούμενου plugin.
+**Συμβατότητα 0.28.0:** ως plugin απαιτεί **Opsis 2.8 ή 3.0** (κοινό συμβόλαιο plugin 1.0.0.0, ακριβώς το ίδιο DLL με το host, και Opsis.UI 0.6.0)· ο installer αρνείται την ενσωμάτωση αν το DLL του host διαφέρει και τότε εγκαθίσταται αυτόνομα. Όλες οι εφαρμογές της οικογένειας τρέχουν σε .NET 11. Οι ρυθμίσεις σας διατηρούνται κατά την αναβάθμιση και ο installer κρατά αντίγραφο επαναφοράς του προηγούμενου plugin.
 
 1. Κατεβάστε από τα [Releases](../../releases/latest) το `OpsisNewsCrawler-Setup.exe` (ή το `…-portable.zip`) και το αντίστοιχο `.sha256`.
 2. **Ελέγξτε το αρχείο** (PowerShell, στον φάκελο λήψεων):
@@ -197,7 +197,7 @@ Dark and light themes (all of them: [`docs/screenshots`](docs/screenshots)).
 
 **Requirements:** Windows 11 (64-bit; Windows 10 is untested), the [.NET 11 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (the installer offers it and downloads it only if you allow), optionally the WebView2 Runtime (live video of breaking news).
 
-**0.28.0 compatibility:** as a plugin it needs **Opsis 2.8** (shared plugin contract 1.0.0.0, exactly the same DLL as the host, and Opsis.UI 0.6.0); the installer refuses to integrate when the host's DLL differs and installs stand-alone instead. Every app of the family runs on .NET 11. Your settings are kept on upgrade and the installer keeps a rollback copy of the previous plugin.
+**0.28.0 compatibility:** as a plugin it needs **Opsis 2.8 or 3.0** (shared plugin contract 1.0.0.0, exactly the same DLL as the host, and Opsis.UI 0.6.0); the installer refuses to integrate when the host's DLL differs and installs stand-alone instead. Every app of the family runs on .NET 11. Your settings are kept on upgrade and the installer keeps a rollback copy of the previous plugin.
 
 1. Download `OpsisNewsCrawler-Setup.exe` (or `…-portable.zip`) and the matching `.sha256` from [Releases](../../releases/latest).
 2. **Verify the file** (PowerShell, in the download folder):
