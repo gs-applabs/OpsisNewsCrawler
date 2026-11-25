@@ -5,7 +5,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>0.28.0</Version>
+    <Version>0.28.1</Version>
     <!-- Source mirror only. Apps/plugins must reference the binary from libs/,
          pinned to the actual Opsis 2.8 release and not this separate build. -->
     <!-- Contract ABI version 1.0.0.0: deploy the same binary to Opsis and all plugins before enabling new feeds. -->

@@ -7,7 +7,7 @@ comments stay in English; UI strings are bilingual "Ελληνικά / English".
 
 
 ## Current .NET 11 + Opsis 2.8 integration rule (2026-11-24)
-- Build with .NET 11; Crawler product version 0.28.0, Crawler plugin/contract ABI 1.0.0.0 and Opsis.UI 0.6.0 (assembly 0.1.0.0). The exact Opsis 2.8.0.2510 UI6 DLL is committed in `libs/`.
+- Build with .NET 11; Crawler product version 0.28.1, Crawler plugin/contract ABI 1.0.0.0 and Opsis.UI 0.6.0 (assembly 0.1.0.0). The exact Opsis 2.8.0.2510 UI6 DLL is committed in `libs/`.
 - Host and all plugins must load the **same compiled** shared ABI contract binary. The app, Windows, plugin and tests reference `libs/OpsisNewsCrawler.Plugin.Abstractions.dll` from Opsis 2.8; the source project is a mirror and must never be packaged as a replacement. The plugin installer must reject inconsistent SHA256 for host contract or UI6; it must not silently replace host-owned binaries.
 - The latest active P0 is draft PR #8 based on draft .NET 11 PR #7. Build/test, actual host loader, Chronikologio and installer/rollback gates are still required. Do not mark P0 complete because the source compiles.
 - The current canonical development journal is `CHANGELOG.md`; do not create or link new dated progress/handoff files. Keep source documentation (`docs/DATA-SOURCES.md`, `docs/SECURITY.md`, etc.) separate from progress history.
@@ -51,7 +51,7 @@ reposition/refresh without losing the scroll position.
 - Release assets are prepared in `release\<version>-assets` (ignored by git); the coordinator publishes. Per-release notes live in `docs/releases/`.
 
 ## v0.8.0 architecture notes (added 2026-10-13, evening)
-- **Single-history policy:** maintain progress/status only in `CHANGELOG.md`. Keep `docs/releases/RELEASE-0.28.0.md` as the current packaging release note, with no separate dated TASKS/HANDOFF progress files. Maintain real tests before calling an item verified.
+- **Single-history policy:** maintain progress/status only in `CHANGELOG.md`. Keep `docs/releases/RELEASE-0.28.1.md` as the current packaging release note, with no separate dated TASKS/HANDOFF progress files. Maintain real tests before calling an item verified.
 - **Language**: every UI text goes through `Core/Loc.cs` (`Loc.T("key")`), keys in `Core/Locales/el.json` + `en.json` (embedded; more languages = `locales\<code>.json` next to the exe). Never write mixed "Ελληνικά / English" strings. The locale files are generated: edit the script behind them or edit both JSON files, keep the same keys in both.
 - **Drawing**: `TickerCanvas` renders into a 32-bit **alpha** bitmap and copies it with `CompositingMode.SourceCopy`. The window background is a DWM accent backdrop chosen by `Native.SetBackdrop` (state 2 gradient / 3 blur / 4 acrylic). Do NOT use `Form.Opacity` (it blurs the text) and do not use GDI `TextRenderer` on the canvas (alpha 0 = invisible dark text).
 - **Bars**: `TickerHost` owns the main bar (`Window`) and an optional second bar inside the taskbar (`SecondWindow`). Each bar shows News, Stocks or Both (split in the middle: `TickerCanvas` x2 in one `TickerWindow`).

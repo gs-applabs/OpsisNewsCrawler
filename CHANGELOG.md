@@ -1,6 +1,6 @@
 # Changelog
 
-### Installer end-to-end findings fixed (2026-11-25)
+### 0.28.1 — installer end-to-end findings fixed (2026-11-25)
 
 - The installer end-to-end run on GitHub Windows runners (installer-e2e on main) installed, upgraded and uninstalled correctly, but its audits reported findings: the price-alert row made the PRICE ALERTS card wider than the page (it wraps now), the weather search buttons did the same in long translations (el, de; they wrap now), and three helper controls (alert metric, evidence filter, live priority) were not declared UI-only in the settings audit. `tools/ci-audit.ps1` now judges the report text, like the end-to-end test, and the audits pass in all 14 languages.
 
