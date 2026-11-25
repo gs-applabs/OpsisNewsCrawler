@@ -1,5 +1,9 @@
 # Changelog
 
+### Installer end-to-end findings fixed (2026-11-25)
+
+- The installer end-to-end run on GitHub Windows runners (installer-e2e on main) installed, upgraded and uninstalled correctly, but its audits reported findings: the price-alert row made the PRICE ALERTS card wider than the page (it wraps now), the weather search buttons did the same in long translations (el, de; they wrap now), and three helper controls (alert metric, evidence filter, live priority) were not declared UI-only in the settings audit. `tools/ci-audit.ps1` now judges the report text, like the end-to-end test, and the audits pass in all 14 languages.
+
 ### Opsis 3.0 compatibility (2026-11-25)
 
 - The plugin works with Opsis 3.0.0.3200 as well as 2.8: the host's shared plugin contract and Opsis.UI are byte-identical to the ones pinned in `libs/` (SHA-256 `514f2a3e…` and `9c50aa3b…`), the plugin DLL is still ABI 1.0.0.0, and the installer already finds the host DLLs in `lib` or `libs`. New: `opsis-permissions.json` next to the plugin DLL (network, audio, local files) which the Opsis 3.0 plugin page shows as the plugin's declared capabilities; older hosts ignore it. Test added. Not verified: a live load inside Opsis 3.0 (it would use the real user profile).

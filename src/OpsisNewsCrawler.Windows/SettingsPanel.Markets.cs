@@ -142,7 +142,7 @@ public sealed partial class SettingsPanel
             if (index >= 0 && index < workAlerts.Count) workAlerts[index].Enabled = isChecked;
         };
         alertFlow.Controls.Add(alertList);
-        alertInstrument = new FlatComboBox { Width = 250 };
+        alertInstrument = new FlatComboBox { Width = 220 };
         alertDirection = new FlatComboBox { Width = 80 };
         alertDirection.SetItems(new[] { "≥", "≤" }, 0);
         alertMetric = new FlatComboBox { Width = 150 };
@@ -152,7 +152,7 @@ public sealed partial class SettingsPanel
         addAlert.Click += (_, _) => AddAlert();
         var removeAlert = new FlatButton { Text = L("btn.delete") };
         removeAlert.Click += (_, _) => RemoveAlert();
-        var alertRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
+        var alertRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, MaximumSize = new Size(660, 0) };   // wraps instead of making the card wider than the page
         alertRow.Controls.AddRange(new Control[] { alertInstrument, alertMetric, alertDirection, alertThreshold, addAlert, removeAlert });
         alertFlow.Controls.Add(alertRow);
         alertMargin = new FlatText { Width = 100 }; alertMargin.Value = "0";
