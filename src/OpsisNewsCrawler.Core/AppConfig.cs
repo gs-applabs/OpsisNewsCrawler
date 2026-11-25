@@ -76,6 +76,10 @@ public sealed class AppConfig
     public bool ShowIcons { get; set; } = true;
     public bool HideRead { get; set; } = true;
 
+    /// <summary>P1 Opsis Widget Studio. Keys are the existing five host widget kinds.
+    /// No new plugin contract, background process, or wallpaper/DeskStrip surface.</summary>
+    public Dictionary<string, WidgetStudioProfile> WidgetProfiles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Discard dated RSS items older than this many hours. Undated items are retained.</summary>
     public int NewsMaxAgeHours { get; set; } = 168;
 
@@ -107,6 +111,12 @@ public sealed class AppConfig
 
     /// <summary>The holdings shown in the portfolio window (quantity and average price; profit and loss are computed).</summary>
     public List<PortfolioPosition> Portfolio { get; set; } = new();
+    /// <summary>Optional local transaction ledger; holdings remain authoritative until explicitly reconciled.</summary>
+    public List<PortfolioTransaction> PortfolioTransactions { get; set; } = new();
+    /// <summary>Imported economic releases; offline copies with explicit source attribution.</summary>
+    public List<EconomicEvent> EconomicEvents { get; set; } = new();
+    /// <summary>Saved local topic watchlists. No remote profiling.</summary>
+    public List<TopicWatch> TopicWatches { get; set; } = new();
 
     /// <summary>Cities (ids of <see cref="GreekCities"/>) shown by a bar whose content is "Weather", in this order.</summary>
     public List<string> WeatherCities { get; set; } = GreekCities.DefaultSelection.ToList();
@@ -162,6 +172,10 @@ public sealed class AppConfig
 
     /// <summary>"auto" (follow the detected hardware), "low", "balanced" or "high" (force a tier). Inside Opsis, "auto" follows the tier Opsis reports.</summary>
     public string PerformanceMode { get; set; } = "auto";
+
+    /// <summary>"normal" = regular data plan; "metered" = prefer lower network usage.
+    /// Explicit choice because legacy desktop Win32 APIs cannot reliably tell which plans are billed.</summary>
+    public string NetworkCostMode { get; set; } = "normal";
 
     /// <summary>When the user was last asked about an older per-user copy that is still installed next to this machine-wide one (asked again after a week).</summary>
     public DateTimeOffset? DuplicateInstallAskedAt { get; set; }
@@ -512,17 +526,21 @@ public sealed class AppConfig
         }
     }
 
-    public void Save(string? path = null)
+    public void Save(string? path = null) => TrySave(path);
+
+    /// <summary>Saves like <see cref="Save"/> (a failure never crashes the ticker) but tells the caller whether the file was really written, so a multi-step change can roll back.</summary>
+    public bool TrySave(string? path = null)
     {
         path ??= DefaultPath;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             SafeFile.WriteAllText(path, JsonSerializer.Serialize(this, JsonOptions));
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Settings that cannot be saved must not crash the ticker.
+            return false;
         }
     }
 
@@ -530,7 +548,8 @@ public sealed class AppConfig
     {
         if (UpdateLogicVersion < 1) { CheckForUpdates = true; UpdateLogicVersion = 1; }
         NewsRefreshSeconds = RefreshIntervalSeconds;
-        PerformanceMode = PerformanceClassifier.ModeText(PerformanceClassifier.ParseMode(PerformanceMode));   // "auto" | "low" | "balanced" | "high"
+        PerformanceMode = PerformanceClassifier.ModeText(PerformanceClassifier.ParseMode(PerformanceMode));
+        NetworkCostMode = NetworkCostMode == "metered" ? "metered" : "normal";   // "auto" | "low" | "balanced" | "high"
         MaxItemsPerFeed = Math.Clamp(MaxItemsPerFeed, 1, 50);
         NewsMaxAgeHours = Math.Clamp(NewsMaxAgeHours, 1, 720);
         MutedNewsKeywords = (MutedNewsKeywords ?? new()).Where(k => !string.IsNullOrWhiteSpace(k))
@@ -584,7 +603,18 @@ public sealed class AppConfig
         QuoteRefreshSeconds = Math.Clamp(QuoteRefreshSeconds, 30, 3600);
         Portfolio = (Portfolio ?? new()).Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Code) && p.Quantity > 0 && p.AvgCost >= 0)
             .Select(p => { p.Currency = string.IsNullOrWhiteSpace(p.Currency) ? "EUR" : p.Currency.Trim().ToUpperInvariant(); p.Market ??= ""; return p; }).Take(500).ToList();
-        PriceAlerts = (PriceAlerts ?? new()).Where(x => x is not null && !string.IsNullOrWhiteSpace(x.Code) && x.Threshold > 0).ToList();
+        PriceAlerts = (PriceAlerts ?? new()).Where(x => x is not null && !string.IsNullOrWhiteSpace(x.Code) &&
+                (x.Metric == "changePercent" ? x.Threshold is >= -100 and <= 100 : x.Threshold > 0))
+            .Select(x => { x.Metric = x.Metric == "changePercent" ? "changePercent" : "price"; x.RearmMargin = Math.Clamp(x.RearmMargin, 0m, 1_000_000m); x.MaxAgeMinutes = Math.Clamp(x.MaxAgeMinutes, 0, 10080); return x; }).Take(200).ToList();
+        TopicWatches = (TopicWatches ?? new()).Where(x => x is not null && !string.IsNullOrWhiteSpace(x.Name))
+            .Select(x => { x.Name=x.Name.Trim()[..Math.Min(80,x.Name.Trim().Length)]; x.Terms=(x.Terms ?? new()).Where(t=>t.Trim().Length>=3).Select(t=>t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList(); x.Region=(x.Region??"").Trim(); return x; })
+            .Take(50).ToList();
+        EconomicEvents = (EconomicEvents ?? new()).Where(x => x is not null &&
+            !string.IsNullOrWhiteSpace(x.Title) && x.Id.Length is >0 and <=100 &&
+            x.Impact is >=0 and <=3).DistinctBy(x=>x.Id).OrderBy(x=>x.StartsAt).TakeLast(1000).ToList();
+        PortfolioTransactions = (PortfolioTransactions ?? new()).Where(x => x is not null &&
+            !string.IsNullOrWhiteSpace(x.InstrumentKey) && x.Units > 0 && x.Fees >= 0 && x.UnitPrice >= 0)
+            .OrderBy(x=>x.When).TakeLast(5000).ToList();
         var builtIn = new HashSet<string>(Breaking.DefaultKeywords.Select(Breaking.Normalize));
         BreakingKeywords = (BreakingKeywords ?? new()).Where(k => !string.IsNullOrWhiteSpace(k)).Select(k => k.Trim())
             .Where(k => !builtIn.Contains(Breaking.Normalize(k))).Distinct(StringComparer.OrdinalIgnoreCase).Take(50).ToList();
@@ -612,7 +642,7 @@ public sealed class AppConfig
         GreekCities.SetCustom(CustomPlaces);   // before the city ids below are checked
         CustomPlaces = GreekCities.Custom.ToList();
         if (GreekCities.Find(AlertCityId) is null) AlertCityId = "";
-        LiveFeeds = (LiveFeeds ?? new()).Where(l => l is not null && !string.IsNullOrWhiteSpace(l.Url)).ToList();
+        LiveFeeds = LiveVideoStudio.CleanAll(LiveFeeds);
         if (!Enum.IsDefined(MainContent)) MainContent = BarContent.News;
         WeatherCities = (WeatherCities ?? new()).Where(id => GreekCities.Find(id) is not null).Distinct().ToList();
         DesktopBarShape = DesktopBarShape is "rounded" or "pill" ? DesktopBarShape : "rect";
@@ -628,6 +658,10 @@ public sealed class AppConfig
         foreach (var m in MonitorBars ??= new()) { m.SlotA = BarSpec.Clean(m.SlotA, Exists); m.SlotB = BarSpec.Clean(m.SlotB, Exists); }
         WeatherFields = (WeatherFields ?? new()).Select(f => (f ?? "").Trim().ToLowerInvariant())
             .Where(f => f is "wind" or "humidity" or "feels" or "rain" or "cloud" or "pressure" or "gusts").Distinct().ToList();
+        WidgetProfiles = WidgetStudio.CleanAll(WidgetProfiles);
+        if (WidgetProfiles.TryGetValue("news", out var newsWidget) &&
+            newsWidget.NewsCategoryId.Length > 0 && FindCategory(newsWidget.NewsCategoryId) is null)
+            newsWidget.NewsCategoryId = ""; // deleted RSS category, revert to active
         Feeds = new(); // migrated; not written back
     }
 }

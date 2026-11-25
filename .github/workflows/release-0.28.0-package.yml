@@ -1,0 +1,102 @@
+name: Package and verify Opsis News Crawler 0.28.0
+on:
+  push:
+    branches: ['release/p2-v0.28.0-*', 'release/p3-v0.28.0-*', 'feat/net11-opsis-280-ui6-compat', 'feat/p0-opsis-28-coordinated-host-20261124', 'feat/p1-news-widget-studio-20261124']
+  pull_request:
+    branches: ['feat/p1-opsis-integration-live-video-20261123', 'release/p2-v0.28.0-20261123', 'release/p3-v0.28.0-contract1-20261123', 'feat/net11-opsis-280-ui6-compat', 'feat/p0-opsis-28-coordinated-host-20261124']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crawler-028-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+      - name: Repository latest-version hygiene guard
+        shell: pwsh
+        run: ./tools/ci-hygiene.ps1
+      - name: Core + plugin regression tests
+        shell: pwsh
+        run: |
+          dotnet test tests/OpsisNewsCrawler.Core.Tests/OpsisNewsCrawler.Core.Tests.csproj -c Release -m:1
+          if ($LASTEXITCODE -ne 0) { throw 'Core tests failed' }
+          dotnet test tests/OpsisNewsCrawler.Plugin.Tests/OpsisNewsCrawler.Plugin.Tests.csproj -c Release -m:1
+          if ($LASTEXITCODE -ne 0) { throw 'Plugin tests failed' }
+      - name: Set up free Inno Setup compiler
+        shell: pwsh
+        run: ./tools/ci-install-inno.ps1
+      - name: Build installer + portable 0.28.0
+        shell: pwsh
+        run: ./tools/release.ps1
+      - name: Prepare exact source archive and verify version identities
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release/0.28.0-assets | Out-Null
+          git archive --format=zip -o release/0.28.0-assets/OpsisNewsCrawler-0.28.0-source.zip HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'git archive failed' }
+          $src = 'release/0.28.0-assets/OpsisNewsCrawler-0.28.0-source.zip'
+          $digest = (Get-FileHash $src -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText("$src.sha256", "$digest  OpsisNewsCrawler-0.28.0-source.zip`n")
+          $app = (Get-Item Output/stage/OpsisNewsCrawler.exe).VersionInfo.ProductVersion.Split('+')[0]
+          if ($app -ne '0.28.0') { throw "wrong app version $app" }
+          $plugin = 'Output/stage/plugins/Opsis - Desktop Customization/OpsisNewsCrawler.OpsisPlugin.dll'
+          $abi = [Reflection.AssemblyName]::GetAssemblyName((Resolve-Path $plugin)).Version.ToString()
+          if ($abi -ne '1.0.0.0') { throw "wrong plugin assembly version $abi" }
+          $contract = 'Output/stage/plugins/Opsis - Desktop Customization/OpsisNewsCrawler.Plugin.Abstractions.dll'
+          $shared = [Reflection.AssemblyName]::GetAssemblyName((Resolve-Path $contract)).Version.ToString()
+          if ($shared -ne '1.0.0.0') { throw "unexpected shared contract identity $shared" }
+          $ui = 'Output/stage/plugins/Opsis - Desktop Customization/Opsis.UI.dll'
+          $uiAssembly = [Reflection.AssemblyName]::GetAssemblyName((Resolve-Path $ui)).Version.ToString()
+          $uiFile = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $ui)).FileVersion
+          if ($uiAssembly -ne '0.1.0.0' -or $uiFile -ne '0.6.0.0') { throw "wrong Opsis.UI identity $uiAssembly / $uiFile" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OpsisNewsCrawler-0.28.0-candidate
+          path: release/0.28.0-assets/*
+          if-no-files-found: error
+          retention-days: 7
+
+  isolated-install:
+    needs: build-release
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [fresh, update-helper, integrated]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: OpsisNewsCrawler-0.28.0-candidate
+          path: package
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+      - name: Check canonical Opsis 2.8 shared ABI before integrated installer gate
+        if: matrix.scenario == 'integrated'
+        shell: pwsh
+        run: |
+          $file = 'libs/OpsisNewsCrawler.Plugin.Abstractions.dll'
+          if (!(Test-Path $file)) { throw 'Missing canonical Opsis shared contract DLL' }
+          if ([Reflection.AssemblyName]::GetAssemblyName((Resolve-Path $file)).Version.ToString() -ne '1.0.0.0') { throw 'Wrong ABI version' }
+      - name: Test real setup install/update/uninstall in Windows VM
+        shell: pwsh
+        run: ./tools/e2e-installer.ps1 -Scenario '${{ matrix.scenario }}' -NewSetup "$PWD/package/OpsisNewsCrawler-Setup.exe" -Repository '${{ github.repository }}' -Out "$env:RUNNER_TEMP/e2e" -ContractFile "$PWD/libs/OpsisNewsCrawler.Plugin.Abstractions.dll"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p3-e2e-${{ matrix.scenario }}
+          path: ${{ runner.temp }}/e2e
+          if-no-files-found: ignore
+          retention-days: 14

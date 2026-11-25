@@ -97,10 +97,10 @@ public sealed class BreakingEngine
             if (home is null) { home = new Cluster { Tokens = tokens }; clusters.Add(home); }
             else home.Tokens.UnionWith(tokens.Where(t => t.Length >= 4));
             home.Items.Add(item);
-            home.Reports.Add(new Report(Publisher(item), item.PublishedAt));
+            home.Reports.Add(new Report(PublisherIdentity.Canonical(Publisher(item)), item.PublishedAt));
             // reports that the news provider folded into this headline when it removed near-duplicates of other publishers
             if (item.StoryReports is not null)
-                foreach (var r in item.StoryReports) home.Reports.Add(new Report(RootHost(r.Host, r.Source), r.At));
+                foreach (var r in item.StoryReports) home.Reports.Add(new Report(PublisherIdentity.Canonical(RootHost(r.Host, r.Source)), r.At));
         }
         return clusters;
     }

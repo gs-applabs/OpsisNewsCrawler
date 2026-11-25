@@ -1,5 +1,180 @@
 # Changelog
 
+### Opsis 3.0 compatibility (2026-11-25)
+
+- The plugin works with Opsis 3.0.0.3200 as well as 2.8: the host's shared plugin contract and Opsis.UI are byte-identical to the ones pinned in `libs/` (SHA-256 `514f2a3e…` and `9c50aa3b…`), the plugin DLL is still ABI 1.0.0.0, and the installer already finds the host DLLs in `lib` or `libs`. New: `opsis-permissions.json` next to the plugin DLL (network, audio, local files) which the Opsis 3.0 plugin page shows as the plugin's declared capabilities; older hosts ignore it. Test added. Not verified: a live load inside Opsis 3.0 (it would use the real user profile).
+
+### 0.28.0 release preparation (2026-11-24)
+
+- README (el + en) lists every capability of 0.28.0 and the Opsis 2.8 / .NET 11 compatibility; the in-app Version history and Help (14 languages) have a 0.28.0 entry; the release note states the pre-release status and what is still unverified.
+
+### Final audit pass on the .NET 11 build (2026-11-24)
+
+- Merged the a05ffa3 head (P1 widget studio, P2/P3 portfolio, digests, alerts, UI6) with the 0.25.0 and P3 lines. The shared ABI is the compiled `libs/OpsisNewsCrawler.Plugin.Abstractions.dll` (SHA-256 `514f2a3e…`, same bytes as the Opsis host); no parallel contract is built or shipped. Opsis.UI is the 0.6.0 build in `libs/`.
+- Fixed: the UI project could not compile (`SafeFile` was internal in Core but used by the weekly-digest export); the gallery card text now breaks lines with `\n` only (it used `Environment.NewLine`, so the text carried a CR).
+- Fixed: the opening-balance migration rolled back only on an exception, but `AppConfig.Save` swallows I/O failures, so a failed save looked like success. New `AppConfig.TrySave` / `TickerHost.TrySaveConfig` report the real result and the migration restores the holding when the file was not written. Test added.
+- Fixed: ICS export now folds content lines at 75 octets without splitting a UTF-8 character (RFC 5545). Test added.
+- Full audit additions: feed downloads (and feed discovery, article images, favicons) now use `RedirectGuardHandler`: at most 5 redirects, no https→http, and a public feed can no longer redirect to loopback, private, link-local or single-label addresses; `NetGuard` also classifies IPv4 hidden in IPv6 (IPv4-compatible, NAT64, 6to4) and 192.0.0.0/24, 198.18.0.0/15. Residual: a public name that DNS-resolves to a private address (DNS rebinding) is not blocked, because a connect-time check would break corporate proxies.
+- Price rules ignore a zero or negative price (it fired "below" rules and re-armed fired ones); a new ledger transaction is rolled back when the settings file cannot be written; the market-list download no longer lets an unexpected exception out of an `async void` handler; topic watchlists normalise terms once (not per story) and ignore null terms; the M3U export refuses URLs with control characters or spaces, writes the normalised URI and caps titles.
+- Requires the .NET 11 Desktop Runtime. Not verified: real Windows install/upgrade/rollback, multi-monitor/DPI, real Opsis 2.8 host load, GitHub CI.
+
+### P2/P3 explicit legacy portfolio migration (2026-11-24)
+
+- Existing portfolio window can move a selected holding into the transaction ledger as an explicitly confirmed opening balance at the migration timestamp, preserving quantity and average cost, without inventing historical trades. Rejects overlapping ledger positions and warns about legacy overlap; transaction editor blocks new entries for matching legacy holdings until reconciliation. No automatic merge, shared totals or new database. Windows validation deferred.
+
+
+### P2/P3 cached ledger valuation and existing market tools (2026-11-24)
+
+- Transaction view reads existing QuoteService.LatestByKey, shows native-currency market value and unrealized P/L when a matching configured instrument and explicit currency unit are available; otherwise reports unavailable. EUR Athens is supported by its configured euro symbol; ambiguous units are not inferred. Shows quote timestamp and delay, no new quote requests or FX assumptions. Existing portfolio and analysis windows linked from the transaction view rather than adding charts or another portfolio engine. No automatic migration or merging of legacy holdings. Windows validation deferred.
+
+
+### P2/P3 advanced price alert safeguards (2026-11-24)
+
+- Existing price and percentage rules support optional re-arm margin and maximum observation age. Missing/stale observations no longer re-arm fired rules. Settings reject duplicate thresholds and excess rules, and display source observation time, delayed status and change-from-open context on alerts. Existing default settings remain compatible; no new quote provider or scheduler. Regression test added, not run; Windows validation deferred.
+
+
+### P2/P3 currency-safe portfolio ledger (2026-11-24)
+
+- Existing portfolio view groups by instrument and currency; no implicit FX conversions or cross-currency sums. Shows weighted average unit cost, realized P/L, dividends, combined realized income and fees. Transaction editor allows historical local timestamps, rejects ambiguous decimal separators and DST times, validates the full corresponding ledger before saving. Ledger rejects mixed instruments/currencies, unknown actions and empty-position splits. Regression test added but not run; no live valuation or unrealized return inferred. Windows validation deferred.
+
+
+### P2/P3 economic calendar filters (2026-11-24)
+
+- Existing calendar supports country, impact, upcoming 7/30/90 days and past 30 days filters, with actual/forecast/previous fields and filtered ICS export. Related cached headlines use the existing HeadlineDedup and comparison form, not a second provider or calendar. Similarity does not prove causal links; imported entries are not live verified releases. Windows validation deferred.
+
+
+### P2/P3 personalized digest exports (2026-11-24)
+
+- Existing Intelligence center offers a digest date and all-news or enabled-watchlist scope for daily and seven-day HTML exports. Date filtering precedes existing TopicMatcher, preserving source ordering and local-only operation. Exports cover only available cached stories, not an exhaustive archive.
+- Daily and weekly links share NetGuard public-URL validation; weekly export uses the existing SafeFile writer. No additional cache, scheduler, history database, mailer or background writes. Windows validation deferred.
+
+
+### P2/P3 story comparison refinement (2026-11-24)
+
+- Existing StoryExplorer caches anchor tokens per cluster during each grouping pass and bounds the comparison window to 1–72 hours. Distinct reports without URLs are not all collapsed into one solely because their URLs are empty.
+- Intelligence center adds publisher-group filters and retains the displayed cluster snapshot for source comparison, avoiding reclustering on click and mismatches after refresh. Existing comparison form shows available cached RSS summaries, no new fetcher or fact-verification claims. Windows validation deferred.
+
+
+### P1/P2 shared topic filtering (2026-11-24)
+
+- Optional News widget filter uses existing Intelligence watchlists and TopicMatcher, combined with existing RSS category selection. Filters before the display limit, keeps source ordering, and shows no results if no enabled watchlist matches. Existing defaults unchanged. No separate watchlist store, network request, or scheduler. Windows verification deferred.
+
+
+### P1 editorial controls and live catalogue refinement (2026-11-24)
+
+- Existing Breaking Evidence Inspector gains source-group filters and descending priority ranking without a second scoring engine. Existing Live Video Hub supports a user-entered sample headline for offline ranking; blank retains the current breaking context. Reject duplicate or oversized catalogue entries before adding, with a 64-source limit and no new player, network request or persistent settings file. Windows validation deferred.
+
+
+### Suite ownership / Chronikologio feed routing (2026-11-24)
+
+- Fixed the On This Day widget: select the verified Chronikologio feed key `san-simera`, accepting both rich and legacy text registration, instead of picking the first unrelated rich feed. Refresh on existing PluginFeeds.Changed; unsubscribe on disposal. No second history database, calendar engine or polling service.
+- Suite ownership policy: Opsis owns performance dashboard, monitor placement, shell and hosted palette; Opsis.UI owns shared controls; WeatherHub supplies hosted weather with standalone fallback; Chronikologio owns calendar/history; Media Suite owns general media processing; GearWin owns system repair and system backups. Crawler owns news/market ingestion, editorial alerts and feed presentation. Do not duplicate these services; feature-specific rollback and standalone fallbacks remain permitted. Windows validation deferred.
+
+
+### P1 accessibility refinement (2026-11-24)
+
+- Existing widgets respect Windows High Contrast colors and use a contrast-safe fallback for normal theme text; card height scales with font size and monitor DPI. Preserve selected list item during refresh; sanitize plain-text headline rows using the existing bounded sanitizer.
+- Performance Dashboard and monitor placement remain Opsis host responsibilities, not new Crawler screens. Windows validation deferred; this is source-only development.
+
+
+### P1 weather cards and widget lifetime refinement (2026-11-24)
+
+- Optional Weather cards in the existing Widget Studio; Weather & Hazards preset selects them. Reuses existing weather snapshot and gallery controls, without extra network calls, ABI changes or new widgets. Cards show bounded plain text, optional source and reported time; no inferred forecast.
+- Stop widget timer when its handle is destroyed, clear pending refresh flag and size list rows for the selected text font. Source-only implementation; Windows CI deferred, not release certification.
+
+
+### P0 compatibility and failure-safety implementation (24/11/2026)
+
+Code is committed in Crawler draft PR #8 and companion Opsis 2.8 host draft PR #11. **This is not a validated or published installer.** Windows Crawler and host CI gates must pass before release; physical GPU/multi-monitor/DPI/UAC/long-soak verification has not occurred.
+
+- Weather: optional host cache via Opsis WeatherHub for configured cities, validation of freshness/schema, no duplicate cache write on valid host readings, fallback to standalone weather.
+- Safe Mode and shell: prohibit late plugin starts in Safe Mode; optional host callback changes Taskbar placement to a temporary non-reserving position when DeskStrip is active or compatibility review is required. Live DeskStrip changes notify Crawler; persistent settings are unchanged.
+- Idle/resource safety: idempotent Start/Stop, weather-session cancellation and suppression of stale retries, one bounded worker for SuiteEventHub emissions so slow observers cannot block ticker drawing.
+- Installer: refuse integrated setup when Opsis host's Local\Opsis.SingleInstance mutex is held, or when ABI/UI6/installed Chronikologio contract DLLs differ. Back up previous plugin folder before copying.
+- Recovery: explicit SHA-checked rollback of one completed plugin snapshot; never silently overwrite the Opsis host or another plugin.
+- CI release gates: net11 build, pinned binary contracts, actual Opsis plugin loader smoke for Crawler AND Chronikologio, installer E2E and mismatch/refusal tests, and repository hygiene.
+- Manual release gates: graphics card, multimonitor and 100/150/200% DPI, UAC/SmartScreen, and multi-day CPU/GDI/SSD soak. Plugin-local rollback does not imply atomic multi-app rollback.
+
+### P1 / News Widget Studio + Breaking transparency (24/11/2026, draft)
+
+- **Financial Desk market cards:** The existing `crawler-markets` widget now offers an opt-in `market-cards` layout using the existing `QuoteService`'s `NewsItem`s (symbol/instrument, value, existing daily/delayed-price indication, movement arrow and optionally last *reported* timestamp). Non-navigable quotes render as accessible **static text** rather than disabled/clickable buttons; no new market API, quote fetcher or trading action. Financial Desk preset selects this layout.
+- **Manually selected News RSS category:** One `NewsCategoryId` property inside the existing widget profile allows any existing user-configured source category, including `Greece`/`International`. No GPS, IP or content-based geolocation. IDs are normalized, removed categories fall back to the active category, and non-News widgets cannot request another RSS category. News widgets reuse `extraNewsProvider`, shared cache and existing visible-widget UI timer with a minimum two-minute request gap; no polling when hidden, no second RSS engine or standalone service.
+- **Cross-app event integrity:** A category-only UI refresh now uses a local `NewsWidgetUpdated` callback, **not** an invented `SuiteEventKind.News` event that could appear as a false headline in Chronikologio/Opsis. Hidden/disposed WinForms widget handles unregister. RSS HTML parser timeout is handled safely.
+- **New regression tests:** `P1NewsCategoryTests`, market-card assertions in `P1NewsroomGalleryTests`, source-category validation in `P1WidgetStudioTests` and preset-kind checks; CI still must execute them on Windows. This work remains in draft PR #9, built on unmerged P0 PR #8.
+
+
+- **Newsroom Gallery (opt-in):** new settings layout for existing `crawler-news`, `crawler-breaking` and `crawler-history` widgets. Category/Breaking text cards include bounded plain-text headlines, excerpts, publisher, optional publication time and count of related *reports* (not independent fact verification). No remote image fetching, new browser, background network timer or duplicated Opsis widget host.
+- **Smart Color Sync:** per-widget opt-in accent from Opsis' existing host palette, or original Crawler theme by default; live event-driven updates only on color change, no wallpaper scraping, no extra scheduler; accessible 4.5:1 caption contrast and fallback header text.
+- **Accessibility + multi-monitor DPI:** user-adjustable text size 80–160% for every existing widget, 100/150/200/400% DPI card-height scaling and live monitor DPI-change handling. A single owned Font per panel is changed only when scale changes, disposed after child controls; no continuous GDI churn.
+- **Ready-made UI presets:** one-click settings-only `Newsroom`, `Financial Desk`, `Weather & Hazards`, `Greece Today`, `Easy Read` (135% font). No config files beyond existing Crawler settings, layout copies, registry changes or duplicate application/plugin modules. Per-widget reset preserves prior 100% font/headline defaults.
+- **Performance and safety:** cards are refreshed only when their bounded in-memory signature changes; theme-only updates redraw existing controls. Existing original Breaking widget remains unchanged until Gallery mode is explicitly selected. RSS HTML is stripped to safe plain text, metadata is bounded, click targets reuse public-HTTP URL guard and queued UI updates remain coalesced. Gallery tests cover source sanitization, public-information provenance, accessibility, contrast, DPI, templates and default migration.
+
+
+- The **same five** Opsis widget keys are reused (news, markets, weather, breaking, on-this-day). No second widget host, tray, wallpaper renderer or new ABI entry point.
+- New `P1 · Widget Studio` page with per-widget layouts (`headlines` or `context`), maximum items (3–30), and optional source/time labels. Existing display is the default. Profiles are validated during config load/import, persisted with the current config (not a new file), and can be individually reset with the normal Opsis.UI flat card affordance.
+- Existing `CrawlerWidgetPanel` adopts the stored profile and accessible list names/selected descriptions, with single-scheduled refresh from SuiteEventHub instead of a backlog of repeated UI-thread callbacks. It uses the existing Opsis/UI6 theme tokens and keeps invisible widget timers stopped.
+- Breaking settings include a read-only **Evidence Inspector**, ranking the latest stories using the existing `BreakingEngine.Assess` results. It displays source-group counts and full positive/negative reasons, explicitly disclaims that score 0–100 is not a truth probability or fact-check. Assessment work is reused (no second scoring pass or network access).
+- Added `P1WidgetStudioTests` for migration/defaults, bad config clamping, title formatting, context metadata and multiline injection. Existing widget ABI tests still require exactly five widgets.
+- **P1 Smart Breaking Live Video Studio:** the existing user-supplied stream editor now edits/retains per-stream priority, region and event keywords (previously lost by settings-copy). Provides **offline** read-only ranked top-three preview using existing LiveVideoPolicy. No stream starts automatically. Invalid/massive URL or metadata entries are bounded and unsafe schemes rejected.
+- Live Video and widget accessibility regression tests added; accessibility metadata is capped at 512 characters and malformed newline-heavy source labels are sanitized. Historical-year widget cannot display meaningless current publication timestamps.
+
+- Companion Opsis P0 PR #11 and P0 Crawler PR #8 remain draft; P1 is a separate draft branch based on P0. All Windows CI and real host load checks must pass before either is merged.
+
+## 0.28.0 — .NET 11 / Opsis 2.8 P0 development (2026-11-24, candidate)
+
+> Product version remains **0.28.0**. These entries document work in draft PRs, not a stable published release. See [PR #7](https://github.com/gs-applabs/OpsisNewsCrawler/pull/7) (.NET 11 migration) and [PR #8](https://github.com/gs-applabs/OpsisNewsCrawler/pull/8) (P0 host integration).
+
+- **Toolchain / host:** `net11.0-windows`, identical `Opsis.UI.dll` as Opsis `release/2.8.0.2510` (UI file version 0.6.0.0, assembly 0.1.0.0); Crawler plugin and shared contract AssemblyVersion/FileVersion 1.0.0.0.
+- **P0 host context and theme:** versioned, in-memory language/theme/performance-tier snapshot; Opsis owns its process-global UI6 palette, while standalone owns its own palette. Host callbacks avoid creating the hidden ticker before `Start`.
+- **P0 lifecycle:** idempotent `Start/Stop`, delayed first-update guard and no manual refresh while stopped; mutex is released on a failed start. Unit tests cover host-context revision and invalid locale/tier.
+- **P0 installer / safety:** Inno integrated mode checks ABI and compares SHA-256 of both shared contract and Opsis.UI against the host before copying plugin files; standalone mode is unaffected. The `tools/verify-opsis-host-p0.ps1` read-only script checks an installed Opsis host, Crawler and optional Chronikologio.
+- **P0 contract ownership:** the exact `lib/OpsisNewsCrawler.Plugin.Abstractions.dll` from Opsis 2.8.0.2510 (Git blob `7beb06349daef31ae4c80f2a47a32c7477f1e50d`) is pinned in `libs/` and referenced directly by App/Windows/Plugin/Tests. The similarly named Crawler source project is a **source mirror**, never the deployed artifact. Opsis optional `IPluginHostSettingsAware` now pushes UI scale/theme/tier/language without breaking ABI 1.0.0.0.
+- **Old image/archive cleanup:** removed 28 screenshots no longer linked by the current README/guide/history (1,671,239 bytes), one superseded 0.14.3 icon (126,025 bytes) and an empty secondary CHANGELOG; kept all screenshots directly referenced by README and all runtime assets. Old source images are recoverable in Git history.
+- **Generated output retention:** `tools/prune-generated-releases.ps1` runs only after a successful installer/package build, keeping `release/0.28.0-assets` and current-version portable/setup files while removing only strict-name older generated packages from `release/` and `Output/`. Default manual invocation is dry-run; no deletion of GitHub releases, source, user settings or backups. Windows CI checks dry-run and safe pruning in temporary directories.
+- **Repository hygiene automation:** `tools/ci-hygiene.ps1` refuses reintroduced old progress docs, multiple historical release notes, generated installers committed to Git, or missing canonical contract DLLs.
+- **CI:** Windows build, plugin ABI, real Opsis 2.8 loader, and installer E2E are release gates. **Do not merge/publish until current-head green CI and real desktop regression testing.** Host + Chronikologio must be upgraded together; real shared-weather + DeskStrip/Taskbar/Safe Mode coordination is implemented in companion Opsis draft PR #11 and Crawler draft PR #8 (not yet CI certified) to the exact shared contract DLL.
+- **Remaining P0:** host-provided weather handoff (no ABI 1.0 callback today); explicit Taskbar/DeskStrip ownership; safe-mode and Windows-update handshake; coordinated multi-app rollback; cross-process idle/SSD/GPU and 100/150/200% DPI testing. No claim of completion for these components.
+
+## Consolidated historical progress and release-note archive (2026-10—2026-11)
+
+**Repository housekeeping policy (as of 2026-11-24):** this is the single chronological development journal. Keep the **latest** release document (`docs/releases/RELEASE-0.28.0.md`), source-code instructions (`CLAUDE.md`), stable technical specifications (security, providers, breaking, plugin, coexistence, performance, etc.), tests and licensing. Do not create separate dated HANDOFF/TASKS/P0/P2/review Markdown progress files for every session. Add future progress under the current-version heading here. Keep an older binary or ZIP only if a release/rollback policy explicitly requires it; deleting a tracked documentation file does **not** rewrite Git history or delete previous GitHub releases.
+
+### Previous release milestones (summarized from superseded `docs/releases/RELEASE-*.md`)
+
+| Version | Historical milestones (already described in earlier entries above/below) |
+|---|---|
+| 0.15.0 | Welcome guide, Opsis family status/update integration, alert/tray icon evolution. |
+| 0.16.0–0.16.2 | Global weather locations, natural hazards from USGS/EMSC/GDACS/EONET, disaster cards, per-bar scroll speeds, source safeguards, update signing/checksum limits. |
+| 0.17.0 | First Opsis.UI shared controls and focus/DPI/RTL improvements. |
+| 0.18.0–0.18.8 | Hazard maps and event details, taskbar transparency and integrated mode, settings toggle/reset behaviour, single instance/mutex, legacy per-user install cleanup and auto-save settings. The older tray animation assumptions are superseded by subsequent versions. |
+| 0.19.0–0.19.2 | Hardware performance tiers, installer migration fixes, static tray icon and scroll-focus bug fixes. |
+| 0.20.0–0.20.3 | Evidence-weighted breaking news with user-adjustable sensitivity; plugin rich feed/widget interfaces, encoding fixes and safer updater/version hygiene. |
+| 0.22.2 | Taskbar flicker fix and avoidance of repeated shell Z-order/backdrop reassignment; real multi-monitor and Windows-build matrix validation still required. |
+| 0.24.0–0.24.1 | Rich metadata feeds, family catalogue, optional MET Norway fallback and opt-in approximate location. |
+| 0.28.0 P0–P3 | RSS safety, SSD/idle reduction, Live TV, five widgets, watchlists, merged timeline, daily/weekly offline HTML digests, market tools, economic calendar and ABI 1.0.0.0 staged for coordinated Opsis 2.8 delivery. |
+
+### Historical progress file dispositions
+
+| Former file | Important decisions retained / current handling |
+|---|---|
+| `docs/HANDOFF.md` / `docs/TASKS.md` | Historical R/N/O requirement and session-by-session checklists (Oct 2026) were superseded by implementation, `CHANGELOG.md` and current tests. Preserved exact source in Git at commit `6d4fb3609d8ae59ada6acd8384f94789c7aad83d`; do not treat old ✅ or unchecked boxes as current QA results. |
+| `docs/PLAN-INTAKE.md` | 2026-11-10 prioritization, staged regional/weather expansion, taskbar-flicker reproduction before changes and high-contrast/automatic text-colour requirements. Continue unresolved priorities under current P0/P1/P2 sections, not an old 2.4.x contract plan. |
+| `CHANGELOG.md (historical review section)` / `docs/INSTRUCTIONS-REVIEW.md` | Historical UX and security audit: source health, title dedup, accessible ticker names, DPI/RTL, taskbar overlay, full-text contrast, user-provider permissions. Some were implemented later; pending verification remains as current work, never promoted to “passed” without a test run. |
+| `docs/P0-IMPLEMENTATION-2026-11-23.md` | Early P0 RSS concurrency/size caps, backoff, reduced disk writes, GDI, timers, cancellation, async rich metadata; originally on 0.24.1 + ABI 0.8, now superseded by 0.28.0 and ABI 1.0.0.0. Reconfirm with current tests. |
+| `docs/P2-COMPATIBILITY-AND-RELEASE.md` | Requires coordinated Opsis/Chronikologio/Crawler contract build, fresh/upgrade/rollback installer E2E, DPI, soak and signature caveats. SHA-256 detects integrity, not publisher authenticity. |
+| `docs/NET11-OPSIS-280-COMPAT.md` / `docs/P0-OPSIS-28-HOST-INTEGRATION.md` | Net11 runtime, UI6 parity, actual host loader tests, host-context and single-instance guards, data-only ABI preflight and installer hash denial moved into the current 0.28.0 development heading above. |
+| Older `docs/releases/RELEASE-*.md` except 0.28.0 | Superseded individual release notes replaced by milestone table and original `CHANGELOG.md` entries. |
+
+**Provenance:** the full pre-consolidation text of these superseded files remains accessible in Git history at [the snapshot commit](https://github.com/gs-applabs/OpsisNewsCrawler/tree/6d4fb3609d8ae59ada6acd8384f94789c7aad83d/docs). This archive is a historical summary, not a claim that old releases or CI jobs were certified today.
+
+
+## 0.28.0 — 2026-11-23
+- **Version alignment:** standalone application, Core, Windows UI, plugin, installer and tests upgraded to product version 0.28.0. Crawler plugin assembly and file version pinned at 1.0.0.0; shared host contract was initially 0.8.0.0 in this staging line; the later P3 coordinated rollout uses 1.0.0.0 (new contract members require synchronized DLL rollout).
+- **P0 reliability:** RSS concurrency, bounded downloads, retry/backoff, cache write reduction, graceful shutdown, GDI measurement protection, refresh scheduler, rich plugin feed metadata and health diagnostics.
+- **P1 interaction:** Live Video Hub and channel selection, explainable breaking scores and publisher-group independence, optional Opsis desktop widgets, suite events, DPI, keyboard focus, smart contrast, regional power/metered network behavior.
+- **P2 local research:** topic watchlists, story source explorer, local multi-app timeline, daily offline HTML digest (print to PDF via browser), optional portfolio trade ledger, price-percent alerts, and unified Opsis-style insights center.
+- **Release validation:** Windows build/tests, settings audits and an installer/portable/source workflow with hashes and fresh/update-helper installation scenarios. Physical multi-monitor/GPU soak and host binary compatibility are still necessary before wide deployment.
+
 The complete history (all versions, in Greek and English) is also inside the program: Settings → Information → History.
 Detailed notes per release: `docs/releases/RELEASE-<version>.md` and the GitHub releases.
 
@@ -187,7 +362,7 @@ Detailed notes per release: `docs/releases/RELEASE-<version>.md` and the GitHub 
 ## 0.14.3 — 2026-10-23
 - The icon is rectangular: the breaking-news intro draws the whole artwork (four news symbols) over the full bar height, crisp at 100/150/200 % DPI (rendered at the final pixel size, only scaled down while it grows); the intro echo ring is a rounded rectangle.
 - Settings header icon is the same wide icon. Letter badges and favicon plates are rounded squares, not circles; favicons are kept at 64 px and scaled down; the icon next to a headline grows with the bar (20 px at 42 px).
-- New --snapshot-bar <png> switch; review with proposals in docs/REVIEW-2026-10.md. Tests: 113.
+- New --snapshot-bar <png> switch; review with proposals in CHANGELOG.md (historical review section). Tests: 113.
 
 ## 0.14.2 — 2026-10-22
 - Severe-weather alert: clicking it opens the warnings page (meteo.gr) and the bar returns to normal news. Before, nothing opened and the bar stayed red and static for 30 minutes.

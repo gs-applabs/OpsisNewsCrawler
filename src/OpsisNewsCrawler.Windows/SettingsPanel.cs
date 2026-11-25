@@ -9,7 +9,7 @@ namespace OpsisNewsCrawler.Windows;
 /// "News Crawler" page of Opsis. Edits are kept in memory and written to the config only when the user presses Apply.
 /// Every text is in the one language chosen in <see cref="Loc"/>; the panel rebuilds itself when the language changes.
 /// </summary>
-public sealed class SettingsPanel : UserControl
+public sealed partial class SettingsPanel : UserControl
 {
     private readonly TickerHost host;
     private readonly bool showCloseButton;
@@ -17,6 +17,7 @@ public sealed class SettingsPanel : UserControl
     private bool loading;
     private bool hasUnsavedChanges;
     private bool dirtyTrackingAttached;
+    private Action? performanceInfoHandler;
 
     private FlatNav tabs = null!;
     private Label status = null!;
@@ -27,6 +28,9 @@ public sealed class SettingsPanel : UserControl
     // General
     private FlatComboBox language = null!;
     private FlatComboBox perfMode = null!;
+    private FlatComboBox networkCost = null!;
+    private Label overviewStatus = null!;
+    private readonly System.Windows.Forms.Timer overviewTimer = new() { Interval = 5000 };
     private Label perfInfo = null!;
     private FlatComboBox category = null!;
     private FlatNumber refresh = null!;
@@ -125,6 +129,7 @@ public sealed class SettingsPanel : UserControl
     private FlatList alertList = null!;
     private FlatComboBox alertInstrument = null!;
     private FlatComboBox alertDirection = null!;
+    private FlatComboBox alertMetric = null!;
     private FlatText alertThreshold = null!;
     private readonly Dictionary<QuoteSource, FlatList> watchLists = new();
     private FlatComboBox marketCombo = null!;
@@ -159,6 +164,9 @@ public sealed class SettingsPanel : UserControl
     private FlatSwatch taskbarSwatch = null!;
     private FlatComboBox barBackdrop = null!;
     private FlatComboBox taskbarBackdrop = null!;
+
+    // P1: edit existing Opsis desktop widgets, never register duplicate widget keys.
+    private readonly Dictionary<string, (FlatComboBox Layout, FlatNumber Count, FlatCheckBox Source, FlatCheckBox Time)> widgetEditors = new();
 
     // Breaking
     private FlatCheckBox breakingEnabled = null!;
@@ -202,6 +210,9 @@ public sealed class SettingsPanel : UserControl
     private List<LiveFeed> workLive = new();
     private FlatList liveList = null!;
     private FlatText addLiveBox = null!;
+    private FlatNumber livePriority = null!;
+    private FlatText liveRegion = null!, liveKeywords = null!;
+    private bool liveMetadataLoading;
     private Label liveStatus = null!;
 
     /// <summary>Raised after Apply succeeded.</summary>
@@ -230,14 +241,37 @@ public sealed class SettingsPanel : UserControl
         Theme.Changed += OnThemeChanged;
         Loc.Changed += OnLanguageChanged;
         previewTimer.Tick += (_, _) => UpdatePreview();
-        previewTimer.Start();
         Build();
+        overviewTimer.Tick += (_, _) => RefreshOverview();
+        if (Visible && IsHandleCreated) { previewTimer.Start(); overviewTimer.Start(); }
+    }
+
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        if (IsDisposed) return;
+        if (Visible)
+        {
+            previewTimer.Start();
+            overviewTimer.Start();
+            if (sourceStatus is { IsDisposed: false }) sourceTimer.Start();
+        }
+        else
+        {
+            previewTimer.Stop();
+            overviewTimer.Stop();
+            sourceTimer.Stop();
+        }
     }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            previewTimer.Stop();
+            if (performanceInfoHandler is not null) host.PerformanceChanged -= performanceInfoHandler;
+            overviewTimer.Stop();
+            overviewTimer.Dispose();
             previewTimer.Dispose();
             sourceTimer.Dispose();
             historyRetry.Dispose();
@@ -250,6 +284,17 @@ public sealed class SettingsPanel : UserControl
             Loc.Changed -= OnLanguageChanged;
         }
         base.Dispose(disposing);
+    }
+
+    private void RefreshOverview()
+    {
+        if (IsDisposed || overviewStatus is null || overviewStatus.IsDisposed) return;
+        var sources = host.FeedHealth;
+        var ok = sources.Count(h => h.ConsecutiveFailures == 0 && h.LastOk is not null);
+        var disk = DataCache.WriteDiagnostics;
+        overviewStatus.Text = Loc.T("dash.metrics",
+            host.RecentNews.Count, ok, sources.Count, host.Performance.Tier, host.RunningRefreshes,
+            disk.Writes, disk.Skips, host.CurrentEnergyBudget.Multiplier);
     }
 
     private void OnThemeChanged()
@@ -331,13 +376,15 @@ public sealed class SettingsPanel : UserControl
                 (Loc.T("pk.desktop.bar.a.free"), BuildDesktopBar()),
                 (Loc.T("pk.other.monitors.one.bar"), BuildMonitors()))),
             (L("tab.look"), BuildLook()),
+            (Loc.IsGreek ? "P1 · Στούντιο widgets" : "P1 · Widget Studio", BuildWidgetStudio()),
             (L("tab.breaking"), BuildBreaking()));
         AddGroup(L("tab.sources"),
             (Loc.T("pk.news.flow"), Combine((null, BuildSources()), (L("tab.readLater"), BuildReadLater()))),
             (Loc.T("pk.markets.flow"), BuildMarkets()),
             (Loc.T("pk.weather.flow"), BuildWeather()),
             (L("hazard.flow"), BuildHazards()),
-            (L("history.flow"), BuildHistory()));
+            (L("history.flow"), BuildHistory()),
+            (Loc.IsGreek ? "P2 · Έξυπνες ειδήσεις" : "P2 · News intelligence", BuildP2Insights()));
         var info = new List<(string, Control)>();
         if (showAboutTabs)
         {
@@ -500,7 +547,36 @@ public sealed class SettingsPanel : UserControl
         perfFlow.Controls.Add(perfInfo);
         perfCard.Controls.Add(perfFlow);
         flow.Controls.Add(perfCard);
-        host.PerformanceChanged += () => { if (!IsDisposed && IsHandleCreated) BeginInvoke(new Action(UpdatePerformanceInfo)); };
+
+        // P1 energy budget: explicit metered mode; no unreliable automatic billing inference.
+        networkCost = new FlatComboBox { Width = 260 };
+        networkCost.SetItems(new[] { L("energy.normal"), L("energy.metered") }, 0);
+        flow.Controls.Add(Row(L("energy.label"), networkCost, 300));
+
+        // Shared Opsis.UI FlatCard styling; does not replace existing navigation or introduce new UI conventions.
+        var dashboardCard = new FlatCard(L("dash.title"));
+        var dashboardFlow = new FlowLayoutPanel
+        {
+            AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false
+        };
+        overviewStatus = new Label { AutoSize = true, MaximumSize = new Size(770, 0), Tag = "muted", UseMnemonic = false };
+        dashboardFlow.Controls.Add(overviewStatus);
+        var details = new FlatButton { Text = L("diag.button") };
+        details.Click += (_, _) => { using var dialog = new P0DiagnosticsForm(host); dialog.ShowDialog(this); };
+        dashboardFlow.Controls.Add(details);
+        dashboardCard.Controls.Add(dashboardFlow);
+        flow.Controls.Add(dashboardCard);
+        RefreshOverview();
+        if (performanceInfoHandler is not null) host.PerformanceChanged -= performanceInfoHandler;
+        performanceInfoHandler = () =>
+        {
+            if (!IsDisposed && IsHandleCreated)
+            {
+                try { BeginInvoke(new Action(UpdatePerformanceInfo)); }
+                catch (InvalidOperationException) { }
+            }
+        };
+        host.PerformanceChanged += performanceInfoHandler;
 
         var backupCard = new FlatCard(L("card.backup"));
         var backupFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true };
@@ -532,7 +608,16 @@ public sealed class SettingsPanel : UserControl
         };
         flow.Controls.Add(reset);
         flow.Controls.Add(openLog);
-
+        var diagnostics = new FlatButton
+        {
+            Text = Loc.T("diag.button")
+        };
+        diagnostics.Click += (_, _) =>
+        {
+            using var dialog = new P0DiagnosticsForm(host);
+            dialog.ShowDialog(this);
+        };
+        flow.Controls.Add(diagnostics);
         return page;
     }
 
@@ -752,120 +837,6 @@ public sealed class SettingsPanel : UserControl
         return page;
     }
 
-    private Control BuildSources()
-    {
-        var page = new StableScrollPanel { Padding = new Padding(8, 6, 8, 6) };
-        var root = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-
-        var left = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 18, 0) };
-        left.Controls.Add(new Label { Text = L("lbl.categories"), AutoSize = true, Margin = new Padding(0, 0, 0, 4) });
-        categoryList = new FlatList { Width = 240, Height = 260 };
-        left.Controls.Add(categoryList);
-        var catButtons = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(260, 0) };
-        var addCat = new FlatButton { Text = L("btn.new") };
-        var renCat = new FlatButton { Text = L("btn.rename") };
-        var delCat = new FlatButton { Text = L("btn.delete") };
-        addCat.Click += (_, _) => AddCategory();
-        renCat.Click += (_, _) => RenameCategory();
-        delCat.Click += (_, _) => DeleteCategory();
-        catButtons.Controls.AddRange(new Control[] { addCat, renCat, delCat });
-        left.Controls.Add(catButtons);
-
-        var right = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false };
-        right.Controls.Add(new Label { Text = L("lbl.sites"), AutoSize = true, Margin = new Padding(0, 0, 0, 4) });
-        feedList = new FlatList { Width = 520, Height = 260 };
-        feedList.SetShowChecks(true);
-        right.Controls.Add(feedList);
-        var sourceActions = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(520, 0) };
-        var removeFeed = new FlatButton { Text = L("btn.removeFeed") };
-        removeFeed.Click += (_, _) => RemoveFeed();
-        var importOpml = new FlatButton { Text = Loc.T("pk.import.opml") };
-        importOpml.Click += (_, _) => ImportOpml();
-        var exportOpml = new FlatButton { Text = Loc.T("pk.export.opml") };
-        exportOpml.Click += (_, _) => ExportOpml();
-        var testFeed = new FlatButton { Text = Loc.T("pk.test") };
-        testFeed.Click += (_, _) => TestFeeds(selectedOnly: true);
-        var testAll = new FlatButton { Text = Loc.T("pk.test.all") };
-        testAll.Click += (_, _) => TestFeeds(selectedOnly: false);
-        var moveUp = new FlatButton { Text = "▲" };
-        moveUp.Click += (_, _) => MoveFeed(-1);
-        var moveDown = new FlatButton { Text = "▼" };
-        moveDown.Click += (_, _) => MoveFeed(1);
-        sourceActions.Controls.AddRange(new Control[] { removeFeed, moveUp, moveDown, testFeed, testAll, importOpml, exportOpml });
-        right.Controls.Add(sourceActions);
-
-        var newsOptions = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(520, 0), Margin = new Padding(0, 8, 0, 4) };
-        newsOptions.Controls.Add(new Label { Text = Loc.T("pk.maximum.story.age.hours"), AutoSize = true, Margin = new Padding(0, 8, 6, 0) });
-        newsMaxAge = new FlatNumber();
-        newsMaxAge.Configure(1, 720, 24);
-        newsOptions.Controls.Add(newsMaxAge);
-        newsNewestFirst = new FlatCheckBox { Text = Loc.T("pk.newest.stories.first"), AutoSize = true, Margin = new Padding(8, 5, 0, 0) };
-        newsOptions.Controls.Add(newsNewestFirst);
-        stockNewsOnly = new FlatCheckBox { Text = Loc.T("pk.only.news.about.my"), AutoSize = true, Margin = new Padding(0, 5, 0, 0) };
-        right.Controls.Add(newsOptions);
-        right.Controls.Add(stockNewsOnly);
-        right.Controls.Add(new Label { Text = Loc.T("pk.mute.words.phrases.separate"), AutoSize = true, Margin = new Padding(0, 8, 0, 3) });
-        mutedNewsKeywords = new FlatText { Width = 500 };
-        right.Controls.Add(mutedNewsKeywords);
-        right.Controls.Add(new Label { Text = Loc.T("pk.matches.title.and.summary"), AutoSize = true, MaximumSize = new Size(520, 0), ForeColor = Theme.TextMuted, Margin = new Padding(0, 0, 0, 6) });
-
-        right.Controls.Add(new Label { Text = L("lbl.addSite"), AutoSize = true, MaximumSize = new Size(520, 0), Margin = new Padding(0, 10, 0, 4) });
-        var addRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        siteBox = new FlatText { Width = 300 };
-        var addSite = new FlatButton { Text = L("btn.addSite") };
-        addSite.Click += (_, _) => AddFromSite();
-        addRow.Controls.Add(siteBox);
-        addRow.Controls.Add(addSite);
-        right.Controls.Add(addRow);
-        discoverStatus = new Label { AutoSize = true, Tag = "muted" };
-        right.Controls.Add(discoverStatus);
-
-        right.Controls.Add(new Label { Text = L("lbl.presets"), AutoSize = true, Margin = new Padding(0, 10, 0, 4) });
-        var presetRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        presets = new FlatComboBox { Width = 300 };
-        presets.SetItems(AppConfig.PresetFeeds.Select(p => p.Name), -1);
-        var addPreset = new FlatButton { Text = L("btn.addPreset") };
-        addPreset.Click += (_, _) => AddPreset();
-        presetRow.Controls.Add(presets);
-        presetRow.Controls.Add(addPreset);
-        right.Controls.Add(presetRow);
-
-        // News of the world: continent, then country, then the open feeds of its broadcasters and newspapers (checked when the list was made, see WorldFeeds).
-        right.Controls.Add(new Label { Text = L("worldfeeds.title"), AutoSize = true, Margin = new Padding(0, 10, 0, 4) });
-        right.Controls.Add(new Label { Text = L("worldfeeds.note"), AutoSize = true, MaximumSize = new Size(520, 0), ForeColor = Theme.TextMuted, Margin = new Padding(0, 0, 0, 4) });
-        var worldFeedRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        worldFeedContinent = new FlatComboBox { Width = 240 };
-        worldFeedContinent.SetItems(WorldPlaces.Continents.Select(c => c.DisplayName), 0);
-        worldFeedCountry = new FlatComboBox { Width = 270 };
-        worldFeedRow.Controls.Add(worldFeedContinent);
-        worldFeedRow.Controls.Add(worldFeedCountry);
-        right.Controls.Add(worldFeedRow);
-        worldFeedList = new FlatList { Width = 520, Height = 30 * 4 + 4 };
-        right.Controls.Add(worldFeedList);
-        var worldFeedButtons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        var worldFeedAdd = new FlatButton { Text = L("worldfeeds.add") };
-        var worldFeedAddAll = new FlatButton { Text = L("worldfeeds.addAll") };
-        worldFeedButtons.Controls.Add(worldFeedAdd);
-        worldFeedButtons.Controls.Add(worldFeedAddAll);
-        right.Controls.Add(worldFeedButtons);
-        worldFeedContinent.SelectedIndexChanged += (_, _) => FillWorldFeedCountries();
-        worldFeedCountry.SelectedIndexChanged += (_, _) => FillWorldFeeds();
-        worldFeedAdd.Click += (_, _) => AddWorldFeeds(onlySelected: true);
-        worldFeedAddAll.Click += (_, _) => AddWorldFeeds(onlySelected: false);
-        FillWorldFeedCountries();
-
-        root.Controls.Add(left);
-        root.Controls.Add(right);
-        page.Controls.Add(root);
-
-        categoryList.SelectedIndexChanged += (_, _) => ShowFeedsOfSelectedCategory();
-        feedList.ItemChecked += (index, isChecked) =>
-        {
-            if (SelectedCategory() is { } cat && index < cat.Feeds.Count) cat.Feeds[index].Enabled = isChecked;
-        };
-        return page;
-    }
-
     private static void OpenLog()
     {
         try
@@ -964,322 +935,6 @@ public sealed class SettingsPanel : UserControl
         return page;
     }
 
-    private Control BuildWeather()
-    {
-        var page = NewPage(out var flow);
-        flow.Controls.Add(Note(L("note.weather"), 700));
-
-        var card = new FlatCard(L("tab.weather"));
-        var inner = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        citySearch = new FlatText { Width = 200 };
-        var all = new FlatButton { Text = L("btn.selectAll") };
-        var none = new FlatButton { Text = L("btn.selectNone") };
-        var searchRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        searchRow.Controls.Add(citySearch);
-        searchRow.Controls.Add(all);
-        searchRow.Controls.Add(none);
-        inner.Controls.Add(Row(L("lbl.search"), searchRow, 150));
-        cityList = new FlatList { Width = 740, Height = 300 };
-        cityList.SetShowChecks(true);
-        inner.Controls.Add(cityList);
-        card.Controls.Add(inner);
-        flow.Controls.Add(card);
-
-        // Any place on Earth: by name, Greek postcode or coordinates. The places are added to the list above (marked with a star).
-        var geo = new FlatCard(L("geo.card"));
-        var geoFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        geoFlow.Controls.Add(Note(L("geo.hint"), 700));
-        geoQuery = new FlatText { Width = 380 };
-        geoSearchButton = new FlatButton { Text = L("geo.search") };
-        geoSearchButton.SetPrimary(true);
-        var geoRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        geoRow.Controls.Add(geoQuery);
-        geoRow.Controls.Add(geoSearchButton);
-        geoFlow.Controls.Add(geoRow);
-        geoList = new FlatList { Width = 740, Height = 30 * 5 + 4 };
-        geoList.SetShowChecks(true);
-        geoFlow.Controls.Add(geoList);
-        geoAddButton = new FlatButton { Text = L("geo.add") };
-        geoCleanupButton = new FlatButton { Text = L("geo.cleanup") };
-        geoMyLocationButton = new FlatButton { Text = L("geo.myloc") };
-        var geoButtons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true };
-        geoButtons.Controls.Add(geoAddButton);
-        geoButtons.Controls.Add(geoCleanupButton);
-        geoButtons.Controls.Add(geoMyLocationButton);
-        geoFlow.Controls.Add(geoButtons);
-        geoStatus = new Label { AutoSize = true, Tag = "muted", MaximumSize = new Size(700, 0), Margin = new Padding(0, 6, 0, 0), UseMnemonic = false };
-        geoFlow.Controls.Add(geoStatus);
-        geoFlow.Controls.Add(Note(L("geo.note"), 700));
-        geo.Controls.Add(geoFlow);
-        flow.Controls.Add(geo);
-        geoSearchButton.Click += async (_, _) => await RunGeoSearchAsync();
-        geoAddButton.Click += async (_, _) => await AddGeoPlacesAsync();
-        geoCleanupButton.Click += (_, _) => CleanupGeoPlaces();
-        geoMyLocationButton.Click += async (_, _) => await AddMyLocationAsync();
-
-        weatherMapOnClick = new FlatToggle { RowWidth = 600, Text = Loc.T("pk.click.a.city.on") };
-        flow.Controls.Add(weatherMapOnClick);
-        flow.Controls.Add(Note(Loc.T("pk.the.map.openstreetmap.needs"), 640));
-
-        // What the weather line shows besides the temperature.
-        var fields = new FlatCard(Loc.T("pk.details.shown"));
-        var fieldsFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        weatherFieldChecks.Clear();
-        foreach (var id in WeatherInfo.FieldIds)
-        {
-            var check = new FlatCheckBox { Text = Loc.T("weather." + (id == "feels" ? "feels" : id)) };
-            weatherFieldChecks[id] = check;
-            fieldsFlow.Controls.Add(check);
-        }
-        fieldsFlow.Controls.Add(Note(Loc.T("pk.the.temperature.is.always"), 600));
-        fields.Controls.Add(fieldsFlow);
-        flow.Controls.Add(fields);
-
-        // The animated icon can show the current weather of the first city.
-        weatherInIcon = new FlatToggle { RowWidth = 600, Text = L("hazard.weatherIcon") };
-        flow.Controls.Add(weatherInIcon);
-
-        citySearch.TextValueChanged += (_, _) => ShowCities();
-        cityList.ItemChecked += (index, isChecked) =>
-        {
-            if (index < 0 || index >= shownCities.Count) return;
-            var id = shownCities[index].Id;
-            if (isChecked) { if (!workCities.Contains(id)) workCities.Add(id); }
-            else workCities.Remove(id);
-        };
-        all.Click += (_, _) => { foreach (var c in shownCities) if (!workCities.Contains(c.Id)) workCities.Add(c.Id); ShowCities(); };
-        none.Click += (_, _) => { foreach (var c in shownCities) workCities.Remove(c.Id); ShowCities(); };
-        ShowCities();
-        flow.Controls.Add(BuildWorldBrowser());
-        return page;
-    }
-
-    /// <summary>Continent, then country, then its main cities with a check box each; a ticked city joins the weather list (Europe first, Greece has its own list above).</summary>
-    private Control BuildWorldBrowser()
-    {
-        var card = new FlatCard(L("world.card"));
-        var inner = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        inner.Controls.Add(Note(L("world.note"), 700));
-        worldContinent = new FlatComboBox { Width = 380 };
-        worldContinent.SetItems(WorldPlaces.Continents.Select(c => c.DisplayName), 0);
-        inner.Controls.Add(Row(L("world.continent"), worldContinent, 260));
-        worldCountry = new FlatComboBox { Width = 380 };
-        inner.Controls.Add(Row(L("world.country"), worldCountry, 260));
-        worldList = new FlatList { Width = 740, Height = 30 * 6 + 4 };
-        worldList.SetShowChecks(true);
-        inner.Controls.Add(worldList);
-        card.Controls.Add(inner);
-
-        worldContinent.SelectedIndexChanged += (_, _) => FillWorldCountries();
-        worldCountry.SelectedIndexChanged += (_, _) => FillWorldCities();
-        worldList.ItemChecked += (index, isChecked) => WorldCityChecked(index, isChecked);
-        FillWorldCountries();
-        return card;
-    }
-
-    private void FillWorldCountries()
-    {
-        var continent = WorldPlaces.Continents.ElementAtOrDefault(Math.Max(0, worldContinent.SelectedIndex));
-        var names = continent is null ? new List<string>() : continent.Countries.OrderBy(c => c.DisplayName, StringComparer.CurrentCultureIgnoreCase).Select(c => c.DisplayName).ToList();
-        worldCountry.SetItems(names, 0);
-        FillWorldCities();
-    }
-
-    private void FillWorldCities()
-    {
-        var continent = WorldPlaces.Continents.ElementAtOrDefault(Math.Max(0, worldContinent.SelectedIndex));
-        shownCountry = continent?.Countries.OrderBy(c => c.DisplayName, StringComparer.CurrentCultureIgnoreCase).ElementAtOrDefault(Math.Max(0, worldCountry.SelectedIndex));
-        worldList.ClearRows();
-        if (shownCountry is null) return;
-        foreach (var city in shownCountry.Cities) worldList.AddRow(Loc.Pick(city.NameEl, city.NameEn), workCities.Contains(city.Id));
-    }
-
-    private void WorldCityChecked(int index, bool isChecked)
-    {
-        if (refreshingWorld || shownCountry is null || index < 0 || index >= shownCountry.Cities.Count) return;
-        var city = shownCountry.Cities[index];
-        if (isChecked)
-        {
-            if (workCustom.All(c => c.Id != city.Id))
-            {
-                if (workCustom.Count >= GreekCities.MaxCustom) { worldList.SetChecked(index, false); return; }
-                workCustom.Add(city);
-            }
-            if (!workCities.Contains(city.Id)) workCities.Add(city.Id);
-        }
-        else workCities.Remove(city.Id);
-        var keep = AlertCityIdSelected();
-        GreekCities.SetCustom(workCustom);
-        ShowCities();
-        FillAlertCities(keep);
-        MarkDirty();
-    }
-
-    /// <summary>The natural-disasters flow: its own page in the Sources group (where from, how far, how strong, how old, and the animated icon).</summary>
-    private Control BuildHazards()
-    {
-        var page = NewPage(out var flow);
-        // Natural disasters: where from, how far, how strong, how old; and whether the animated icon shows them.
-        var hazards = new FlatCard(L("hazard.card"));
-        var hazardFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        hazardFlow.Controls.Add(Note(L("hazard.note"), 700));
-        hazardRegion = new FlatComboBox { Width = 300 };
-        hazardRegion.SetItems(new[] { L("hazard.region.greece"), L("hazard.region.europe"), L("hazard.region.world") }, 0);
-        hazardFlow.Controls.Add(Row(L("hazard.region"), hazardRegion, 260));
-        hazardMinMagnitude = new FlatComboBox { Width = 120 };
-        hazardMinMagnitude.SetItems(MagnitudeChoices.Select(m => m.ToString("0.0", System.Globalization.CultureInfo.CurrentCulture)), 3);
-        hazardFlow.Controls.Add(Row(L("hazard.minmag"), hazardMinMagnitude, 260));
-        hazardMaxAge = new FlatNumber { Width = 120 };
-        hazardMaxAge.Configure(1, 24 * 14, 6);
-        hazardFlow.Controls.Add(Row(L("hazard.maxage"), hazardMaxAge, 260));
-        hazardRefresh = new FlatNumber { Width = 120 };
-        hazardRefresh.Configure(5, 240, 5);
-        hazardFlow.Controls.Add(Row(L("hazard.refresh"), hazardRefresh, 260));
-        var kindsRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, MaximumSize = new Size(470, 0) };
-        hazardKindChecks.Clear();
-        foreach (var kind in Enum.GetValues<HazardKind>())
-        {
-            var check = new FlatCheckBox { Text = HazardText.KindName(kind), Margin = new Padding(0, 4, 16, 4) };
-            hazardKindChecks[kind] = check;
-            kindsRow.Controls.Add(check);
-        }
-        hazardFlow.Controls.Add(Row(L("hazard.kinds"), kindsRow, 240));
-        var sourcesRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, MaximumSize = new Size(470, 0) };
-        hazardSourceChecks.Clear();
-        foreach (var (source, name) in new[] { (HazardSources.Usgs, "USGS"), (HazardSources.Emsc, "EMSC"), (HazardSources.Gdacs, "GDACS"), (HazardSources.Eonet, "NASA EONET") })
-        {
-            var check = new FlatCheckBox { Text = name, Margin = new Padding(0, 4, 16, 4) };
-            hazardSourceChecks[source] = check;
-            sourcesRow.Controls.Add(check);
-        }
-        hazardFlow.Controls.Add(Row(L("hazard.src"), sourcesRow, 240));
-        hazardInIcon = new FlatToggle { RowWidth = 600, Text = L("hazard.icon") };
-        hazardFlow.Controls.Add(hazardInIcon);
-        hazards.Controls.Add(hazardFlow);
-        flow.Controls.Add(hazards);
-        return page;
-    }
-
-    private void ShowCities()
-    {
-        if (cityList is null || cityList.IsDisposed) return;
-        var term = citySearch.Value.Trim();
-        shownCities = GreekCities.All.Where(c => term.Length == 0 || c.NameEl.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                                                 c.NameEn.Contains(term, StringComparison.OrdinalIgnoreCase)).ToList();
-        cityList.ClearRows();
-        foreach (var c in shownCities) cityList.AddRow(CityName(c) + (GreekCities.Custom.Contains(c) ? "  \u2605" : ""), workCities.Contains(c.Id));
-        RefreshWorldChecks();
-    }
-
-    /// <summary>The check marks of the world list follow the weather list (a city can be removed there).</summary>
-    private void RefreshWorldChecks()
-    {
-        if (worldList is null || shownCountry is null) return;
-        refreshingWorld = true;
-        try { for (var i = 0; i < shownCountry.Cities.Count; i++) worldList.SetChecked(i, workCities.Contains(shownCountry.Cities[i].Id)); }
-        finally { refreshingWorld = false; }
-    }
-
-    // ---- places found by name, postcode or coordinates -------------------------------------------
-
-    private async Task RunGeoSearchAsync()
-    {
-        var query = geoQuery.Value.Trim();
-        if (query.Length < 2) return;
-        geoSearchButton.Enabled = false;
-        geoStatus.Text = Loc.T("pk.testing");
-        try
-        {
-            geoHits = (await GeoSearch.SearchAsync(query, Loc.IsGreek ? "el" : "en", Loc.IsGreek, CancellationToken.None)).ToList();
-            geoList.ClearRows();
-            foreach (var h in geoHits) geoList.AddRow(h.Label, false);
-            geoStatus.Text = geoHits.Count == 0 ? L("geo.none") : Loc.T("geo.found", geoHits.Count);
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
-        {
-            geoStatus.Text = Loc.T("geo.error", ex.Message);
-        }
-        finally
-        {
-            if (!IsDisposed) geoSearchButton.Enabled = true;
-        }
-    }
-
-    private async Task AddGeoPlacesAsync()
-    {
-        var chosen = Enumerable.Range(0, geoHits.Count).Where(i => geoList.GetChecked(i)).Select(i => geoHits[i]).ToList();
-        if (chosen.Count == 0) return;
-        geoAddButton.Enabled = false;
-        var added = 0;
-        try
-        {
-            foreach (var place in chosen)
-            {
-                if (workCustom.Count >= GreekCities.MaxCustom) break;
-                // The name in the other language of the program, when the place has one (best effort; the name found is used otherwise).
-                var other = place.OpenMeteoId is { } id ? await GeoSearch.NameInAsync(id, Loc.IsGreek ? "en" : "el", CancellationToken.None) : null;
-                var city = Loc.IsGreek ? GeoSearch.ToCity(place, place.Name, other) : GeoSearch.ToCity(place, other, place.Name);
-                if (workCustom.All(c => c.Id != city.Id)) workCustom.Add(city);
-                if (!workCities.Contains(city.Id)) workCities.Add(city.Id);
-                added++;
-            }
-            var keep = AlertCityIdSelected();
-            GreekCities.SetCustom(workCustom);
-            ShowCities();
-            FillAlertCities(keep);
-            geoStatus.Text = Loc.T("geo.added", added);
-        }
-        finally
-        {
-            if (!IsDisposed) geoAddButton.Enabled = true;
-        }
-    }
-
-    /// <summary>Forgets the added places that are not ticked in the list.</summary>
-    /// <summary>Opt-in: asks the Windows Location service once (after a confirmation) and adds the rounded point as a place of the weather list.</summary>
-    private async Task AddMyLocationAsync()
-    {
-        if (MessageBox.Show(FindForm(), L("geo.myloc.consent"), L("geo.myloc"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-        geoMyLocationButton.Enabled = false;
-        try
-        {
-            var here = await DeviceLocation.GetApproximateAsync();
-            if (here is null) { geoStatus.Text = L("geo.myloc.denied"); return; }
-            if (workCustom.Count >= GreekCities.MaxCustom) return;
-            var name = L("geo.myloc.name");
-            var city = GeoSearch.ToCity(new GeoPlace(name, null, null, null, "", here.Value.Lat, here.Value.Lon), name, name);
-            if (workCustom.All(c => c.Id != city.Id)) workCustom.Add(city);
-            if (!workCities.Contains(city.Id)) workCities.Add(city.Id);
-            var keep = AlertCityIdSelected();
-            GreekCities.SetCustom(workCustom);
-            ShowCities();
-            FillAlertCities(keep);
-            geoStatus.Text = Loc.T("geo.added", 1);
-        }
-        finally { if (!IsDisposed) geoMyLocationButton.Enabled = true; }
-    }
-
-    private void CleanupGeoPlaces()
-    {
-        var keep = AlertCityIdSelected();
-        workCustom = workCustom.Where(c => workCities.Contains(c.Id)).ToList();
-        GreekCities.SetCustom(workCustom);
-        workCities = workCities.Where(id => GreekCities.Find(id) is not null).ToList();
-        ShowCities();
-        FillAlertCities(keep);
-    }
-
-    private string? AlertCityIdSelected() => alertCity is null || alertCity.SelectedIndex <= 0 || alertCity.SelectedIndex > GreekCities.All.Count ? null : GreekCities.All[alertCity.SelectedIndex - 1].Id;
-
-    /// <summary>The "my area" list of the severe-weather card: automatic, then every city (built-in and added).</summary>
-    private void FillAlertCities(string? keepId)
-    {
-        var index = keepId is null ? 0 : Math.Max(0, GreekCities.All.ToList().FindIndex(x => x.Id == keepId) + 1);
-        alertCity.SetItems(new[] { Loc.T("pk.automatic.the.first.city") }.Concat(GreekCities.All.Select(CityName)), index);
-    }
-
-    // ---- updates -----------------------------------------------------------------------------
-
     private void ShowUpdateState()
     {
         if (updateStatus is null || updateStatus.IsDisposed) return;
@@ -1376,62 +1031,6 @@ public sealed class SettingsPanel : UserControl
 
     // ---- read later ------------------------------------------------------------------------
 
-    private Control BuildReadLater()
-    {
-        var page = NewPage(out var flow);
-        flow.Controls.Add(Note(L("note.readLater"), 700));
-        var card = new FlatCard(L("tab.readLater"));
-        var inner = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        laterList = new FlatList { Width = 740, Height = 320 };
-        laterList.SetShowChecks(true);
-        inner.Controls.Add(laterList);
-        var open = new FlatButton { Text = L("btn.open") };
-        var remove = new FlatButton { Text = L("btn.removeFeed") };
-        var all = new FlatButton { Text = L("btn.selectAll") };
-        var buttons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 6, 0, 0) };
-        buttons.Controls.Add(open);
-        buttons.Controls.Add(remove);
-        buttons.Controls.Add(all);
-        inner.Controls.Add(buttons);
-        laterStatus = new Label { AutoSize = true, Tag = "muted", MaximumSize = new Size(780, 0), Margin = new Padding(0, 6, 0, 0) };
-        inner.Controls.Add(laterStatus);
-        card.Controls.Add(inner);
-        flow.Controls.Add(card);
-
-        open.Click += (_, _) =>
-        {
-            foreach (var a in CheckedLater().Take(20)) OpenInBrowser(a.Url);
-        };
-        remove.Click += (_, _) => host.ReadLater.Remove(CheckedLater().Select(a => a.Url));
-        all.Click += (_, _) =>
-        {
-            for (var i = 0; i < laterShown.Count; i++) laterList.SetChecked(i, true);
-        };
-        RefreshReadLater();
-        return page;
-    }
-
-    private List<SavedArticle> CheckedLater() =>
-        laterShown.Where((_, i) => laterList.GetChecked(i)).ToList();
-
-    private void OnReadLaterChanged()
-    {
-        if (IsDisposed) return;
-        if (InvokeRequired) BeginInvoke(new Action(RefreshReadLater));
-        else RefreshReadLater();
-    }
-
-    private void RefreshReadLater()
-    {
-        if (laterList is null || laterList.IsDisposed) return;
-        laterShown = host.ReadLater.Items.ToList();
-        laterList.ClearRows();
-        foreach (var a in laterShown)
-            laterList.AddRow($"{a.Source}  —  {a.Title}", false);
-        laterStatus.Text = laterShown.Count == 0 ? L("msg.readLaterEmpty") : Loc.T("fmt.readLaterCount", laterShown.Count);
-    }
-
-    /// <summary>Opens a saved article in the browser (http/https only).</summary>
     private static void OpenInBrowser(string url)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return;
@@ -1442,250 +1041,6 @@ public sealed class SettingsPanel : UserControl
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
         }
-    }
-
-    private Control BuildMarkets()
-    {
-        var page = NewPage(out var flow);
-        var openPortfolio = new FlatButton { Text = L("btn.openPortfolio") };
-        openPortfolio.SetPrimary(true);
-        openPortfolio.Click += (_, _) => host.ShowPortfolio();
-        flow.Controls.Add(openPortfolio);
-        var openAnalysis = new FlatButton { Text = L("btn.openAnalysis") };
-        openAnalysis.Click += (_, _) => host.ShowAnalysis();
-        flow.Controls.Add(openAnalysis);
-        var historyCard = new FlatCard(L("card.history"));
-        var historyFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        yahooHistory = new FlatToggle { RowWidth = 600, Text = L("chk.yahooHistory") };
-        historyFlow.Controls.Add(yahooHistory);
-        historyFlow.Controls.Add(Note(L("note.yahooHistory"), 700));
-        historyCard.Controls.Add(historyFlow);
-        flow.Controls.Add(historyCard);
-
-        // The Yahoo Finance catalogue: search any share, index, currency or commodity it offers, or add a ready-made group.
-        var catalog = new FlatCard(L("card.yahooCatalog"));
-        var catalogFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        catalogFlow.Controls.Add(Note(L("yahoo.note"), 700));
-        yahooSearch = new FlatText { Width = 380 };
-        yahooSearchButton = new FlatButton { Text = L("btn.yahooSearch") };
-        yahooSearchButton.SetPrimary(true);
-        var searchRow2 = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        searchRow2.Controls.Add(yahooSearch);
-        searchRow2.Controls.Add(yahooSearchButton);
-        catalogFlow.Controls.Add(searchRow2);
-        // The whole built-in catalogue is listed to pick from; typing filters it at once, and Search asks Yahoo for anything else.
-        yahooGroup = new FlatComboBox { Width = 240 };
-        yahooGroup.SetItems(new[] { L("yahoo.group.all") }.Concat(YahooPresets.All.Select(g => L("yahoo.group." + g.Key))), 0);
-        var groupRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        groupRow.Controls.Add(yahooGroup);
-        catalogFlow.Controls.Add(groupRow);
-        yahooHitList = new FlatList { Width = 740, Height = 30 * 10 + 4 };
-        yahooHitList.SetShowChecks(true);
-        catalogFlow.Controls.Add(yahooHitList);
-        yahooAddButton = new FlatButton { Text = L("btn.yahooAdd") };
-        yahooRemoveButton = new FlatButton { Text = L("btn.yahooRemove") };
-        var buttonRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, MaximumSize = new Size(740, 0) };
-        buttonRow.Controls.Add(yahooAddButton);
-        foreach (var group in YahooPresets.All)
-        {
-            var presetButton = new FlatButton { Text = L("yahoo.preset." + group.Key) };
-            var g = group;
-            presetButton.Click += (_, _) => AddYahoo(g.Items.Select(i => (i.Symbol, i.NameEl, i.NameEn)));
-            yahooPresetButtons.Add(presetButton);
-            buttonRow.Controls.Add(presetButton);
-        }
-        buttonRow.Controls.Add(yahooRemoveButton);
-        catalogFlow.Controls.Add(buttonRow);
-        yahooStatus = new Label { AutoSize = true, Tag = "muted", MaximumSize = new Size(700, 0), Margin = new Padding(0, 6, 0, 0), UseMnemonic = false };
-        catalogFlow.Controls.Add(yahooStatus);
-        catalog.Controls.Add(catalogFlow);
-        flow.Controls.Add(catalog);
-        yahooCatalog = catalog;
-        yahooSearch.TextValueChanged += (_, _) => ShowYahooCatalogue();
-        yahooGroup.SelectedIndexChanged += (_, _) => ShowYahooCatalogue();
-        ShowYahooCatalogue();
-        yahooSearchButton.Click += async (_, _) => await RunYahooSearchAsync();
-        yahooAddButton.Click += (_, _) =>
-            AddYahoo(Enumerable.Range(0, yahooHits.Count).Where(i => yahooHitList.GetChecked(i)).Select(i => (yahooHits[i].Symbol, yahooHits[i].Name, yahooHits[i].Name)));
-        yahooRemoveButton.Click += (_, _) => RemoveSelectedYahoo();
-        yahooHistory.CheckedChanged += (_, _) => UpdateYahooUi();
-        UpdateYahooUi();
-        flow.Controls.Add(Note(L("note.markets"), 700));
-        flow.Controls.Add(Note(Loc.T("pk.data.limits.athens.prices"), 700));
-
-        // All the shares of one Euronext market: pick the market, search, tick the ones to show.
-        var card = new FlatCard(L("card.shares"));
-        var inner = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        marketCombo = new FlatComboBox { Width = 300 };
-        marketCombo.SetItems(EuronextCatalog.Markets.Select(m => m.DisplayName), 0);
-        refreshCatalog = new FlatButton { Text = L("btn.refreshList") };
-        var marketRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        marketRow.Controls.Add(marketCombo);
-        marketRow.Controls.Add(refreshCatalog);
-        inner.Controls.Add(Row(L("lbl.market"), marketRow, 150));
-        stockSearch = new FlatText { Width = 240 };
-        var selectAll = new FlatButton { Text = L("btn.selectAll") };
-        var selectNone = new FlatButton { Text = L("btn.selectNone") };
-        var searchRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        searchRow.Controls.Add(stockSearch);
-        searchRow.Controls.Add(selectAll);
-        searchRow.Controls.Add(selectNone);
-        selectAll.Click += (_, _) => SetAllVisibleStocks(true);
-        selectNone.Click += (_, _) => SetAllVisibleStocks(false);
-        inner.Controls.Add(Row(L("lbl.search"), searchRow, 150));
-        stockList = new FlatList { Width = 740, Height = 340 };
-        stockList.SetShowChecks(true);
-        inner.Controls.Add(stockList);
-        stockStatus = new Label { AutoSize = true, Tag = "muted", MaximumSize = new Size(680, 0), Margin = new Padding(0, 6, 0, 0) };
-        inner.Controls.Add(stockStatus);
-        card.Controls.Add(inner);
-        flow.Controls.Add(card);
-
-        marketCombo.SelectedIndexChanged += (_, _) =>
-        {
-            stockSearch.Value = "";
-            LoadCatalog(force: false);
-        };
-        refreshCatalog.Click += (_, _) => LoadCatalog(force: true);
-        stockSearch.TextValueChanged += (_, _) => ShowStocks();
-        stockList.ItemChecked += (index, isChecked) => ToggleStock(index, isChecked);
-
-        foreach (var (source, titleKey) in new[] { (QuoteSource.Metals, "card.metals"), (QuoteSource.Crypto, "card.crypto"), (QuoteSource.Currency, "card.currency"), (QuoteSource.Energy, "card.energy"), (QuoteSource.Yahoo, "card.yahoo") })
-        {
-            var small = new FlatCard(L(titleKey));
-            var list = new FlatList { Width = 640, Height = 30 * 5 + 4 };
-            list.SetShowChecks(true);
-            var src = source;
-            list.ItemChecked += (index, isChecked) =>
-            {
-                var items = workWatch.Where(i => i.Source == src).ToList();
-                if (index < items.Count) items[index].Enabled = isChecked;
-            };
-            watchLists[source] = list;
-            small.Controls.Add(list);
-            flow.Controls.Add(small);
-        }
-
-        // Price alerts: a limit per instrument; when it is passed the bar shows an alert like a breaking headline.
-        var alertCard = new FlatCard(Loc.T("pk.price.alerts"));
-        var alertFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        alertFlow.Controls.Add(Note(Loc.T("pk.when.the.price.passes"), 640));
-        alertList = new FlatList { Width = 640, Height = 30 * 4 + 4 };
-        alertList.SetShowChecks(true);
-        alertList.ItemChecked += (index, isChecked) =>
-        {
-            if (index >= 0 && index < workAlerts.Count) workAlerts[index].Enabled = isChecked;
-        };
-        alertFlow.Controls.Add(alertList);
-        alertInstrument = new FlatComboBox { Width = 250 };
-        alertDirection = new FlatComboBox { Width = 80 };
-        alertDirection.SetItems(new[] { "≥", "≤" }, 0);
-        alertThreshold = new FlatText { Width = 100 };
-        var addAlert = new FlatButton { Text = L("btn.new") };
-        addAlert.Click += (_, _) => AddAlert();
-        var removeAlert = new FlatButton { Text = L("btn.delete") };
-        removeAlert.Click += (_, _) => RemoveAlert();
-        var alertRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        alertRow.Controls.AddRange(new Control[] { alertInstrument, alertDirection, alertThreshold, addAlert, removeAlert });
-        alertFlow.Controls.Add(alertRow);
-        alertCard.Controls.Add(alertFlow);
-        flow.Controls.Add(alertCard);
-
-        // Which price sources answered, how many prices and how fresh (updates by itself while the window is open).
-        var health = new FlatCard(Loc.T("pk.price.source.status"));
-        sourceStatus = new Label { AutoSize = true, Tag = "muted", MaximumSize = new Size(680, 0) };
-        health.Controls.Add(sourceStatus);
-        flow.Controls.Add(health);
-        sourceTimer.Tick -= UpdateSourceStatus;
-        sourceTimer.Tick += UpdateSourceStatus;
-        sourceTimer.Start();
-        UpdateSourceStatus(null, EventArgs.Empty);
-        return page;
-    }
-
-    /// <summary>The instruments an alert can be set for: the ticked ones. Rebuilt only when that set changes.</summary>
-    private void RefreshAlertChoices()
-    {
-        if (alertInstrument is null || alertInstrument.IsDisposed) return;
-        var choices = workWatch.Where(w => w.Enabled).ToList();
-        var signature = string.Join("|", choices.Select(c => c.Source + ":" + c.Market + ":" + c.Code));
-        if (signature == alertChoicesSignature) return;
-        alertChoicesSignature = signature;
-        alertChoices = choices;
-        alertInstrument.SetItems(choices.Select(c => string.IsNullOrEmpty(c.Symbol) ? c.DisplayName(Loc.IsGreek) : c.Symbol + " — " + c.DisplayName(Loc.IsGreek)), choices.Count > 0 ? 0 : -1);
-    }
-
-    private void ShowAlerts()
-    {
-        if (alertList is null || alertList.IsDisposed) return;
-        alertList.ClearRows();
-        foreach (var a in workAlerts)
-            alertList.AddRow($"{a.Label}  {(a.Above ? "≥" : "≤")}  {a.Threshold.ToString("0.00##", System.Globalization.CultureInfo.CurrentCulture)}", a.Enabled);
-    }
-
-    private void AddAlert()
-    {
-        RefreshAlertChoices();
-        var index = alertInstrument.SelectedIndex;
-        if (index < 0 || index >= alertChoices.Count) return;
-        var text = (alertThreshold.Value ?? "").Trim().Replace(',', '.');
-        if (!decimal.TryParse(text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var limit) || limit <= 0)
-        {
-            SetStatus(Loc.T("pk.enter.a.valid.limit"));
-            return;
-        }
-        var inst = alertChoices[index];
-        workAlerts.Add(new PriceAlert
-        {
-            Source = inst.Source, Code = inst.Code, Market = inst.Market,
-            Label = string.IsNullOrEmpty(inst.Symbol) ? inst.DisplayName(Loc.IsGreek) : inst.Symbol,
-            Above = alertDirection.SelectedIndex != 1, Threshold = limit, Enabled = true
-        });
-        alertThreshold.Value = "";
-        ShowAlerts();
-        MarkDirty();
-    }
-
-    private void RemoveAlert()
-    {
-        var index = alertList.SelectedIndex;
-        if (index < 0 || index >= workAlerts.Count) return;
-        workAlerts.RemoveAt(index);
-        ShowAlerts();
-        MarkDirty();
-    }
-
-    private static string SourceName(QuoteSource source) => source switch
-    {
-        QuoteSource.Athens => Loc.T("pk.euronext.athens.15.min"),
-        QuoteSource.Euronext => Loc.T("pk.other.euronext.markets.end"),
-        QuoteSource.Metals => Loc.T("pk.metals.gold.api.com"),
-        QuoteSource.Crypto => Loc.T("pk.crypto.gold.api.com"),
-        QuoteSource.Currency => Loc.T("pk.currencies.ecb.once.a"),
-        QuoteSource.Energy => Loc.T("pk.energy.pyth.fred.fallback"),
-        QuoteSource.Yahoo => "Yahoo Finance",
-        _ => source.ToString()
-    };
-
-    private void UpdateSourceStatus(object? sender, EventArgs e)
-    {
-        if (sourceStatus is null || sourceStatus.IsDisposed) return;
-        RefreshAlertChoices();
-        var rows = QuoteService.Statuses();
-        if (rows.Count == 0)
-        {
-            sourceStatus.Text = Loc.T("pk.no.prices.have.been");
-            return;
-        }
-        var lines = rows.Select(s =>
-        {
-            var state = s.Failed ? Loc.T("pk.failed") : Loc.T("pk.ok");
-            var line = $"{(s.Failed ? "✖" : "✔")} {SourceName(s.Source)}: {state}, {s.Count} {Loc.T("pk.prices")}, "
-                + $"{Loc.T("pk.checked")} {s.CheckedAt:HH:mm:ss}";
-            if (s.Newest is { } newest) line += $", {Loc.T("pk.newest.price")} {newest.ToLocalTime():dd/MM HH:mm}";
-            return line;
-        });
-        sourceStatus.Text = string.Join(Environment.NewLine, lines);
     }
 
     // ---- the shares of a Euronext market ----------------------------------------------------
@@ -1725,8 +1080,9 @@ public sealed class SettingsPanel : UserControl
         {
             return;
         }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or System.Text.Json.JsonException or FormatException or InvalidOperationException)
+        catch (Exception ex)   // async void: anything else would end the program
         {
+            Log.Write($"catalog download failed: {ex.GetType().Name}: {ex.Message}");
             list = Array.Empty<QuoteInstrument>(); // shown as "could not be downloaded"
         }
         if (IsDisposed) return;
@@ -1791,386 +1147,6 @@ public sealed class SettingsPanel : UserControl
         UpdateStockStatus(CatalogFor(SelectedMic).Count);
     }
 
-    private Control BuildLook()
-    {
-        var page = NewPage(out var flow);
-        themeMode = new FlatComboBox { Width = 300 };
-        themeMode.SetItems(new[] { L("theme.system"), L("theme.light"), L("theme.dark") }.Concat(Theme.NamedThemes).Concat(host.HostedByOpsis ? new[] { L("theme.host") } : Array.Empty<string>()).ToArray(), 0);
-        themeRow = Row(L("lbl.theme"), themeMode, 240);
-        flow.Controls.Add(themeRow);
-        themeAccent = new FlatToggle { RowWidth = 600, Text = L("chk.themeAccent") };
-        flow.Controls.Add(themeAccent);
-
-        opacity = new FlatSlider { Width = 300 };
-        opacity.SetRange(30, 100);
-        opacityLabel = new Label { AutoSize = false, Width = 60, Height = 26, TextAlign = ContentAlignment.MiddleLeft };
-        var op = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        op.Controls.Add(opacity);
-        op.Controls.Add(opacityLabel);
-        flow.Controls.Add(Row(L("lbl.transparency"), op, 240));
-        opacity.ValueChanged += (_, _) => opacityLabel.Text = $"{opacity.Value} %";
-
-        barColor = new FlatComboBox { Width = 470 };
-        barColor.SetItems(new[] { L("color.theme"), L("color.lightblue"), L("color.accent"), L("color.custom") }, 0);
-        barSwatch = new FlatSwatch();
-        var barColorRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        barColorRow.Controls.Add(barColor);
-        barColorRow.Controls.Add(barSwatch);
-        flow.Controls.Add(Row(L("lbl.barColor"), barColorRow, 240));
-
-        taskbarColor = new FlatComboBox { Width = 470 };
-        taskbarColor.SetItems(new[] { L("color.taskbar"), L("color.lightblue"), L("color.accent"), L("color.custom") }, 0);
-        taskbarSwatch = new FlatSwatch();
-        var taskbarColorRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        taskbarColorRow.Controls.Add(taskbarColor);
-        taskbarColorRow.Controls.Add(taskbarSwatch);
-        flow.Controls.Add(Row(L("lbl.taskbarBarColor"), taskbarColorRow, 240));
-        var materials = new[] { L("backdrop.acrylic"), L("backdrop.blur"), L("backdrop.gradient") };
-        barBackdrop = new FlatComboBox { Width = 470 };
-        barBackdrop.SetItems(materials, 0);
-        flow.Controls.Add(Row(L("lbl.barBackdrop"), barBackdrop, 240));
-        taskbarBackdrop = new FlatComboBox { Width = 470 };
-        taskbarBackdrop.SetItems(materials, 1);
-        flow.Controls.Add(Row(L("lbl.taskbarBackdrop"), taskbarBackdrop, 240));
-        flow.Controls.Add(Note(L("note.backdrop"), 640));
-        barColor.SelectedIndexChanged += (_, _) => barSwatch.Enabled = barColor.SelectedIndex == 3;
-        taskbarColor.SelectedIndexChanged += (_, _) => { taskbarSwatch.Enabled = taskbarColor.SelectedIndex == 3; taskbarBackdrop.Enabled = taskbarColor.SelectedIndex != 0; };
-
-        windowOpacity = new FlatSlider { Width = 300 };
-        windowOpacity.SetRange(60, 100);
-        windowOpacityLabel = new Label { AutoSize = false, Width = 60, Height = 26, TextAlign = ContentAlignment.MiddleLeft };
-        var wop = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        wop.Controls.Add(windowOpacity);
-        wop.Controls.Add(windowOpacityLabel);
-        windowOpacityRow = Row(L("lbl.windowOpacity"), wop, 240);
-        windowOpacity.ValueChanged += (_, _) =>
-        {
-            windowOpacityLabel.Text = $"{windowOpacity.Value} %";
-            // live preview on the settings window itself
-            if (!loading && FindForm() is { } form && form.Parent is null && !HostThemeLocked) form.Opacity = windowOpacity.Value / 100.0;
-        };
-        flow.Controls.Add(windowOpacityRow);
-
-        edgeFade = new FlatToggle { RowWidth = 600, Text = L("chk.edgeFade") };
-        flow.Controls.Add(edgeFade);
-        flow.Controls.Add(Note(L("note.transparency"), 640));
-        themeNote = Note("", 640);
-        flow.Controls.Add(themeNote);
-        flow.Controls.Add(BuildTextAndSize());
-        return page;
-    }
-
-    // ---- "History flow": the text feeds that plugins register (for example "On this day") ----------------------------------------------------
-
-    private Control BuildHistory()
-    {
-        var page = NewPage(out var flow);
-        flow.Controls.Add(Note(L("history.note"), 700));
-
-        var card = new FlatCard(L("history.card"));
-        var inner = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        historyNone = new Label { AutoSize = true, MaximumSize = new Size(740, 0), Tag = "muted", Text = L("history.none") };
-        inner.Controls.Add(historyNone);
-        historyList = new FlatList { Width = 740, Height = 30 * 4 + 4 };
-        historyList.SetShowChecks(true);
-        historyList.ItemChecked += (index, isChecked) =>
-        {
-            if (refreshingHistory || index < 0 || index >= historyFeeds.Count) return;
-            var key = historyFeeds[index].Key;
-            workDisabledFeeds.RemoveAll(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
-            if (!isChecked) workDisabledFeeds.Add(key);
-        };
-        historyList.SelectedIndexChanged += (_, _) => { if (!refreshingHistory) { historyRetries = 0; RefreshHistoryPreview(); } };
-        inner.Controls.Add(historyList);
-        historyUsed = new Label { AutoSize = true, MaximumSize = new Size(740, 0), Tag = "muted", Margin = new Padding(0, 6, 0, 4) };
-        inner.Controls.Add(historyUsed);
-        historyAddToBar = new FlatButton { Text = L("history.addToBar") };
-        historyAddToBar.Click += (_, _) => AddSelectedFeedToMainBar();
-        inner.Controls.Add(historyAddToBar);
-        card.Controls.Add(inner);
-        flow.Controls.Add(card);
-
-        var preview = new FlatCard(L("history.preview"));
-        historyPreviewCard = preview;
-        var previewFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        historyStatus = new Label { AutoSize = true, MaximumSize = new Size(740, 0), Tag = "muted", Margin = new Padding(0, 0, 0, 4) };
-        previewFlow.Controls.Add(historyStatus);
-        historyPreview = new FlatList { Width = 740, Height = 30 * 8 + 4 };
-        previewFlow.Controls.Add(historyPreview);
-        preview.Controls.Add(previewFlow);
-        flow.Controls.Add(preview);
-
-        var optionsCard = new FlatCard(L("history.options"));
-        var optionsFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        optionsFlow.Controls.Add(Note(L("history.options.note"), 700));
-        feedMaxLines = new FlatNumber();
-        feedMaxLines.Configure(5, 200, 5);
-        optionsFlow.Controls.Add(Row(L("history.maxLines"), feedMaxLines, 300));
-        feedOrder = new FlatComboBox { Width = 380 };
-        feedOrder.SetItems(new[] { L("history.order.priority"), L("history.order.yearAsc"), L("history.order.yearDesc") }, 0);
-        optionsFlow.Controls.Add(Row(L("history.order"), feedOrder, 300));
-        feedCountry = new FlatComboBox { Width = 380 };
-        feedCountryCodes = new List<string> { "" };
-        var countryNames = new List<string> { L("history.country.all") };
-        foreach (var c in WorldPlaces.Continents.SelectMany(k => k.Countries).OrderBy(c => c.DisplayName, StringComparer.CurrentCultureIgnoreCase)) { feedCountryCodes.Add(c.Code); countryNames.Add(c.DisplayName); }
-        feedCountry.SetItems(countryNames, 0);
-        optionsFlow.Controls.Add(Row(L("history.country"), feedCountry, 300));
-        optionsCard.Controls.Add(optionsFlow);
-        flow.Controls.Add(optionsCard);
-
-        historyRetry.Tick += (_, _) =>
-        {
-            // a plugin fills its feed in the background a few seconds after it started: ask again (at most 10 times) until there is something to show
-            historyRetry.Stop();
-            if (IsDisposed || ++historyRetries > 10) return;
-            RefreshHistoryPreview();
-        };
-        OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.Changed += OnPluginFeedsChanged;
-        return page;
-    }
-
-    private void OnPluginFeedsChanged()
-    {
-        // raised by a plugin, from any thread
-        if (IsDisposed || !IsHandleCreated) return;
-        try { BeginInvoke(new Action(() => { if (!IsDisposed) { historyRetries = 0; foreach (var picker in AllPickers()) picker.SetChoices(workCategories); RefreshHistoryFeeds(); } })); }
-        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException) { }
-    }
-
-    private void RefreshHistoryFeeds()
-    {
-        if (historyList is null) return;
-        var selectedKey = historyList.SelectedIndex >= 0 && historyList.SelectedIndex < historyFeeds.Count ? historyFeeds[historyList.SelectedIndex].Key : null;
-        historyFeeds = PluginFeedMapper.AllFeeds(() => PluginFeedOptions.From(host.Config, Loc.Language)).ToList();
-        refreshingHistory = true;
-        try
-        {
-            historyList.ClearRows();
-            foreach (var f in historyFeeds)
-                historyList.AddRow($"{Loc.Pick(f.TitleEl, f.TitleEn)}   -   {f.Key}", !workDisabledFeeds.Contains(f.Key, StringComparer.OrdinalIgnoreCase));
-            if (historyFeeds.Count > 0)
-                historyList.SelectedIndex = Math.Max(0, historyFeeds.FindIndex(f => string.Equals(f.Key, selectedKey, StringComparison.OrdinalIgnoreCase)));
-        }
-        finally { refreshingHistory = false; }
-        var any = historyFeeds.Count > 0;
-        historyNone.Visible = !any;
-        historyList.Visible = historyUsed.Visible = historyAddToBar.Visible = historyPreviewCard.Visible = any;
-        RefreshHistoryPreview();
-    }
-
-    private void RefreshHistoryPreview()
-    {
-        if (historyPreview is null || historyStatus is null) return;
-        historyPreview.ClearRows();
-        if (historyFeeds.Count == 0)
-        {
-            historyUsed.Text = "";
-            return;
-        }
-        var index = Math.Max(0, historyList.SelectedIndex);
-        var feed = historyFeeds[Math.Min(index, historyFeeds.Count - 1)];
-        historyUsed.Text = UsedInText(feed.Key);
-        IReadOnlyList<OpsisNewsCrawler.Plugin.Abstractions.PluginFeedItem> items;
-        try { items = feed.GetItems(); }   // the lines are kept in memory by the plugin (the contract allows no input/output here); an error shows as empty
-        catch (Exception ex) { Log.Write($"Plugin feed '{feed.Key}' preview failed: {ex.Message}"); items = Array.Empty<OpsisNewsCrawler.Plugin.Abstractions.PluginFeedItem>(); }
-        if (items.Count == 0)
-        {
-            historyStatus.Text = L("history.loading");
-            if (historyRetries < 10) historyRetry.Start();
-            return;
-        }
-        historyStatus.Text = Loc.T("history.count", items.Count, Loc.Pick(feed.TitleEl, feed.TitleEn));
-        foreach (var item in items.Take(200)) historyPreview.AddRow(item.Text);
-    }
-
-    private string UsedInText(string key)
-    {
-        var spec = "feed:" + key;
-        var names = new List<string>();
-        void Check(SlotPicker picker, string name)
-        {
-            if (picker is not null && picker.Get().All().Any(s => s.ToSpec().Equals(spec, StringComparison.OrdinalIgnoreCase))) names.Add(name);
-        }
-        Check(mainPicker, L("card.mainBar"));
-        Check(secondPicker, L("card.secondBar"));
-        Check(miniPicker, L("speed.mini"));
-        foreach (var row in monitorRows) Check(row.Picker, row.Screen.DeviceName.TrimStart('\\', '.'));
-        return names.Count == 0 ? L("history.notUsed") : Loc.T("history.usedIn", string.Join(", ", names));
-    }
-
-    /// <summary>Puts the selected feed in the right half of the main bar (the bar is split in the middle); what the left half shows stays as it is.</summary>
-    private void AddSelectedFeedToMainBar()
-    {
-        if (historyList.SelectedIndex < 0 || historyList.SelectedIndex >= historyFeeds.Count) return;
-        var feed = historyFeeds[historyList.SelectedIndex];
-        workDisabledFeeds.RemoveAll(k => string.Equals(k, feed.Key, StringComparison.OrdinalIgnoreCase));
-        var current = mainPicker.Get();
-        var slot = new BarSlot(SlotKind.Feed, feed.Key);
-        mainPicker.Set(current.A == slot ? new BarSlots(slot, null) : new BarSlots(current.A, slot));
-        RefreshHistoryFeeds();
-        MarkDirty();
-    }
-
-    // ---- font, text size and height of every bar ----------------------------------------------------------------------------------------------
-
-    private Control BuildTextAndSize()
-    {
-        using (var installed = new System.Drawing.Text.InstalledFontCollection())
-            fontNames = installed.Families.Select(f => f.Name).OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList();
-        var items = new[] { L("text.defaultFont") }.Concat(fontNames).ToArray();
-
-        var card = new FlatCard(L("text.card"));
-        var inner = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        inner.Controls.Add(Note(L("text.note"), 700));
-
-        textColorMode = new FlatComboBox { Width = 380 };
-        textColorMode.SetItems(new[] { L("text.color.auto"), L("text.color.fixed") }, 0);
-        inner.Controls.Add(Row(L("text.color"), textColorMode, 260));
-        inner.Controls.Add(Note(L("text.color.note"), 700));
-        textShadow = new FlatToggle { RowWidth = 600, Text = L("text.shadow") };
-        inner.Controls.Add(textShadow);
-
-        void Bar(string title, out FlatComboBox font, out FlatNumber pct, out FlatToggle? auto, out FlatNumber? height)
-        {
-            inner.Controls.Add(new Label { Text = title, AutoSize = true, Margin = new Padding(0, 10, 0, 2), Font = new Font(Font, FontStyle.Bold) });
-            font = new FlatComboBox { Width = 300 };
-            font.SetItems(items, 0);
-            inner.Controls.Add(Row(L("text.font"), font, 260));
-            pct = new FlatNumber();
-            pct.Configure(AppConfig.MinFontPercent, AppConfig.MaxFontPercent, 5);
-            inner.Controls.Add(Row(L("text.size"), pct, 260));
-            auto = null; height = null;
-        }
-
-        Bar(L("card.mainBar"), out mainFont, out mainFontPct, out _, out _);
-        mainHeightAuto = new FlatToggle { RowWidth = 600, Text = L("text.heightAuto") };
-        mainHeight = new FlatNumber(); mainHeight.Configure(24, 200, 2);
-        mainHeightAuto.CheckedChanged += (_, _) => mainHeight.Enabled = !mainHeightAuto.Checked;
-        inner.Controls.Add(mainHeightAuto);
-        inner.Controls.Add(Row(L("text.height"), mainHeight, 260));
-
-        Bar(L("card.secondBar"), out secondFont, out secondFontPct, out _, out _);
-        inner.Controls.Add(Note(L("text.secondHeight"), 700));
-
-        Bar(L("speed.mini"), out miniFont, out miniFontPct, out _, out _);
-        inner.Controls.Add(Note(L("text.miniHeight"), 700));
-
-        Bar(L("text.monitors"), out monitorFont, out monitorFontPct, out _, out _);
-        monitorHeightAuto = new FlatToggle { RowWidth = 600, Text = L("text.heightAuto") };
-        monitorHeight = new FlatNumber(); monitorHeight.Configure(24, 200, 2);
-        monitorHeightAuto.CheckedChanged += (_, _) => monitorHeight.Enabled = !monitorHeightAuto.Checked;
-        inner.Controls.Add(monitorHeightAuto);
-        inner.Controls.Add(Row(L("text.height"), monitorHeight, 260));
-
-        card.Controls.Add(inner);
-        return card;
-    }
-
-    private int FontIndex(string family) => string.IsNullOrWhiteSpace(family) ? 0 : Math.Max(0, fontNames.FindIndex(n => string.Equals(n, family, StringComparison.OrdinalIgnoreCase)) + 1);
-
-    private string FontAt(FlatComboBox combo) => combo.SelectedIndex > 0 && combo.SelectedIndex - 1 < fontNames.Count ? fontNames[combo.SelectedIndex - 1] : "";
-
-    private Control BuildBreaking()
-    {
-        var page = NewPage(out var flow);
-        breakingEnabled = new FlatToggle { RowWidth = 600, Text = L("chk.breakingEnabled") };
-        flow.Controls.Add(breakingEnabled);
-        breakingSound = new FlatToggle { RowWidth = 600, Text = Loc.T("pk.alert.sound.when.something") };
-        flow.Controls.Add(breakingSound);
-        breakingSensitivity = new FlatComboBox { Width = 300 };
-        breakingSensitivity.SetItems(new[] { L("breaking.sens.strict"), L("breaking.sens.normal"), L("breaking.sens.sensitive") }, 1);
-        flow.Controls.Add(Row(L("breaking.sensitivity"), breakingSensitivity, 330));
-        flow.Controls.Add(Note(L("breaking.sensitivity.note"), 700));
-        keywords = new FlatText { Width = 520 };
-        flow.Controls.Add(Row(L("lbl.keywords"), keywords, 330));
-        forgetBreaking = new FlatButton { Text = L("breaking.forget") };
-        forgetBreaking.Click += (_, _) => { host.ForgetBreakingFeedback(); forgetBreaking.Text = L("breaking.forgotten"); };
-        flow.Controls.Add(forgetBreaking);
-        maxAge = new FlatNumber();
-        maxAge.Configure(10, 1440, 10);
-        flow.Controls.Add(Row(L("lbl.maxAge"), maxAge, 330));
-        duration = new FlatNumber();
-        duration.Configure(1, 240, 5);
-        flow.Controls.Add(Row(L("lbl.duration"), duration, 330));
-        flow.Controls.Add(Note(L("note.breaking"), 700));
-
-        // Severe weather for the user's area.
-        var weatherCard = new FlatCard(Loc.T("pk.severe.weather.in.my"));
-        var weatherFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        weatherAlerts = new FlatToggle { RowWidth = 600, Text = Loc.T("pk.warn.me.about.severe") };
-        weatherFlow.Controls.Add(weatherAlerts);
-        alertCity = new FlatComboBox { Width = 360 };
-        FillAlertCities(null);
-        weatherFlow.Controls.Add(Row(Loc.T("pk.my.area"), alertCity, 200));
-        weatherFlow.Controls.Add(Note(Loc.T("pk.every.30.minutes.the"), 640));
-        var testWeather = new FlatButton { Text = Loc.T("pk.test.the.weather.warning") };
-        testWeather.Click += (_, _) => host.SimulateWeatherAlert();
-        weatherFlow.Controls.Add(testWeather);
-        weatherCard.Controls.Add(weatherFlow);
-        flow.Controls.Add(weatherCard);
-
-        var test = new FlatButton { Text = L("btn.testBreaking") };
-        test.Click += (_, _) => host.SimulateBreaking(Loc.T("pk.breaking.test.headline.to"));
-        flow.Controls.Add(test);
-
-        var card = new FlatCard(L("card.live"));
-        var inner = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        inner.Controls.Add(Note(L("note.live"), 620));
-        liveList = new FlatList { Width = 640, Height = 30 * 4 + 4 };
-        liveList.SetShowChecks(true);
-        liveList.ItemChecked += (index, isChecked) =>
-        {
-            if (index < workLive.Count) workLive[index].Enabled = isChecked;
-        };
-        inner.Controls.Add(liveList);
-        var removeLive = new FlatButton { Text = L("btn.removeLive") };
-        removeLive.Click += (_, _) =>
-        {
-            if (liveList.SelectedIndex < 0 || liveList.SelectedIndex >= workLive.Count) return;
-            workLive.RemoveAt(liveList.SelectedIndex);
-            RebuildLiveList();
-        };
-        inner.Controls.Add(removeLive);
-        inner.Controls.Add(new Label { Text = L("lbl.addLive"), AutoSize = true, Margin = new Padding(0, 10, 0, 4) });
-        var add = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        addLiveBox = new FlatText { Width = 440 };
-        var addBtn = new FlatButton { Text = L("btn.addLive") };
-        addBtn.Click += (_, _) => AddLive();
-        add.Controls.Add(addLiveBox);
-        add.Controls.Add(addBtn);
-        inner.Controls.Add(add);
-        liveStatus = new Label { AutoSize = true, Tag = "muted" };
-        inner.Controls.Add(liveStatus);
-        card.Controls.Add(inner);
-        flow.Controls.Add(card);
-        return page;
-    }
-
-    private void RebuildLiveList()
-    {
-        liveList.ClearRows();
-        foreach (var f in workLive) liveList.AddRow($"{(string.IsNullOrWhiteSpace(f.Name) ? f.Url : f.Name)}   —   {f.Url}", f.Enabled);
-    }
-
-    private void AddLive()
-    {
-        // "Name;Address" (the address may contain ';' only after the first one)
-        var split = addLiveBox.Value.Split(';', 2, StringSplitOptions.TrimEntries);
-        var name = split.Length > 1 ? split[0] : "";
-        var url = split.Length > 1 ? split[1] : split[0];
-        if (Breaking.ToPlayableUrl(url) is null)
-        {
-            liveStatus.Text = L("msg.badLive");
-            return;
-        }
-        workLive.Add(new LiveFeed(name, url));
-        RebuildLiveList();
-        addLiveBox.Value = "";
-        liveStatus.Text = "";
-    }
-
-    /// <summary>A read-only page with one of the long texts (help, instructions, history, license).</summary>
-    /// <summary>A read-only text page. With a <paramref name="host"/> it has two buttons on top: the welcome guide and the Opsis family window.</summary>
     private static Control BuildInfoPage(Func<string> text, TickerHost? host = null)
     {
         var page = new Panel { Padding = new Padding(8, 6, 8, 6) };
@@ -2219,9 +1195,14 @@ public sealed class SettingsPanel : UserControl
         try
         {
             var c = host.Config;
+            workTopics = (c.TopicWatches ?? new()).Select(t=>new TopicWatch {
+                Name=t.Name, Terms=t.Terms.ToList(), Region=t.Region, Enabled=t.Enabled }).ToList();
+            RebuildTopics();
+            LoadWidgetStudio();
             var langs = Loc.Available();
             language.SelectSilently(Math.Max(0, langs.ToList().FindIndex(l => l.Code == Loc.Language)));
             perfMode.SelectSilently((int)PerformanceClassifier.ParseMode(c.PerformanceMode));
+            networkCost.SelectSilently(c.NetworkCostMode == "metered" ? 1 : 0);
             UpdatePerformanceInfo();
             refresh.SetValueSilently(c.RefreshIntervalSeconds);
             speed.SetValueSilently(c.ScrollSpeed);
@@ -2321,7 +1302,7 @@ public sealed class SettingsPanel : UserControl
             forgetBreaking.Text = L("breaking.forget");
             maxAge.SetValueSilently(c.BreakingMaxAgeMinutes);
             duration.SetValueSilently(c.BreakingDurationMinutes);
-            workLive = c.LiveFeeds.Select(f => new LiveFeed(f.Name, f.Url) { Enabled = f.Enabled }).ToList();
+            workLive = c.LiveFeeds.Select(LiveVideoStudio.Clean).ToList();
             RebuildLiveList();
             // The crawler's themes are its own, also inside Opsis; "Follow Opsis" is just one more choice there.
             themeRow.Visible = true; themeAccent.Visible = true;
@@ -2433,6 +1414,31 @@ public sealed class SettingsPanel : UserControl
         foreach (var card in Descendants(tabs).OfType<FlatCard>())
         {
             if (!Descendants(card).Any(IsSettingControl)) continue;
+            if (card.Tag is string tag && tag.StartsWith("p1-widget-", StringComparison.Ordinal))
+            {
+                var kind = tag["p1-widget-".Length..];
+                card.ShowReset = true;
+                card.ResetRequested += (_, _) =>
+                {
+                    if (!widgetEditors.TryGetValue(kind, out var controls)) return;
+                    loading = true;
+                    try
+                    {
+                        controls.Layout.SelectSilently(0);
+                        controls.Count.SetValueSilently(12);
+                        if (kind == "news") newsWidgetCategory?.SelectSilently(0);
+                        if (widgetFontScale.TryGetValue(kind, out var fontScale))
+                            fontScale.SetValueSilently(100);
+                        controls.Source.Checked = false;
+                        controls.Time.Checked = false;
+                        if (widgetAccentOptions.TryGetValue(kind, out var accent))
+                            accent.Checked = false;
+                    }
+                    finally { loading = false; }
+                    MarkDirty();
+                };
+                continue;
+            }
             card.ShowReset = true;
             card.ResetRequested += (_, _) => ResetCard(card);
         }
@@ -2651,10 +1657,14 @@ public sealed class SettingsPanel : UserControl
     private void ApplySettings()
     {
         var c = host.Config;
+        c.WidgetProfiles = ReadWidgetStudio();
+        c.TopicWatches = workTopics.Select(t => new TopicWatch { Name=t.Name, Terms=t.Terms.ToList(),
+            Region=t.Region, Enabled=t.Enabled }).ToList();
         var mutedKeywords = mutedNewsKeywords.Value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).Take(100).ToList();
         var newsSettingsChanged = c.NewsMaxAgeHours != newsMaxAge.Value || c.NewsSortNewestFirst != newsNewestFirst.Checked || c.StockNewsOnly != stockNewsOnly.Checked || !c.MutedNewsKeywords.SequenceEqual(mutedKeywords, StringComparer.OrdinalIgnoreCase);
         c.Language = Loc.Available().ElementAtOrDefault(Math.Max(0, language.SelectedIndex)).Code ?? c.Language;
         c.PerformanceMode = PerformanceClassifier.ModeText((PerformanceMode)Math.Clamp(perfMode.SelectedIndex, 0, 3));
+        c.NetworkCostMode = networkCost.SelectedIndex == 1 ? "metered" : "normal";
         c.NewsRefreshSeconds = refresh.Value;
         c.ScrollSpeed = speed.Value;
         c.MainSpeedB = AppConfig.CleanSpeed(speedMainB.Value); c.SecondSpeed = AppConfig.CleanSpeed(speedSecond.Value); c.SecondSpeedB = AppConfig.CleanSpeed(speedSecondB.Value);
@@ -2757,7 +1767,7 @@ public sealed class SettingsPanel : UserControl
         c.BreakingSensitivity = BreakingEngine.SensitivityText((BreakingSensitivity)Math.Clamp(breakingSensitivity.SelectedIndex, 0, 2));
         c.BreakingMaxAgeMinutes = maxAge.Value;
         c.BreakingDurationMinutes = duration.Value;
-        c.LiveFeeds = workLive.Select(f => new LiveFeed(f.Name, f.Url) { Enabled = f.Enabled }).ToList();
+        c.LiveFeeds = LiveVideoStudio.CleanAll(workLive);
 
         // Feeds: write the edited copy back and fetch again when the active category's sources changed.
         var previousActive = c.ActiveCategory;
@@ -2773,6 +1783,7 @@ public sealed class SettingsPanel : UserControl
         host.SetBarsEnabled(barsEnabled.Checked);
         if (!host.HostedByOpsis) StartupRegistration.Set(startWithWindows.Checked);
         host.SetCategory(chosen);
+        host.NewsWidgetCategoryChanged();
         if ((feedsChanged || newsSettingsChanged) && string.Equals(chosen, previousActive, StringComparison.OrdinalIgnoreCase)) host.ReloadNews();
         host.SaveConfig();
         hasUnsavedChanges = false;

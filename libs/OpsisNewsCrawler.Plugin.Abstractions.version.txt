@@ -1,0 +1,3 @@
+Canonical host contract: Opsis 2.8.0.2510 release/2.8.0.2510/lib/OpsisNewsCrawler.Plugin.Abstractions.dll
+AssemblyVersion/FileVersion 1.0.0.0; blob SHA 7beb06349daef31ae4c80f2a47a32c7477f1e50d
+Do not deploy a locally compiled source mirror to the host or plugin; build against this exact binary.

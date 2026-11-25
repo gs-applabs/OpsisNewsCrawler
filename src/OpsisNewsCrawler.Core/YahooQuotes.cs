@@ -12,7 +12,7 @@ namespace OpsisNewsCrawler.Core;
 public static class YahooAccess
 {
     public const int MaxInstruments = 30;
-    public static readonly TimeSpan MinInterval = TimeSpan.FromMinutes(15);
+    public static readonly TimeSpan MinInterval = FinanceSourcePolicy.MinimumQuoteInterval;
     public static readonly TimeSpan BlockFor = TimeSpan.FromHours(6);
 
     /// <summary>Set from the settings (<see cref="AppConfig.HistoryFromYahoo"/>). Off: no request to Yahoo is made.</summary>
@@ -179,7 +179,8 @@ public sealed class YahooQuoteProvider : IQuoteProvider
         if (!YahooAccess.Enabled) return Array.Empty<MarketQuote>();
         var wanted = instruments.Where(i => i.Code.Length > 0).GroupBy(i => i.Code, StringComparer.Ordinal).Select(g => g.First()).Take(YahooAccess.MaxInstruments).ToList();
         var now = DateTimeOffset.UtcNow;
-        var todo = wanted.Where(i => !cache.TryGetValue(i.Code, out var c) || now - c.At >= YahooAccess.MinInterval).ToList();
+        var todo = wanted.Where(i => FinanceSourcePolicy.MayPoll(YahooAccess.Enabled, YahooAccess.IsBlocked, now,
+            cache.TryGetValue(i.Code, out var c) ? c.At : null)).ToList();
         if (todo.Count > 0 && !YahooAccess.IsBlocked)
         {
             var changed = false;

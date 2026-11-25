@@ -10,6 +10,12 @@ public sealed class LiveFeed
     public string Name { get; set; } = "";
     public string Url { get; set; } = "";
     public bool Enabled { get; set; } = true;
+    /// <summary>Optional event keywords for selecting a user-configured stream automatically.</summary>
+    public List<string> EventKeywords { get; set; } = new();
+    /// <summary>Optional ISO region code (e.g. GR, CY). Empty = general coverage.</summary>
+    public string Region { get; set; } = "";
+    /// <summary>Higher-priority user preference. Does not imply channel verification.</summary>
+    public int Priority { get; set; }
 
     public LiveFeed() { }
     public LiveFeed(string name, string url) { Name = name; Url = url; }
@@ -59,7 +65,10 @@ public static class Breaking
         if (!text.Contains("://")) text = "https://" + text;
         if (!Uri.TryCreate(text, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return null;
 
-        if (uri.Host.Contains("youtube.com", StringComparison.OrdinalIgnoreCase) || uri.Host.Contains("youtu.be", StringComparison.OrdinalIgnoreCase))
+        if (!NetGuard.IsPublicHost(uri.Host)) return null;
+        if (uri.Host.Equals("youtube.com", StringComparison.OrdinalIgnoreCase) ||
+            uri.Host.EndsWith(".youtube.com", StringComparison.OrdinalIgnoreCase) ||
+            uri.Host.Equals("youtu.be", StringComparison.OrdinalIgnoreCase))
         {
             var id = YoutubeId.Match(uri.AbsoluteUri);
             if (id.Success) return $"https://www.youtube.com/embed/{id.Groups[1].Value}?autoplay=1&mute=1&rel=0";

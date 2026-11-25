@@ -9,13 +9,18 @@ namespace OpsisNewsCrawler.Windows;
 /// a sparse grid of its pixels gives the middle luminance; the few pixels of text and icons do not change a median. Called only when the background may have changed,
 /// never once per frame.
 /// </summary>
+internal sealed record BackdropContrastSample(double Median, double DarkPercentile, double LightPercentile);
+
 internal static class BackdropSampler
 {
     private const int Step = 7;
     private const int MaxPixelsPerSide = 4000;
 
     /// <summary>The middle luminance (0..1) of the screen area, or null when it cannot be read (locked screen, secure desktop, remote session without a screen).</summary>
-    public static double? Sample(Rectangle screenArea)
+    public static double? Sample(Rectangle screenArea) => SampleDetailed(screenArea)?.Median;
+
+    /// <summary>Reads 10th and 90th percentile brightness to detect mixed light/dark wallpaper.</summary>
+    public static BackdropContrastSample? SampleDetailed(Rectangle screenArea)
     {
         var area = Rectangle.Intersect(screenArea, SystemInformation.VirtualScreen);
         if (area.Width < 8 || area.Height < 4 || area.Width > MaxPixelsPerSide || area.Height > MaxPixelsPerSide) return null;
@@ -34,7 +39,11 @@ internal static class BackdropSampler
                     for (var x = Step / 2; x < bmp.Width; x += Step)
                         samples.Add(ContrastChooser.RelativeLuminance(row[x * 4 + 2], row[x * 4 + 1], row[x * 4]));
                 }
-                return ContrastChooser.Median(samples);
+                if (samples.Count == 0) return null;
+                samples.Sort();
+                var lower = samples[(int)Math.Floor((samples.Count - 1) * 0.1)];
+                var upper = samples[(int)Math.Ceiling((samples.Count - 1) * 0.9)];
+                return new BackdropContrastSample(ContrastChooser.Median(samples), lower, upper);
             }
             finally { bmp.UnlockBits(data); }
         }

@@ -192,6 +192,10 @@ internal sealed class TickerCanvas : Control
         // No OptimizedDoubleBuffer: the frame is composed in our own alpha bitmap and copied once.
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
         SetStyle(ControlStyles.OptimizedDoubleBuffer, false);
+        SetStyle(ControlStyles.Selectable, true);
+        TabStop = true;
+        AccessibleRole = AccessibleRole.List;
+        AccessibleName = Loc.T("app.name") + " news ticker";
         BackColor = Color.Black;
     }
 
@@ -377,6 +381,8 @@ internal sealed class TickerCanvas : Control
     {
         items = newItems;
         hoverIndex = -1;
+        keyboardIndex = -1;
+        AccessibleDescription = string.Join(". ", items.Take(8).Select(x => x.Title));
         BuildLayout();
 
         foreach (var host in entries.Where(e => e.Item.Kind == NewsItemKind.News).Select(e => e.Host).Where(h => h.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase))
@@ -387,6 +393,38 @@ internal sealed class TickerCanvas : Control
             });
         }
         Invalidate();
+    }
+
+    private int keyboardIndex = -1;
+
+    /// <summary>Arrow keys navigate items; Enter activates the focused headline for keyboard users.</summary>
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (items.Count == 0) return;
+        if (e.KeyCode is Keys.Right or Keys.Down)
+        {
+            keyboardIndex = (keyboardIndex + 1) % items.Count;
+            e.Handled = true;
+        }
+        else if (e.KeyCode is Keys.Left or Keys.Up)
+        {
+            keyboardIndex = keyboardIndex <= 0 ? items.Count - 1 : keyboardIndex - 1;
+            e.Handled = true;
+        }
+        else if (e.KeyCode == Keys.Enter && keyboardIndex >= 0 && keyboardIndex < items.Count)
+        {
+            var chosen = items[keyboardIndex];
+            if (chosen.Kind == NewsItemKind.Weather) WeatherClicked?.Invoke(chosen);
+            else if (chosen.Kind == NewsItemKind.Hazard) HazardClicked?.Invoke(chosen);
+            else if (!string.IsNullOrEmpty(chosen.Url)) ItemClicked?.Invoke(chosen);
+            e.Handled = true;
+        }
+        if (e.Handled)
+        {
+            AccessibleDescription = keyboardIndex >= 0 ? items[keyboardIndex].Title : AccessibleDescription;
+            Invalidate();
+        }
     }
 
     /// <summary>Sets the scroll position. It wraps around the loop length, so any value is accepted.</summary>
@@ -407,19 +445,25 @@ internal sealed class TickerCanvas : Control
     // Widths of texts: measured once per font and text (the strip is laid out again after every refresh and every change of font or size,
     // and most headlines are the same as in the previous layout). Cleared when it grows too big or the fonts change.
     private static readonly Dictionary<(string Font, float Size, FontStyle Style, string Text), int> MeasureCache = new();
+    private static readonly object MeasureGate = new();
     private const int MeasureCacheLimit = 4000;
 
     private static int Measure(string text, Font font)
     {
         var key = (font.Name, font.Size, font.Style, text);
-        if (MeasureCache.TryGetValue(key, out var cached)) return cached;
-        var width = (int)Math.Ceiling(MeasureGraphics.MeasureString(text, font, PointF.Empty, TextFormat).Width);
-        if (MeasureCache.Count >= MeasureCacheLimit) MeasureCache.Clear();
-        MeasureCache[key] = width;
-        return width;
+        // Multiple ticker windows and UI tests share this Graphics instance. GDI+ is not
+        // thread-safe: cache and MeasureGraphics must be protected by the same lock.
+        lock (MeasureGate)
+        {
+            if (MeasureCache.TryGetValue(key, out var cached)) return cached;
+            var width = (int)Math.Ceiling(MeasureGraphics.MeasureString(text, font, PointF.Empty, TextFormat).Width);
+            if (MeasureCache.Count >= MeasureCacheLimit) MeasureCache.Clear();
+            MeasureCache[key] = width;
+            return width;
+        }
     }
 
-    internal static int MeasureCacheCount => MeasureCache.Count;
+    internal static int MeasureCacheCount { get { lock (MeasureGate) return MeasureCache.Count; } }
 
     /// <summary>Greek capitals are written without accents ("ΕΚΤΑΚΤΗ", not "ΈΚΤΑΚΤΗ").</summary>
     internal static string UpperNoAccents(string text) => Loc.Upper(text);
@@ -427,7 +471,7 @@ internal sealed class TickerCanvas : Control
     private void BuildLayout()
     {
         entries.Clear();
-        textHeight = (int)Math.Ceiling(titleFont.GetHeight(MeasureGraphics));
+        lock (MeasureGate) textHeight = (int)Math.Ceiling(titleFont.GetHeight(MeasureGraphics));
 
         var x = 0;
         foreach (var item in items)
@@ -588,7 +632,7 @@ internal sealed class TickerCanvas : Control
     protected override void OnPaint(PaintEventArgs e)
     {
         if (Width <= 0 || Height <= 0) return;
-        ComposeFrame();
+        ComposeFrame(e.ClipRectangle);
         // Copy, don't blend: the alpha channel of the frame goes to the window as it is.
         e.Graphics.CompositingMode = CompositingMode.SourceCopy;
         e.Graphics.DrawImageUnscaled(buffer!, 0, 0);
@@ -601,17 +645,41 @@ internal sealed class TickerCanvas : Control
         return new Bitmap(buffer!);
     }
 
-    private void ComposeFrame()
+    /// <summary>Internal regression aid for dirty rectangle alpha rendering.</summary>
+    internal Bitmap RenderPartialFrameForTest(Rectangle rect)
     {
-        if (buffer is null || buffer.Width != Width || buffer.Height != Height)
+        ComposeFrame(rect);
+        return new Bitmap(buffer!);
+    }
+
+    private int partialFrameCount;
+    private long renderedFrames;
+    internal int PartialFrameCount => partialFrameCount;
+    internal long RenderedFrames => Interlocked.Read(ref renderedFrames);
+
+    /// <summary>Renders only an invalidated region when safe, or the whole frame for alpha fades/shape effects.</summary>
+    private void ComposeFrame(Rectangle? dirty = null)
+    {
+        Interlocked.Increment(ref renderedFrames);
+        var resized = buffer is null || buffer.Width != Width || buffer.Height != Height;
+        if (resized)
         {
             buffer?.Dispose();
             buffer = new Bitmap(Width, Height, PixelFormat.Format32bppPArgb);
         }
+        var partial = !resized && dirty is { } region && region.Width > 0 && region.Height > 0 &&
+                      region.Width * 2 < Width && !edgeFade && OutlineRadius == 0 && !divider;
 
         using (var g = Graphics.FromImage(buffer))
         {
-            g.Clear(FillColor());
+            if (partial)
+            {
+                g.SetClip(dirty!.Value);
+                using var fill = new SolidBrush(FillColor());
+                g.FillRectangle(fill, dirty.Value);
+                partialFrameCount++;
+            }
+            else g.Clear(FillColor());
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;

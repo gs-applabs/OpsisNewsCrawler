@@ -94,4 +94,23 @@ public sealed class BarSpeedConfigTests
         }
         finally { if (File.Exists(path)) File.Delete(path); }
     }
+
+    [Fact]
+    public void TrySave_ReportsFailureSoCallersCanRollBack()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"opsis-trysave-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var good = Path.Combine(dir, "config.json");
+            Assert.True(new AppConfig().TrySave(good));
+            Assert.True(File.Exists(good));
+            // the parent "folder" is a file: the write cannot succeed, and it must not throw
+            var blocker = Path.Combine(dir, "blocker");
+            File.WriteAllText(blocker, "x");
+            Assert.False(new AppConfig().TrySave(Path.Combine(blocker, "config.json")));
+            new AppConfig().Save(Path.Combine(blocker, "config.json"));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
 }

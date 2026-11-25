@@ -17,7 +17,7 @@
 #define MyAppName "Opsis News Crawler"
 #define MyPublisher "gs-applabs"
 #define MyAppUrl "https://github.com/gs-applabs/OpsisNewsCrawler"
-#define MyAppVersion "0.24.1"
+#define MyAppVersion "0.28.0"
 #ifndef BinDir
 #define BinDir "bin"
 #endif
@@ -380,6 +380,10 @@ Name: "startup"; Description: "{cm:StartWithWindows}"; Flags: unchecked; Check: 
 Name: "desktopicon"; Description: "{cm:DesktopShortcut}"; Flags: unchecked; Check: IsSeparate
 
 [Files]
+; P0 preflight: extract data-only copies to {tmp} before touching an Opsis plugin.
+; Same sources are still installed by the wildcard entry below.
+Source: "{#BinDir}\plugins\{#PluginFolder}\OpsisNewsCrawler.Plugin.Abstractions.dll"; DestDir: "{tmp}"; DestName: "crawler-contract-check.dll"; Flags: dontcopy; Check: IsIntegrated
+Source: "{#BinDir}\plugins\{#PluginFolder}\Opsis.UI.dll"; DestDir: "{tmp}"; DestName: "crawler-ui-check.dll"; Flags: dontcopy; Check: IsIntegrated
 ; Separate install: the program (the plugin copy stays out, Opsis must not load a second crawler next to the stand-alone one)
 Source: "{#BinDir}\*"; DestDir: "{app}"; Excludes: "plugins";Flags: recursesubdirs createallsubdirs ignoreversion; Check: IsSeparate
 ; Integrated install: only the plugin folder, into the folder Opsis scans ({app} is set to it on the wizard page)
@@ -417,6 +421,8 @@ var
   OpsisVersion: String;
   OpsisFound: Boolean;
   InfoAdded: Boolean;
+  P0BackupPending: String;
+  P0BackupPrepared: Boolean;
 
 // ---- finding Opsis -------------------------------------------------------------------------
 
@@ -652,11 +658,223 @@ begin
   RegDeleteValue(HKCU, RunKeyPath, 'DeskTicker');
 end;
 
+// ABI safety: an integrated Crawler plugin cannot bind to an Opsis host still loading
+// the 0.8.0.0 plugin contract. Standalone installation remains available in all cases.
+function OpsisSharedFile(const Name: String): String;
+var
+  Root, Probe: String;
+begin
+  Result := '';
+  Root := OpsisInstallDir();
+  if Root = '' then
+    Root := ExpandConstant('{localappdata}\Programs\Opsis - Desktop Customization');
+  Probe := AddBackslash(Root) + Name;
+  if not FileExists(Probe) then
+    Probe := AddBackslash(Root) + 'lib\' + Name;
+  if not FileExists(Probe) then
+    Probe := AddBackslash(Root) + 'libs\' + Name;
+  if FileExists(Probe) then Result := Probe;
+end;
+
+function CompatibleOpsisContract(): Boolean;
+var
+  Probe, V: String;
+begin
+  Result := False;
+  Probe := OpsisSharedFile('OpsisNewsCrawler.Plugin.Abstractions.dll');
+  if Probe = '' then Exit;
+  if not GetVersionNumbersString(Probe, V) then Exit;
+  if CompareText(V, '1.0.0.0') <> 0 then Exit;
+  ExtractTemporaryFile('crawler-contract-check.dll');
+  // ABI 1.0.0.0 is not sufficient: require the exact same contract bytes.
+  Result := CompareText(GetSHA256OfFile(Probe),
+    GetSHA256OfFile(ExpandConstant('{tmp}\crawler-contract-check.dll'))) = 0;
+end;
+
+function CompatibleOpsisUi(): Boolean;
+var
+  Probe, V: String;
+begin
+  Result := False;
+  Probe := OpsisSharedFile('Opsis.UI.dll');
+  if Probe = '' then Exit;
+  if not GetVersionNumbersString(Probe, V) then Exit;
+  if CompareText(V, '0.6.0.0') <> 0 then Exit;
+  ExtractTemporaryFile('crawler-ui-check.dll');
+  Result := CompareText(GetSHA256OfFile(Probe),
+    GetSHA256OfFile(ExpandConstant('{tmp}\crawler-ui-check.dll'))) = 0;
+end;
+
+// P0 rollback snapshot: the last working plugin only, outside the plugin folder.
+// Never back up settings, follow junctions/symlinks, or overwrite a pending
+// snapshot from a setup that may have been interrupted.
+function CopyP0PluginTree(const Source, Target: String): Boolean;
+var
+  Found: TFindRec;
+  FromPath, ToPath: String;
+begin
+  Result := ForceDirectories(Target);
+  if not Result then Exit;
+  if not FindFirst(AddBackslash(Source) + '*', Found) then Exit;
+  try
+    repeat
+      if (Found.Name <> '.') and (Found.Name <> '..') then
+      begin
+        // Inno constants are Win32 file attributes. Refuse links to avoid
+        // copying files outside the selected Opsis plugin directory.
+        if (Found.Attributes and FILE_ATTRIBUTE_REPARSE_POINT) <> 0 then
+        begin
+          Result := False;
+          Exit;
+        end;
+        FromPath := AddBackslash(Source) + Found.Name;
+        ToPath := AddBackslash(Target) + Found.Name;
+        if (Found.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+        begin
+          if not CopyP0PluginTree(FromPath, ToPath) then
+          begin
+            Result := False;
+            Exit;
+          end;
+        end
+        else if not FileCopy(FromPath, ToPath, True) then
+        begin
+          Result := False;
+          Exit;
+        end;
+      end;
+    until not FindNext(Found);
+  finally
+    FindClose(Found);
+  end;
+end;
+
+// Optional Chronikologio safety gate: the Opsis loader resolves the shared
+// ABI from its own default load context. An installed Chronikologio plugin
+// carrying different contract bytes must be upgraded separately first.
+function CompatibleChronikologioFolder(const Folder, HostContract: String): Boolean;
+var
+  PluginDll, ContractDll: String;
+begin
+  Result := True;
+  PluginDll := AddBackslash(Folder) + 'Chronikologio.OpsisPlugin.dll';
+  if not FileExists(PluginDll) then Exit;
+  ContractDll := AddBackslash(Folder) + 'OpsisNewsCrawler.Plugin.Abstractions.dll';
+  if FileExists(ContractDll) then
+    Result := CompareText(GetSHA256OfFile(HostContract),
+      GetSHA256OfFile(ContractDll)) = 0;
+end;
+
+function CompatibleInstalledChronikologio(): Boolean;
+var
+  Root, ContractDll: String;
+begin
+  Result := False;
+  ContractDll := OpsisSharedFile('OpsisNewsCrawler.Plugin.Abstractions.dll');
+  if ContractDll = '' then Exit;
+  Root := OpsisInstallDir();
+  if Root = '' then Root := ExpandConstant('{localappdata}\Programs\Opsis - Desktop Customization');
+  Result :=
+    CompatibleChronikologioFolder(AddBackslash(Root) + 'plugins\Chronikologio', ContractDll) and
+    CompatibleChronikologioFolder(ExpandConstant('{userappdata}\Opsis\plugins\Chronikologio'), ContractDll) and
+    CompatibleChronikologioFolder(ExpandConstant('{localappdata}\Opsis\plugins\Chronikologio'), ContractDll);
+end;
+
+function PrepareP0Rollback(): String;
+var
+  Source, Root: String;
+begin
+  Result := '';
+  P0BackupPrepared := False;
+  if not IsIntegrated() then Exit;
+  Source := WizardDirValue();
+  if not FileExists(AddBackslash(Source) + 'OpsisNewsCrawler.OpsisPlugin.dll') then Exit;
+  Root := ExpandConstant('{commonappdata}\Opsis\CrawlerRollback');
+  P0BackupPending := AddBackslash(Root) + 'pending';
+  if DirExists(P0BackupPending) then
+  begin
+    Result := 'An unfinished Crawler rollback snapshot already exists: ' + P0BackupPending;
+    Result := Result + #13#10 + 'Recover it or move it aside before retrying the update.';
+    Exit;
+  end;
+  if not CopyP0PluginTree(Source, P0BackupPending) then
+  begin
+    // A partial snapshot is never treated as a valid restoration source.
+    if DirExists(P0BackupPending) then DelTree(P0BackupPending, True, True, True);
+    Result := 'The previous Crawler plugin could not be backed up safely. Installation was stopped.';
+    Exit;
+  end;
+  // A crash during copying must never turn a partial folder into a
+  // restore candidate. The recovery tool checks this completion marker.
+  if not SaveStringToFile(AddBackslash(P0BackupPending) + '.backup-complete',
+    'Opsis News Crawler P0 complete rollback snapshot', False) then
+  begin
+    DelTree(P0BackupPending, True, True, True);
+    Result := 'Could not verify the rollback snapshot; installation was stopped.';
+    Exit;
+  end;
+  P0BackupPrepared := True;
+  Log('P0: backed up the existing Crawler plugin before replacing any files');
+end;
+
+procedure CommitP0Rollback();
+var
+  Previous: String;
+begin
+  if not P0BackupPrepared then Exit;
+  Previous := ExpandConstant('{commonappdata}\Opsis\CrawlerRollback\previous');
+  // Retain a single completed rollback. An interrupted backup is preserved
+  // separately, so recovery can proceed without replacing the last good one.
+  if DirExists(Previous) then
+    if not DelTree(Previous, True, True, True) then
+    begin
+      Log('P0: previous snapshot could not be pruned; the new backup remains in pending');
+      Exit;
+    end;
+  if not RenameFile(P0BackupPending, Previous) then
+    Log('P0: pending backup remains available; rename to previous failed');
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Left: String;
 begin
   Result := '';
+  // Opsis.exe uses this exact mutex (see Opsis 2.8 src/Program.cs).
+  // Never overwrite its loaded plugin DLLs while the host is running.
+  if IsIntegrated() and CheckForMutexes('Local\Opsis.SingleInstance') then
+  begin
+    Result := 'Opsis is running. Close Opsis completely before installing or updating the News Crawler plugin.';
+    Result := Result + #13#10 + 'Ο Opsis εκτελείται. Κλείστε τον πλήρως πριν την εγκατάσταση ή αναβάθμιση του plugin.';
+    Result := Result + #13#10 + 'No files were changed. The standalone installation is unaffected.';
+    Exit;
+  end;
+  if IsIntegrated() and not CompatibleOpsisContract() then
+  begin
+    // Keep #13#10 away from a line-start: Inno Setup ISPP otherwise treats it as a directive.
+    Result := 'Opsis host needs the exact same plugin contract binary (ABI 1.0.0.0 / SHA256) before integration.';
+    Result := Result + #13#10 + 'Απαιτείται ακριβώς το ίδιο DLL συμβολαίου (ABI 1.0.0.0 / SHA256) στον Opsis.';
+    Result := Result + #13#10 + 'The standalone installation mode is still available.';
+    Exit;
+  end;
+  if IsIntegrated() and not CompatibleOpsisUi() then
+  begin
+    Result := 'Opsis.UI 0.6.0 DLL must match the integrated Crawler plugin exactly (SHA256).';
+    Result := Result + #13#10 + 'Απαιτείται κοινή βιβλιοθήκη Opsis.UI 0.6.0 με ταυτόσημο SHA256.';
+    Result := Result + #13#10 + 'The standalone installation mode remains available.';
+    Exit;
+  end;
+  if IsIntegrated() and not CompatibleInstalledChronikologio() then
+  begin
+    Result := 'An installed Chronikologio plugin has different shared contract DLL bytes.';
+    Result := Result + #13#10 + 'Το Χρονικολόγιο χρειάζεται ενημέρωση στο κοινό συμβόλαιο πριν από την ενσωμάτωση.';
+    Result := Result + #13#10 + 'No plugin files were replaced. The standalone mode remains available.';
+    Exit;
+  end;
+  // Run the rollback snapshot only after ABI/UI6/Chronikologio checks succeeded.
+  // A failure aborts setup before any Crawler files are replaced.
+  Result := PrepareP0Rollback();
+  if Result <> '' then Exit;
   Left := RemovePerUserInstall;
   if Left <> '' then
     Result := CustomMessage('OldInstallRemains') + #13#10 + Left;
@@ -681,6 +899,7 @@ begin
   end;
   if CurStep = ssPostInstall then
   begin
+    if IsIntegrated() then CommitP0Rollback();
     // read once by the app at its next start (AppConfig.ApplyFirstRun). A fresh installation carries the choices of the wizard; an update
     // (a config.json exists) never overwrites the user's language and bar, it only carries the "start with Windows" wish over.
     Dir := ExpandConstant('{userappdata}\OpsisNewsCrawler');

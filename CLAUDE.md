@@ -1,17 +1,24 @@
 # Opsis News Crawler — project guide for Claude Code
 
-A Windows desktop news/market ticker bar (.NET 10, WinForms). It runs standalone
+A Windows desktop news/market ticker bar (.NET 11, WinForms). It runs standalone
 (`OpsisNewsCrawler.exe`) and as a plugin hosted by **Opsis / Opsis**.
 Owner's language is Greek: reply to the user in Greek unless asked otherwise; code, identifiers and
 comments stay in English; UI strings are bilingual "Ελληνικά / English".
 
+
+## Current .NET 11 + Opsis 2.8 integration rule (2026-11-24)
+- Build with .NET 11; Crawler product version 0.28.0, Crawler plugin/contract ABI 1.0.0.0 and Opsis.UI 0.6.0 (assembly 0.1.0.0). The exact Opsis 2.8.0.2510 UI6 DLL is committed in `libs/`.
+- Host and all plugins must load the **same compiled** shared ABI contract binary. The app, Windows, plugin and tests reference `libs/OpsisNewsCrawler.Plugin.Abstractions.dll` from Opsis 2.8; the source project is a mirror and must never be packaged as a replacement. The plugin installer must reject inconsistent SHA256 for host contract or UI6; it must not silently replace host-owned binaries.
+- The latest active P0 is draft PR #8 based on draft .NET 11 PR #7. Build/test, actual host loader, Chronikologio and installer/rollback gates are still required. Do not mark P0 complete because the source compiles.
+- The current canonical development journal is `CHANGELOG.md`; do not create or link new dated progress/handoff files. Keep source documentation (`docs/DATA-SOURCES.md`, `docs/SECURITY.md`, etc.) separate from progress history.
+
 ## READ FIRST
-1. `docs/HANDOFF.md` — current status, what is done / not done, decisions, next steps (start here).
+1. `CHANGELOG.md` — canonical historical status and current P0/P1/P2 gates; do not use deleted historical progress files.
 2. `docs/USER-REQUIREMENTS-2026-10-13.md` — the owner's latest requirement list, verbatim (Greek).
 3. `docs/DATA-SOURCES.md` — which market-data / news sources were verified and which are forbidden.
 
 ## Hard facts about the state of the code
-- The solution builds with 0 errors/0 warnings on Windows (`dotnet build OpsisNewsCrawler.sln -c Release`) and the installer compiles (`Output\OpsisNewsCrawler-Setup.exe`). Since 2026-10-13 it has been run and checked on a real desktop; `docs/TASKS.md` says exactly which behaviours were verified (screenshots) and which were not.
+- The solution builds with 0 errors/0 warnings on Windows (`dotnet build OpsisNewsCrawler.sln -c Release`) and the installer compiles (`Output\OpsisNewsCrawler-Setup.exe`). Since 2026-10-13 it has been run and checked on a real desktop; historical run claims are archived in `CHANGELOG.md`; new P0 functionality requires current GitHub Actions and real-desktop verification.
 - WinForms analyzer **WFO1000** is silenced in the Windows project (`NoWarn`), like in Opsis; `TickerCanvas` still uses `GetX()/SetX()` methods.
 - Greek.isl is not shipped with Inno Setup 6.7: the installer uses only `Default.isl` and bilingual custom messages (the only place that still mixes the two languages).
 
@@ -26,8 +33,8 @@ and compiles `OpsisNewsCrawler.iss` with Inno Setup 7/6/5 (`ISCC`, found automat
 ## Solution layout (`src/`)
 | Project | Role |
 |---|---|
-| `OpsisNewsCrawler.Core` (net10.0) | models, `TickerState`, `AppConfig` (JSON in `%AppData%\OpsisNewsCrawler\config.json`), RSS parsing, other non-UI logic |
-| `OpsisNewsCrawler.Windows` (net10.0-windows) | all WinForms UI + Win32 interop: `TickerHost` (owns window, config, refresh loops), `TickerWindow`, `TickerCanvas` (custom painted strip), `ArticlePreviewForm`, `SettingsForm`, `FaviconCache`, `Native` |
+| `OpsisNewsCrawler.Core` (net11.0) | models, `TickerState`, `AppConfig` (JSON in `%AppData%\OpsisNewsCrawler\config.json`), RSS parsing, other non-UI logic |
+| `OpsisNewsCrawler.Windows` (net11.0-windows) | all WinForms UI + Win32 interop: `TickerHost` (owns window, config, refresh loops), `TickerWindow`, `TickerCanvas` (custom painted strip), `ArticlePreviewForm`, `SettingsForm`, `FaviconCache`, `Native` |
 | `OpsisNewsCrawler.App` | standalone exe (tray icon, single instance mutex) |
 | `OpsisNewsCrawler.Plugin.Abstractions` | `IOpsisNewsCrawlerPlugin` contract that Opsis implements against |
 | `OpsisNewsCrawler.OpsisPlugin` | the plugin DLL; wraps the same `TickerHost` |
@@ -44,7 +51,7 @@ reposition/refresh without losing the scroll position.
 - Release assets are prepared in `release\<version>-assets` (ignored by git); the coordinator publishes. Per-release notes live in `docs/releases/`.
 
 ## v0.8.0 architecture notes (added 2026-10-13, evening)
-- **Task list**: `docs/TASKS.md` is the live list of requirements (R1–R12, N1–N11, O1–O6) with verified/unverified state. Update it whenever a task changes state.
+- **Single-history policy:** maintain progress/status only in `CHANGELOG.md`. Keep `docs/releases/RELEASE-0.28.0.md` as the current packaging release note, with no separate dated TASKS/HANDOFF progress files. Maintain real tests before calling an item verified.
 - **Language**: every UI text goes through `Core/Loc.cs` (`Loc.T("key")`), keys in `Core/Locales/el.json` + `en.json` (embedded; more languages = `locales\<code>.json` next to the exe). Never write mixed "Ελληνικά / English" strings. The locale files are generated: edit the script behind them or edit both JSON files, keep the same keys in both.
 - **Drawing**: `TickerCanvas` renders into a 32-bit **alpha** bitmap and copies it with `CompositingMode.SourceCopy`. The window background is a DWM accent backdrop chosen by `Native.SetBackdrop` (state 2 gradient / 3 blur / 4 acrylic). Do NOT use `Form.Opacity` (it blurs the text) and do not use GDI `TextRenderer` on the canvas (alpha 0 = invisible dark text).
 - **Bars**: `TickerHost` owns the main bar (`Window`) and an optional second bar inside the taskbar (`SecondWindow`). Each bar shows News, Stocks or Both (split in the middle: `TickerCanvas` x2 in one `TickerWindow`).
@@ -81,7 +88,7 @@ Fourteen UI languages like Opsis: `Core/Locales/<code>.json` (el, en generated b
 - Tray: one Pause/Resume item (standalone and in the Opsis plugin menu), Close/Open in the plugin menu.
 
 ## 0.17.0 additions
-- **Shared controls**: FlatButton / FlatCheckBox / FlatSlider / FlatComboBox / FlatTabs / FlatMenuRenderer / FlatDraw live in the separate repository `..\Opsis.UI`; the Crawler references the committed `libs\Opsis.UI.dll` (named in `libs\Opsis.UI.version.txt`) from App, Windows and OpsisPlugin (every output project needs the Reference, or deps.json misses it). Do not re-add copies here: fix them in Opsis.UI, rebuild, copy the DLL. `Theme` hands live tokens to the library (`OpsisTheme.Use` in its static constructor). The remaining Flat* controls (FlatNumber, FlatText, FlatList, FlatCard, FlatSwatch, FlatStrip, FlatProgress) stay here for now.
+- **Shared controls**: FlatButton / FlatCheckBox / FlatSlider / FlatComboBox / FlatTabs / FlatMenuRenderer / FlatDraw live in the separate repository `..\Opsis.UI`; the Crawler references the committed `libs\Opsis.UI.dll` (named in `libs\Opsis.UI.version.txt`) from App, Windows and OpsisPlugin (every output project needs the Reference, or deps.json misses it). Do not re-add copies here: fix them in Opsis.UI, rebuild, copy the DLL. `Theme` hands tokens to the library only in standalone mode: when hosted by Opsis 2.8, the host owns the process-wide `OpsisTheme` singleton. Never override the host palette. The remaining Flat* controls (FlatNumber, FlatText, FlatList, FlatCard, FlatSwatch, FlatStrip, FlatProgress) stay here for now.
 
 
 ## 0.18.5 additions

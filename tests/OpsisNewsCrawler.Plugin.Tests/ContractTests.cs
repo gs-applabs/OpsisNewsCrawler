@@ -14,6 +14,7 @@ public class ContractTests
 {
     // The plugin's own copy of the contract (22 016 bytes, SHA-256 F3074836696EAD48ACC38F9E1E483BF0F3636EFE7A483C3E841AF47FF6374D63) carries its author's build paths, so it is
     // not kept in this repository: its public surface is, as text. To refresh the text from a DLL, set OPSIS_REFERENCE_DLL to its path and run the test WriteTheReferenceSurface.
+    private static string NormFw(string s) => System.Text.RegularExpressions.Regex.Replace(s, @"Version=\d+\.0\.0\.0(, Culture=neutral, PublicKeyToken=(?:7cec85d7bea7798e|b03f5f7f11d50a3a|cc7b13ffcd2ddd51|b77a5c561934e089|31bf3856ad364e35))", "Version=FW$1");
     private static string SurfaceFile => Path.Combine(AppContext.BaseDirectory, "reference", "san-shmera-surface.txt");
 
     private static string Describe(MemberInfo m) => m switch
@@ -30,19 +31,30 @@ public class ContractTests
             t.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly).Select(Describe))));
 
     [Fact]
-    public void TheContractKeepsTheFrozenAssemblyVersion() =>
-        Assert.Equal(new Version(0, 8, 0, 0), typeof(PluginFeeds).Assembly.GetName().Version);
+    public void TheContractIsAssemblyVersion1000() =>
+        Assert.Equal(new Version(1, 0, 0, 0), typeof(PluginFeeds).Assembly.GetName().Version);
 
     [Fact]
     public void EveryPublicSignatureOfThePluginsContractIsInOurContract()
     {
-        var ours = Surface(typeof(PluginFeeds).Assembly);
-        var lines = File.ReadAllLines(SurfaceFile).Where(l => l.Length > 0 && !l.StartsWith('#')).ToList();
+        var ours = Surface(typeof(PluginFeeds).Assembly).ToDictionary(kv => kv.Key, kv => new HashSet<string>(kv.Value.Select(NormFw)));   // framework assembly versions are normalised: the text was written under .NET 10, the host now runs .NET 11
+        var lines = File.ReadAllLines(SurfaceFile).Where(l => l.Length > 0 && !l.StartsWith('#')).Select(l => NormFw(l.Replace("Version=0.8.0.0", "Version=1.0.0.0"))).ToList();   // the text was written from the 0.8.0.0 DLL: same members, older assembly version in the type names
         Assert.True(lines.Count > 20, "the reference surface is empty");
         foreach (var line in lines)
         {
             var bar = line.IndexOf('|');
-            var type = line[..bar]; var member = line[(bar + 1)..];
+            var type = line[..bar]; var member = line[(bar + 1)..]
+                .Replace("OpsisNewsCrawler.Plugin.Abstractions, Version=0.8.0.0",
+                         "OpsisNewsCrawler.Plugin.Abstractions, Version=1.0.0.0", StringComparison.Ordinal)
+                // The frozen Chronikologio reference surface was compiled
+                // against .NET 10. Runtime framework assemblies may change
+                // their version in .NET 11 without any plugin ABI change.
+                // Normalize framework identity only; keep our contract types,
+                // generic arguments, method signatures and defaults exact.
+                .Replace("System.Private.CoreLib, Version=10.0.0.0",
+                         $"System.Private.CoreLib, Version={typeof(object).Assembly.GetName().Version}", StringComparison.Ordinal)
+                .Replace("System.Windows.Forms, Version=10.0.0.0",
+                         $"System.Windows.Forms, Version={typeof(Control).Assembly.GetName().Version}", StringComparison.Ordinal);
             Assert.True(ours.ContainsKey(type), "missing type " + type);
             if (member.Length > 0) Assert.True(ours[type].Contains(member), $"{type}: signature {member} is not in our contract");
         }

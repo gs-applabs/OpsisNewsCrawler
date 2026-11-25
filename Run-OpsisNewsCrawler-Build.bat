@@ -7,7 +7,7 @@ cd /d "%~dp0"
 where dotnet >nul 2>&1
 if errorlevel 1 (
   echo [ERROR] .NET SDK was not found.
-  echo Install .NET 10 SDK: https://dotnet.microsoft.com/download/dotnet/10.0
+  echo Install .NET 11 SDK: https://dotnet.microsoft.com/download/dotnet/11.0
   pause
   exit /b 1
 )
@@ -45,8 +45,8 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-if exist "%~dp0src\OpsisNewsCrawler.OpsisPlugin\bin\Release\net10.0-windows10.0.19041.0" (
-  xcopy "%~dp0src\OpsisNewsCrawler.OpsisPlugin\bin\Release\net10.0-windows10.0.19041.0\*" "%BINDIR%\plugins\Opsis - Desktop Customization\" /E /Y /I /Q >nul
+if exist "%~dp0src\OpsisNewsCrawler.OpsisPlugin\bin\Release\net11.0-windows10.0.19041.0" (
+  xcopy "%~dp0src\OpsisNewsCrawler.OpsisPlugin\bin\Release\net11.0-windows10.0.19041.0\*" "%BINDIR%\plugins\Opsis - Desktop Customization\" /E /Y /I /Q >nul
 )
 echo [OK] Application is in: "%BINDIR%"
 

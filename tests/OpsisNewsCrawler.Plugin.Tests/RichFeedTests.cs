@@ -31,6 +31,25 @@ public class RichFeedTests
     }
 
     [Fact]
+    public void RichMetadataSurvivesMappingWithoutChangingCalendarSemantics()
+    {
+        var item = new PluginRichFeedItem("id1", "Ancient history", "https://example.org/event",
+            "history", "Summary", "portrait-1", "GR", "el", -490, "detail-7", 7);
+        var news = Assert.Single(PluginFeedMapper.FromRich(new[] { item }, "Chronikologio", Now, Opts()));
+        Assert.Equal(NewsItemKind.Calendar, news.Kind);
+        Assert.False(news.Breaking);
+        var meta = Assert.IsType<PluginFeedMetadata>(news.PluginMetadata);
+        Assert.Equal("history", meta.OriginalKind);
+        Assert.Equal("portrait-1", meta.ImageId);
+        Assert.Equal(-490, meta.HistoricalYear);
+        Assert.Equal("detail-7", meta.DetailId);
+        Assert.Equal(7, meta.Priority);
+        Assert.Equal("GR", meta.CountryCode);
+        Assert.Equal("el", meta.LanguageCode);
+        Assert.Equal(Now, news.PublishedAt);
+    }
+
+    [Fact]
     public void TheOrderIsTheSameEveryTimeWhateverTheOrderOfTheInput()
     {
         var items = new[] { R("c", "C", 1, 1900), R("a", "A", 5, 1800), R("b", "B", 5, 1950), R("d", "D", 0, null), R("e", "E", 5, 1950) };
@@ -111,7 +130,7 @@ public class RichFeedTests
         Assert.NotNull(typeof(PluginFeeds).GetMethod("Register", new[] { typeof(PluginFeed) }));
         Assert.NotNull(typeof(PluginFeeds).GetMethod("RegisterRich", new[] { typeof(PluginRichFeed) }));
         // the rich types live in their own classes, so a plugin that does not use them never loads them
-        Assert.Equal(new Version(0, 8, 0, 0), typeof(PluginRichFeed).Assembly.GetName().Version);
+        Assert.Equal(new Version(1, 0, 0, 0), typeof(PluginRichFeed).Assembly.GetName().Version);
         Assert.DoesNotContain(typeof(PluginFeedItem).GetProperties(), p => p.Name is "EntryId" or "Summary" or "HistoricalYear");
     }
 

@@ -11,6 +11,15 @@ public sealed record Cached<T>(DateTimeOffset At, T Data);
 /// </summary>
 public static class DataCache
 {
+    private static readonly object WriteGate = new();
+    private static readonly Dictionary<string, string> WrittenHashes = new(StringComparer.OrdinalIgnoreCase);
+    private static long skippedWrites;
+    private static long completedWrites;
+
+    /// <summary>Counts successful cache writes and skips for the current process; no telemetry is sent anywhere.</summary>
+    public static (long Writes, long Skips) WriteDiagnostics =>
+        (Interlocked.Read(ref completedWrites), Interlocked.Read(ref skippedWrites));
+
     public static string Folder => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OpsisNewsCrawler", "cache");
 
@@ -27,8 +36,24 @@ public static class DataCache
     {
         try
         {
-            Directory.CreateDirectory(Folder);
-            SafeFile.WriteAllText(PathOf(name), JsonSerializer.Serialize(new Cached<T>(DateTimeOffset.Now, data)));
+            var path = PathOf(name);
+            // The timestamp changes on every poll: fingerprint only the payload so unchanged
+            // RSS/weather data do not trigger SSD writes several times an hour.
+            var payload = JsonSerializer.Serialize(data);
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(payload)));
+            lock (WriteGate)
+            {
+                if (WrittenHashes.TryGetValue(path, out var previous) && previous == hash)
+                {
+                    Interlocked.Increment(ref skippedWrites);
+                    return;
+                }
+                Directory.CreateDirectory(Folder);
+                SafeFile.WriteAllText(path, JsonSerializer.Serialize(new Cached<T>(DateTimeOffset.UtcNow, data)));
+                WrittenHashes[path] = hash; // on success only; failed writes may be retried
+                Interlocked.Increment(ref completedWrites);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -42,7 +67,18 @@ public static class DataCache
         try
         {
             var path = PathOf(name);
-            return File.Exists(path) ? JsonSerializer.Deserialize<Cached<T>>(File.ReadAllText(path)) : null;
+            if (!File.Exists(path)) return null;
+            var result = JsonSerializer.Deserialize<Cached<T>>(File.ReadAllText(path));
+            if (result is not null)
+            {
+                // Seed the fingerprint from the persisted cache at startup: the first unchanged
+                // fetch after restarting the app will not rewrite the SSD.
+                var payload = JsonSerializer.Serialize(result.Data);
+                var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(payload)));
+                lock (WriteGate) WrittenHashes[path] = hash;
+            }
+            return result;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
         {

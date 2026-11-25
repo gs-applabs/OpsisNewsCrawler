@@ -2,7 +2,7 @@
 ;
 ; Shows the components the program needs. What is already on the computer is shown ticked and cannot be changed; what is missing can
 ; be ticked and is then downloaded from Microsoft and installed silently:
-;   * .NET 10 Desktop Runtime (x64)            - needed to run the program (framework-dependent build)
+;   * .NET 11 Desktop Runtime (x64)            - needed to run the program (framework-dependent build)
 ;   * Microsoft Edge WebView2 Runtime          - live video preview, weather map
 ; Every downloaded file is run only if it carries a valid Microsoft signature.
 ; Silent installs: /DEPS=all | dotnet | webview2 | none (default none: a silent install never downloads by itself).
@@ -17,7 +17,7 @@
 english.DepsTitle=Required components
 english.DepsSubtitle=Programs that {#MyAppName} needs
 english.DepsIntro=Components that are already on this computer are ticked and cannot be changed. Tick the missing ones to download them from Microsoft and install them now.
-english.DepDotNet=.NET 10 Desktop Runtime (needed to run the program)
+english.DepDotNet=.NET 11 Desktop Runtime (needed to run the program)
 english.DepWebView2=Microsoft Edge WebView2 Runtime (live video preview and weather map)
 english.DepInstalled= - already installed
 english.DepsDownloadTitle=Downloading components
@@ -28,7 +28,7 @@ english.DepsNotSigned=the downloaded file is not signed by Microsoft
 greek.DepsTitle=Απαιτούμενα στοιχεία
 greek.DepsSubtitle=Προγράμματα που χρειάζεται το {#MyAppName}
 greek.DepsIntro=Τα στοιχεία που υπάρχουν ήδη σε αυτόν τον υπολογιστή εμφανίζονται τσεκαρισμένα και δεν αλλάζουν. Τσεκάρετε όσα λείπουν για να τα κατεβάσετε από τη Microsoft και να εγκατασταθούν τώρα.
-greek.DepDotNet=.NET 10 Desktop Runtime (απαραίτητο για να τρέξει το πρόγραμμα)
+greek.DepDotNet=.NET 11 Desktop Runtime (απαραίτητο για να τρέξει το πρόγραμμα)
 greek.DepWebView2=Microsoft Edge WebView2 Runtime (ζωντανή προεπισκόπηση βίντεο και χάρτης καιρού)
 greek.DepInstalled= - ήδη εγκατεστημένο
 greek.DepsDownloadTitle=Λήψη στοιχείων
@@ -39,7 +39,7 @@ greek.DepsNotSigned=το αρχείο που κατέβηκε δεν είναι 
 german.DepsTitle=Erforderliche Komponenten
 german.DepsSubtitle=Programme, die {#MyAppName} benötigt
 german.DepsIntro=Komponenten, die bereits auf diesem Computer vorhanden sind, sind angehakt und nicht änderbar. Haken Sie fehlende an, um sie jetzt von Microsoft herunterzuladen und zu installieren.
-german.DepDotNet=.NET 10 Desktop Runtime (zum Ausführen des Programms nötig)
+german.DepDotNet=.NET 11 Desktop Runtime (zum Ausführen des Programms nötig)
 german.DepWebView2=Microsoft Edge WebView2 Runtime (Live-Videovorschau und Wetterkarte)
 german.DepInstalled= - bereits installiert
 german.DepsDownloadTitle=Komponenten werden heruntergeladen
@@ -50,7 +50,7 @@ german.DepsNotSigned=die heruntergeladene Datei ist nicht von Microsoft signiert
 french.DepsTitle=Composants requis
 french.DepsSubtitle=Programmes dont {#MyAppName} a besoin
 french.DepsIntro=Les composants déjà présents sur cet ordinateur sont cochés et ne peuvent pas être modifiés. Cochez ceux qui manquent pour les télécharger depuis Microsoft et les installer maintenant.
-french.DepDotNet=.NET 10 Desktop Runtime (nécessaire pour exécuter le programme)
+french.DepDotNet=.NET 11 Desktop Runtime (nécessaire pour exécuter le programme)
 french.DepWebView2=Microsoft Edge WebView2 Runtime (aperçu vidéo en direct et carte météo)
 french.DepInstalled= - déjà installé
 french.DepsDownloadTitle=Téléchargement des composants
@@ -61,7 +61,7 @@ french.DepsNotSigned=le fichier téléchargé n'est pas signé par Microsoft
 spanish.DepsTitle=Componentes necesarios
 spanish.DepsSubtitle=Programas que necesita {#MyAppName}
 spanish.DepsIntro=Los componentes que ya están en este equipo aparecen marcados y no se pueden cambiar. Marque los que faltan para descargarlos de Microsoft e instalarlos ahora.
-spanish.DepDotNet=.NET 10 Desktop Runtime (necesario para ejecutar el programa)
+spanish.DepDotNet=.NET 11 Desktop Runtime (necesario para ejecutar el programa)
 spanish.DepWebView2=Microsoft Edge WebView2 Runtime (vista previa de vídeo en directo y mapa del tiempo)
 spanish.DepInstalled= - ya instalado
 spanish.DepsDownloadTitle=Descargando componentes
@@ -72,7 +72,7 @@ spanish.DepsNotSigned=el archivo descargado no está firmado por Microsoft
 korean.DepsTitle=필수 구성 요소
 korean.DepsSubtitle={#MyAppName}에 필요한 프로그램
 korean.DepsIntro=이 컴퓨터에 이미 있는 구성 요소는 선택된 상태로 표시되며 변경할 수 없습니다. 없는 항목을 선택하면 Microsoft에서 내려받아 지금 설치합니다.
-korean.DepDotNet=.NET 10 Desktop Runtime (프로그램 실행에 필요)
+korean.DepDotNet=.NET 11 Desktop Runtime (프로그램 실행에 필요)
 korean.DepWebView2=Microsoft Edge WebView2 Runtime (실시간 영상 미리 보기 및 날씨 지도)
 korean.DepInstalled= - 이미 설치됨
 korean.DepsDownloadTitle=구성 요소 다운로드
@@ -83,7 +83,7 @@ korean.DepsNotSigned=다운로드한 파일이 Microsoft 서명이 아닙니다
 chinese.DepsTitle=所需组件
 chinese.DepsSubtitle={#MyAppName} 需要的程序
 chinese.DepsIntro=此计算机上已有的组件会显示为已勾选且无法更改。请勾选缺少的组件，以便从 Microsoft 下载并立即安装。
-chinese.DepDotNet=.NET 10 Desktop Runtime（运行程序所必需）
+chinese.DepDotNet=.NET 11 Desktop Runtime（运行程序所必需）
 chinese.DepWebView2=Microsoft Edge WebView2 Runtime（实时视频预览和天气地图）
 chinese.DepInstalled= - 已安装
 chinese.DepsDownloadTitle=正在下载组件
@@ -94,7 +94,7 @@ chinese.DepsNotSigned=下载的文件没有 Microsoft 签名
 italian.DepsTitle=Componenti necessari
 italian.DepsSubtitle=Programmi di cui {#MyAppName} ha bisogno
 italian.DepsIntro=I componenti già presenti su questo computer sono spuntati e non modificabili. Spunta quelli mancanti per scaricarli da Microsoft e installarli ora.
-italian.DepDotNet=.NET 10 Desktop Runtime (necessario per eseguire il programma)
+italian.DepDotNet=.NET 11 Desktop Runtime (necessario per eseguire il programma)
 italian.DepWebView2=Microsoft Edge WebView2 Runtime (anteprima video dal vivo e mappa meteo)
 italian.DepInstalled= - già installato
 italian.DepsDownloadTitle=Download dei componenti
@@ -105,7 +105,7 @@ italian.DepsNotSigned=il file scaricato non è firmato da Microsoft
 russian.DepsTitle=Необходимые компоненты
 russian.DepsSubtitle=Программы, которые нужны {#MyAppName}
 russian.DepsIntro=Компоненты, уже имеющиеся на этом компьютере, отмечены и недоступны для изменения. Отметьте недостающие, чтобы скачать их у Microsoft и установить сейчас.
-russian.DepDotNet=.NET 10 Desktop Runtime (нужен для запуска программы)
+russian.DepDotNet=.NET 11 Desktop Runtime (нужен для запуска программы)
 russian.DepWebView2=Microsoft Edge WebView2 Runtime (предпросмотр видео и карта погоды)
 russian.DepInstalled= - уже установлено
 russian.DepsDownloadTitle=Загрузка компонентов
@@ -116,7 +116,7 @@ russian.DepsNotSigned=скачанный файл не подписан Microsof
 japanese.DepsTitle=必要なコンポーネント
 japanese.DepsSubtitle={#MyAppName} に必要なプログラム
 japanese.DepsIntro=このコンピューターにすでにあるコンポーネントはチェック済みで変更できません。足りないものにチェックを入れると、Microsoft からダウンロードして今すぐインストールします。
-japanese.DepDotNet=.NET 10 Desktop Runtime (プログラムの実行に必要)
+japanese.DepDotNet=.NET 11 Desktop Runtime (プログラムの実行に必要)
 japanese.DepWebView2=Microsoft Edge WebView2 Runtime (ライブ動画プレビューと天気マップ)
 japanese.DepInstalled= - インストール済み
 japanese.DepsDownloadTitle=コンポーネントをダウンロードしています
@@ -127,7 +127,7 @@ japanese.DepsNotSigned=ダウンロードしたファイルに Microsoft の署�
 portuguese.DepsTitle=Componentes necessários
 portuguese.DepsSubtitle=Programas de que o {#MyAppName} precisa
 portuguese.DepsIntro=Os componentes que já existem neste computador aparecem assinalados e não podem ser alterados. Assinale os que faltam para os transferir da Microsoft e instalar agora.
-portuguese.DepDotNet=.NET 10 Desktop Runtime (necessário para executar o programa)
+portuguese.DepDotNet=.NET 11 Desktop Runtime (necessário para executar o programa)
 portuguese.DepWebView2=Microsoft Edge WebView2 Runtime (pré-visualização de vídeo em direto e mapa do tempo)
 portuguese.DepInstalled= - já instalado
 portuguese.DepsDownloadTitle=A transferir componentes
@@ -138,7 +138,7 @@ portuguese.DepsNotSigned=o ficheiro transferido não está assinado pela Microso
 turkish.DepsTitle=Gerekli bileşenler
 turkish.DepsSubtitle={#MyAppName} için gereken programlar
 turkish.DepsIntro=Bu bilgisayarda zaten bulunan bileşenler işaretli gelir ve değiştirilemez. Eksik olanları işaretleyerek Microsoft'tan indirip şimdi kurabilirsiniz.
-turkish.DepDotNet=.NET 10 Desktop Runtime (programı çalıştırmak için gerekli)
+turkish.DepDotNet=.NET 11 Desktop Runtime (programı çalıştırmak için gerekli)
 turkish.DepWebView2=Microsoft Edge WebView2 Runtime (canlı video önizlemesi ve hava durumu haritası)
 turkish.DepInstalled= - zaten kurulu
 turkish.DepsDownloadTitle=Bileşenler indiriliyor
@@ -149,7 +149,7 @@ turkish.DepsNotSigned=indirilen dosya Microsoft tarafından imzalanmamış
 arabic.DepsTitle=المكونات المطلوبة
 arabic.DepsSubtitle=البرامج التي يحتاجها {#MyAppName}
 arabic.DepsIntro=المكونات الموجودة بالفعل على هذا الكمبيوتر تظهر محددة ولا يمكن تغييرها. حدّد المكونات الناقصة لتنزيلها من Microsoft وتثبيتها الآن.
-arabic.DepDotNet=.NET 10 Desktop Runtime (مطلوب لتشغيل البرنامج)
+arabic.DepDotNet=.NET 11 Desktop Runtime (مطلوب لتشغيل البرنامج)
 arabic.DepWebView2=Microsoft Edge WebView2 Runtime (معاينة الفيديو المباشر وخريطة الطقس)
 arabic.DepInstalled= - مثبّت بالفعل
 arabic.DepsDownloadTitle=جارٍ تنزيل المكونات
@@ -160,7 +160,7 @@ arabic.DepsNotSigned=الملف الذي تم تنزيله غير موقّع م�
 hindi.DepsTitle=आवश्यक घटक
 hindi.DepsSubtitle=वे प्रोग्राम जिनकी {#MyAppName} को ज़रूरत है
 hindi.DepsIntro=इस कंप्यूटर पर पहले से मौजूद घटक चुने हुए दिखते हैं और बदले नहीं जा सकते। जो घटक नहीं हैं उन्हें चुनें ताकि उन्हें Microsoft से डाउनलोड करके अभी इंस्टॉल किया जा सके।
-hindi.DepDotNet=.NET 10 Desktop Runtime (प्रोग्राम चलाने के लिए ज़रूरी)
+hindi.DepDotNet=.NET 11 Desktop Runtime (प्रोग्राम चलाने के लिए ज़रूरी)
 hindi.DepWebView2=Microsoft Edge WebView2 Runtime (लाइव वीडियो पूर्वावलोकन और मौसम मानचित्र)
 hindi.DepInstalled= - पहले से इंस्टॉल है
 hindi.DepsDownloadTitle=घटक डाउनलोड हो रहे हैं
@@ -171,7 +171,7 @@ hindi.DepsNotSigned=डाउनलोड की गई फ़ाइल Microsof
 
 [Code]
 const
-  DotNetUrl = 'https://aka.ms/dotnet/10.0/windowsdesktop-runtime-win-x64.exe';
+  DotNetUrl = 'https://aka.ms/dotnet/11.0/windowsdesktop-runtime-win-x64.exe';
   WebView2Url = 'https://go.microsoft.com/fwlink/p/?LinkId=2124703';
   WebView2Guid = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
 
@@ -183,12 +183,12 @@ var
   DepDotNetFile: String;
   DepWebView2File: String;
 
-function DotNetDesktop10Present(): Boolean;
+function DotNetDesktop11Present(): Boolean;
 var
   FindRec: TFindRec;
 begin
   Result := False;
-  if FindFirst(ExpandConstant('{commonpf64}\dotnet\shared\Microsoft.WindowsDesktop.App\10.*'), FindRec) then
+  if FindFirst(ExpandConstant('{commonpf64}\dotnet\shared\Microsoft.WindowsDesktop.App\11.*'), FindRec) then
   begin
     Result := True;
     FindClose(FindRec);
@@ -208,7 +208,7 @@ end;
 
 procedure DepsInit(AfterPageID: Integer);
 begin
-  DepDotNetPresent := DotNetDesktop10Present();
+  DepDotNetPresent := DotNetDesktop11Present();
   DepWebView2Present := WebView2Present();
   DepsPage := CreateInputOptionPage(AfterPageID, CustomMessage('DepsTitle'), CustomMessage('DepsSubtitle'), CustomMessage('DepsIntro'), False, False);
   if DepDotNetPresent then
@@ -321,13 +321,13 @@ begin
   if DepDotNetFile <> '' then
   begin
     if not SignedByMicrosoft(DepDotNetFile) then
-      SuppressibleMsgBox(FmtMessage(CustomMessage('DepsFailed'), ['.NET 10 Desktop Runtime', CustomMessage('DepsNotSigned')]), mbError, MB_OK, IDOK)
+      SuppressibleMsgBox(FmtMessage(CustomMessage('DepsFailed'), ['.NET 11 Desktop Runtime', CustomMessage('DepsNotSigned')]), mbError, MB_OK, IDOK)
     else
     begin
       // needs administrator rights: Windows asks for them (UAC)
       if not ShellExec('runas', DepDotNetFile, '/install /quiet /norestart', '', SW_SHOWNORMAL, ewWaitUntilTerminated, ResultCode) or
          not ((ResultCode = 0) or (ResultCode = 3010) or (ResultCode = 1638)) then
-        SuppressibleMsgBox(FmtMessage(CustomMessage('DepsFailed'), ['.NET 10 Desktop Runtime', IntToStr(ResultCode)]), mbError, MB_OK, IDOK);
+        SuppressibleMsgBox(FmtMessage(CustomMessage('DepsFailed'), ['.NET 11 Desktop Runtime', IntToStr(ResultCode)]), mbError, MB_OK, IDOK);
     end;
   end;
   if DepWebView2File <> '' then
