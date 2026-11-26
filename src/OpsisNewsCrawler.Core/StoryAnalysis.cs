@@ -38,14 +38,20 @@ public static class StoryAnalysis
             .Where(x => x.Publisher.Length > 0).GroupBy(x => x.Publisher).Select(g => g.First()).ToList();
         if (byPublisher.Count < 2) return Array.Empty<StoryDifference>();
 
+        var found = new List<StoryDifference>();
+        // Some publishers report a denial and others do not: worth reading side by side.
+        var denying = byPublisher.Where(x => Denies(x.Item.Title)).Select(x => x.Publisher).ToArray();
+        if (denying.Length > 0 && denying.Length < byPublisher.Count) found.Add(new StoryDifference("denial", Array.Empty<string>(), denying));
+
         var numbersOf = byPublisher.Select(x => (x.Publisher, Numbers: Numbers(x.Item.Title))).ToList();
         var common = numbersOf.Select(x => x.Numbers).Aggregate((a, b) => a.Intersect(b).ToHashSet());
         var all = numbersOf.SelectMany(x => x.Numbers).Distinct().ToList();
         // A number that every publisher uses is not a difference; a number that only some use is, when the others use another number.
         var odd = all.Where(n => !common.Contains(n)).OrderBy(n => n, StringComparer.Ordinal).ToList();
-        if (odd.Count < 2 || numbersOf.Any(x => x.Numbers.Count == 0)) return Array.Empty<StoryDifference>();
+        if (odd.Count < 2 || numbersOf.Any(x => x.Numbers.Count == 0)) return found;
         var sources = numbersOf.Where(x => x.Numbers.Any(odd.Contains)).Select(x => x.Publisher).Distinct().ToArray();
-        return new[] { new StoryDifference("number", odd, sources) };
+        found.Insert(0, new StoryDifference("number", odd, sources));
+        return found;
     }
 
     /// <summary>Groups reports with the same headline or summary from different publishers, or that name the same agency (N05). Attribution is kept as the feeds gave it.</summary>
@@ -65,6 +71,14 @@ public static class StoryAnalysis
             .Where(g => g.Key.Length >= 40 && Publishers(g) >= 2);
         foreach (var g in same) result.Add(new CommonOrigin(null, g.ToList()));
         return result;
+    }
+
+    private static readonly string[] DenialWords = { "denies", "denied", "denial", "refutes", "rejects claim", "διαψευδ", "διεψευσ", "διαψευση", "διαψευσ" };
+
+    private static bool Denies(string? title)
+    {
+        var text = Breaking.Normalize(title ?? "").ToLowerInvariant();
+        return DenialWords.Any(w => text.Contains(Breaking.Normalize(w).ToLowerInvariant(), StringComparison.Ordinal));
     }
 
     private static bool Safe(Regex pattern, string text)

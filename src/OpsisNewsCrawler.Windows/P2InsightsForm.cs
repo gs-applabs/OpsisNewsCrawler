@@ -35,6 +35,8 @@ public sealed class P2InsightsForm : Form
     private readonly FlatButton storyTimeline = new();
     private readonly FlatButton focusReader = new();
     private readonly FlatButton analyticsButton = new();
+    private readonly FlatComboBox topicChoice = new() { Width=220 };
+    private bool updatingTopics;
     private readonly Label summary = new() { Dock=DockStyle.Bottom, Height=34, AutoEllipsis=true };
     private readonly ListView lines = new()
     {
@@ -46,7 +48,7 @@ public sealed class P2InsightsForm : Form
     public P2InsightsForm(TickerHost host)
     {
         this.host=host;
-        Text=Loc.IsGreek ? "Opsis News Crawler 0.29.0 — Κέντρο πληροφοριών" : "Opsis News Crawler 0.29.0 — Intelligence";
+        Text=Loc.IsGreek ? "Opsis News Crawler 0.30.0 — Κέντρο πληροφοριών" : "Opsis News Crawler 0.30.0 — Intelligence";
         StartPosition=FormStartPosition.CenterParent;
         Size=new Size(1060,680);
         MinimumSize=new Size(720,460);
@@ -115,6 +117,9 @@ public sealed class P2InsightsForm : Form
         analyticsButton.Text=Loc.IsGreek?"Αναλύσεις":"Analytics";
         analyticsButton.Click+=(_,_)=>host.ShowAnalytics();
         bar.Controls.Add(analyticsButton);
+        topicChoice.AccessibleName=Loc.IsGreek?"Φίλτρο θέματος":"Topic filter";
+        topicChoice.SelectedIndexChanged+=(_,_)=>{if(!updatingTopics)Reload();};
+        bar.Controls.Add(topicChoice);
         mediaPlaylist.Text=Loc.IsGreek?"Media Suite · M3U":"Media Suite · M3U";
         mediaPlaylist.Click+=(_,_)=>ExportMediaPlaylist();
         bar.Controls.Add(exportWeekly);bar.Controls.Add(digestScope);bar.Controls.Add(digestDate);bar.Controls.Add(importCalendar);bar.Controls.Add(exportCalendar);
@@ -148,6 +153,8 @@ public sealed class P2InsightsForm : Form
         storyTimeline.Visible=views.SelectedIndex==1;
         searchBox.Visible=views.SelectedIndex is 1 or 2;
         focusReader.Visible=views.SelectedIndex is 1 or 2;
+        topicChoice.Visible=views.SelectedIndex==2;
+        if(topicChoice.Visible) FillTopicChoice();
         newTransaction.Visible=openPortfolio.Visible=openAnalysis.Visible=views.SelectedIndex==3;
         var news=searchBox.Visible && !string.IsNullOrWhiteSpace(searchBox.Value)
             ? NewsSearch.Find(host.RecentNews,new NewsQuery(searchBox.Value))
@@ -173,7 +180,7 @@ public sealed class P2InsightsForm : Form
                 foreach(var e in EmergingTopics.Find(host.RecentNews,DateTimeOffset.Now))
                     visible.Add((Loc.IsGreek?$"Αναδυόμενο θέμα: {e.Term}":$"Emerging term: {e.Term}",
                         Loc.IsGreek?$"{e.RecentReports} τίτλοι · {e.RecentPublishers} εκδότες · κάλυψη, όχι επαλήθευση":$"{e.RecentReports} headlines · {e.RecentPublishers} publishers · coverage, not verification",null));
-                foreach(var m in TopicMatcher.Find(news,host.Config.TopicWatches))
+                foreach(var m in TopicMatcher.Find(news,host.Config.TopicWatches,SelectedTopicFilter()))
                     visible.Add(($"{m.Topic.Name} · {m.Item.Title}",$"{m.Score}/100 · {m.Item.Source}",m.Item.Url));
                 break;
             case 4:
@@ -244,7 +251,9 @@ public sealed class P2InsightsForm : Form
     {
         var parts=new List<string>();
         foreach(var d in StoryAnalysis.Differences(g))
-            parts.Add((Loc.IsGreek?"διαφορετικοί αριθμοί: ":"differing numbers: ")+string.Join(" / ",d.Values.Take(6)));
+            parts.Add(d.Kind=="denial"
+                ? (Loc.IsGreek?"ορισμένοι αναφέρουν διάψευση":"some report a denial")
+                : (Loc.IsGreek?"διαφορετικοί αριθμοί: ":"differing numbers: ")+string.Join(" / ",d.Values.Take(6)));
         foreach(var o in StoryAnalysis.CommonOrigins(g))
             parts.Add(o.Agency is { } a
                 ? (Loc.IsGreek?"κοινή πηγή: ":"shared origin: ")+a
@@ -254,6 +263,23 @@ public sealed class P2InsightsForm : Form
     }
 
     /// <summary>N17: the stories of the current view in a large, distraction-free reader.</summary>
+    private void FillTopicChoice()
+    {
+        var enabled=host.Config.TopicWatches.Where(t=>t.Enabled).ToList();
+        var keep=topicChoice.SelectedIndex>0&&topicChoice.SelectedIndex<=shownTopicIds.Count?shownTopicIds[topicChoice.SelectedIndex-1]:null;
+        updatingTopics=true;
+        shownTopicIds=enabled.Select(t=>t.Id).ToList();
+        var names=new[]{Loc.IsGreek?"Όλα τα θέματα":"All topics"}.Concat(enabled.Select(t=>t.Name)).ToArray();
+        topicChoice.SetItems(names,keep is null?0:Math.Max(0,shownTopicIds.IndexOf(keep)+1));
+        updatingTopics=false;
+    }
+
+    private List<string> shownTopicIds=new();
+
+    private TopicFilter? SelectedTopicFilter() =>
+        topicChoice.SelectedIndex>0&&topicChoice.SelectedIndex<=shownTopicIds.Count
+            ? new TopicFilter(TopicIds:new HashSet<string>{shownTopicIds[topicChoice.SelectedIndex-1]}) : null;
+
     private void ShowFocusReader()
     {
         var stories=host.RecentNews.Where(n=>n.Kind==NewsItemKind.News);

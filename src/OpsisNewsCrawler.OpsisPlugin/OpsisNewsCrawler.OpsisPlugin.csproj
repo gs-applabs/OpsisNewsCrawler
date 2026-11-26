@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net11.0-windows10.0.19041.0</TargetFramework><UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><AssemblyName>OpsisNewsCrawler.OpsisPlugin</AssemblyName><Product>Opsis News Crawler</Product><Version>0.29.0</Version><AssemblyVersion>1.0.0.0</AssemblyVersion><FileVersion>1.0.0.0</FileVersion></PropertyGroup>
+  <PropertyGroup><TargetFramework>net11.0-windows10.0.19041.0</TargetFramework><UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><AssemblyName>OpsisNewsCrawler.OpsisPlugin</AssemblyName><Product>Opsis News Crawler</Product><Version>0.30.0</Version><AssemblyVersion>1.0.0.0</AssemblyVersion><FileVersion>1.0.0.0</FileVersion></PropertyGroup>
   <ItemGroup><ProjectReference Include="..\OpsisNewsCrawler.Core\OpsisNewsCrawler.Core.csproj" /><ProjectReference Include="..\OpsisNewsCrawler.Windows\OpsisNewsCrawler.Windows.csproj" /></ItemGroup>
   <ItemGroup><Reference Include="Opsis.UI"><HintPath>..\..\libs\Opsis.UI.dll</HintPath><Private>true</Private></Reference></ItemGroup>
   <!-- Canonical ABI 1.0.0.0 DLL byte-identical to Opsis 2.8.0.2510; do not build a parallel contract into the plugin payload. -->

@@ -93,7 +93,7 @@ if (internalHostField.GetValue(controller) is not null)
 plugin.GetTrayMenuItems();
 if (internalHostField.GetValue(controller) is not null)
     throw new InvalidDataException("Fetching Opsis tray entries unexpectedly creates a ticker.");
-if (plugin.Version != "0.29.0" || string.IsNullOrWhiteSpace(plugin.Id))
+if (plugin.Version != "0.30.0" || string.IsNullOrWhiteSpace(plugin.Id))
     throw new InvalidDataException("Unexpected product version or plugin ID.");
 if (plugin is not IPluginWidgetProvider widgetProvider || widgetProvider.GetWidgets().Count != 5)
     throw new InvalidDataException("Five Opsis widgets are required.");

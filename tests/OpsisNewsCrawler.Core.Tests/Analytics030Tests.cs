@@ -166,3 +166,20 @@ public sealed class GeoHomeCountryTests
     public void GreeceIsRecognised(string title) =>
         Assert.Equal("GR", NewsGeo.Hint(new NewsItem(title, "https://a.example/1", "A", DateTimeOffset.UtcNow))?.CountryCode);
 }
+
+public sealed class DenialDifferenceTests
+{
+    [Fact]
+    public void ADenialByOnlySomeOutletsIsShownAsADifference()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var a = new NewsItem("Ministry confirms the new tax plan", "https://a.example/1", "A", now);
+        var b = new NewsItem("Ministry denies the new tax plan", "https://b.example/1", "B", now);
+        var cluster = new StoryCluster(a.Url, a.Title, now, new[] { a, b }, 2);
+        var diff = Assert.Single(StoryAnalysis.Differences(cluster));
+        Assert.Equal("denial", diff.Kind);
+        Assert.Single(diff.Sources);
+        var both = new StoryCluster(b.Url, b.Title, now, new[] { b, b with { Url = "https://c.example/1", Source = "C" } }, 2);
+        Assert.Empty(StoryAnalysis.Differences(both));
+    }
+}

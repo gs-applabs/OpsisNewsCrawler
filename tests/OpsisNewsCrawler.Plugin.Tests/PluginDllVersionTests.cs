@@ -13,7 +13,7 @@ public sealed class PluginDllVersionTests
         var assembly = typeof(OpsisNewsCrawlerPlugin).Assembly;
         Assert.Equal(new Version(1, 0, 0, 0), assembly.GetName().Version);
         Assert.Equal("1.0.0.0", FileVersionInfo.GetVersionInfo(assembly.Location).FileVersion);
-        Assert.Equal("0.29.0", new OpsisNewsCrawlerPlugin().Version);
+        Assert.Equal("0.30.0", new OpsisNewsCrawlerPlugin().Version);
     }
 
     [Fact]
