@@ -33,6 +33,7 @@ public sealed class P2InsightsForm : Form
     private readonly List<StoryCluster> displayedClusters = new();
     private readonly FlatText searchBox = new() { Width=220 };
     private readonly FlatButton storyTimeline = new();
+    private readonly FlatButton focusReader = new();
     private readonly Label summary = new() { Dock=DockStyle.Bottom, Height=34, AutoEllipsis=true };
     private readonly ListView lines = new()
     {
@@ -107,6 +108,9 @@ public sealed class P2InsightsForm : Form
         storyTimeline.Text=Loc.IsGreek?"Χρονολόγιο ιστορίας":"Story timeline";
         storyTimeline.Click+=(_,_)=>ShowStoryTimeline();
         bar.Controls.Add(searchBox);bar.Controls.Add(storyTimeline);
+        focusReader.Text=Loc.IsGreek?"Λειτουργία εστίασης":"Focus mode";
+        focusReader.Click+=(_,_)=>ShowFocusReader();
+        bar.Controls.Add(focusReader);
         mediaPlaylist.Text=Loc.IsGreek?"Media Suite · M3U":"Media Suite · M3U";
         mediaPlaylist.Click+=(_,_)=>ExportMediaPlaylist();
         bar.Controls.Add(exportWeekly);bar.Controls.Add(digestScope);bar.Controls.Add(digestDate);bar.Controls.Add(importCalendar);bar.Controls.Add(exportCalendar);
@@ -139,6 +143,7 @@ public sealed class P2InsightsForm : Form
         evidence.Enabled=views.SelectedIndex==1;
         storyTimeline.Visible=views.SelectedIndex==1;
         searchBox.Visible=views.SelectedIndex is 1 or 2;
+        focusReader.Visible=views.SelectedIndex is 1 or 2;
         newTransaction.Visible=openPortfolio.Visible=openAnalysis.Visible=views.SelectedIndex==3;
         var news=searchBox.Visible && !string.IsNullOrWhiteSpace(searchBox.Value)
             ? NewsSearch.Find(host.RecentNews,new NewsQuery(searchBox.Value))
@@ -242,6 +247,18 @@ public sealed class P2InsightsForm : Form
                 : (Loc.IsGreek?"ίδιο κείμενο σε πολλούς":"same text in several outlets"));
         if(g.Reports.Count>0 && NewsGeo.Hint(g.Reports[0]) is { } geo) parts.Add(geo.CountryName);
         return parts.Count==0?"":" · "+string.Join(" · ",parts);
+    }
+
+    /// <summary>N17: the stories of the current view in a large, distraction-free reader.</summary>
+    private void ShowFocusReader()
+    {
+        var stories=host.RecentNews.Where(n=>n.Kind==NewsItemKind.News);
+        if(!string.IsNullOrWhiteSpace(searchBox.Value)) stories=NewsSearch.Find(stories,new NewsQuery(searchBox.Value));
+        var selected=lines.SelectedIndices.Count>0&&lines.SelectedIndices[0]<visible.Count?visible[lines.SelectedIndices[0]].Url:null;
+        var list=stories.Take(200).ToList();
+        var start=Math.Max(0,list.FindIndex(n=>n.Url==selected));
+        using var reader=new FocusReaderForm(list,start);
+        reader.ShowDialog(this);
     }
 
     private void ShowStoryTimeline()

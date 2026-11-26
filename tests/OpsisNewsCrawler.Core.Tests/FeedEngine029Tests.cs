@@ -113,3 +113,24 @@ public sealed class FeedEngine029Tests
         Assert.Equal(0, recovered.Health().Single().ConsecutiveFailures);
     }
 }
+
+public sealed class ReadStoreLimitTests
+{
+    [Fact]
+    public void ReadListNeverGrowsPastItsLimit_N38()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "opsis-read-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var many = Enumerable.Range(0, ReadStore.MaxEntries + 200).ToDictionary(i => "https://n.example/" + i, i => DateTimeOffset.UtcNow.AddMinutes(-i));
+            File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(many));
+            var store = new ReadStore(path);
+            store.MarkRead("https://n.example/new");
+            Assert.True(store.Count <= ReadStore.MaxEntries);
+            Assert.True(store.IsRead("https://n.example/new"));
+            Assert.True(store.IsRead("https://n.example/0"));                          // the newest stay
+            Assert.False(store.IsRead("https://n.example/" + (ReadStore.MaxEntries + 199)));   // the oldest go
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+}
