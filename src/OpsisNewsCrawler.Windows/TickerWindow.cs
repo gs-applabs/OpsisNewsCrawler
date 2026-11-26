@@ -714,24 +714,36 @@ public sealed class TickerWindow : Form
         if (IsHandleCreated && !IsDisposed) BeginInvoke(new Action(Reposition));
     }
 
-    /// <summary>Rebuilds the strip (the left half when split). The scroll position given in <paramref name="savedOffset"/> is restored.</summary>
-    public void SetItems(IEnumerable<NewsItem> items, double savedOffset)
+    /// <summary>
+    /// Rebuilds the strip (the left half when split). A normal refresh keeps what the reader sees where it is (the entry at the left edge is found
+    /// again, see <see cref="ScrollAnchor"/>); a different <paramref name="savedOffset"/> than the one shown now is an explicit request and is applied.
+    /// With <paramref name="keepPlace"/> false the pixel position is simply restored (urgent headlines taking over the bar).
+    /// </summary>
+    public void SetItems(IEnumerable<NewsItem> items, double savedOffset, bool keepPlace = true)
     {
         HidePreview();
-        canvas.SetItems(items.ToList());
-        canvas.SetShowIcons(showIcons);
-        canvas.SetOffset(savedOffset);
-        state.RestoreScroll(new TickerScrollState(canvas.GetOffset()));
+        Rebuild(canvas, items, savedOffset, keepPlace);
+        // A strip that does not scroll (a placeholder while loading) must not erase the remembered position.
+        if (canvas.IsScrollable()) state.RestoreScroll(new TickerScrollState(canvas.GetOffset()));
     }
 
     /// <summary>Rebuilds the right half of a split bar.</summary>
-    public void SetItemsB(IEnumerable<NewsItem> items, double savedOffset)
+    public void SetItemsB(IEnumerable<NewsItem> items, double savedOffset, bool keepPlace = true)
     {
         HidePreview();
-        canvasB.SetItems(items.ToList());
-        canvasB.SetShowIcons(showIcons);
-        canvasB.SetOffset(savedOffset);
-        state.SetScrollOffsetB(canvasB.GetOffset());
+        Rebuild(canvasB, items, savedOffset, keepPlace);
+        if (canvasB.IsScrollable()) state.SetScrollOffsetB(canvasB.GetOffset());
+    }
+
+    private void Rebuild(TickerCanvas target, IEnumerable<NewsItem> items, double savedOffset, bool keepPlace)
+    {
+        var before = target.CapturePlace();
+        target.SetItems(items.ToList());
+        target.SetShowIcons(showIcons);
+        // "The same position as shown" means an ordinary refresh; anything else was asked for (a new category starts at 0, a restored bar).
+        var refresh = keepPlace && before.Entries.Count > 0 && before.Loop > 0 && Math.Abs(savedOffset - before.Offset) < 2.0;
+        var after = target.CapturePlace();
+        target.SetOffset(refresh ? ScrollAnchor.Relocate(before.Entries, before.Loop, before.Offset, after.Entries, after.Loop) : savedOffset);
     }
 
     /// <summary>Splits the bar in the middle: two independent strips side by side.</summary>
@@ -849,11 +861,7 @@ public sealed class TickerWindow : Form
     {
         if (!c.IsScrollable())
         {
-            if (getOffset() != 0)
-            {
-                setOffset(0);
-                c.SetOffset(0);
-            }
+            c.SetOffset(0);   // nothing to scroll; the remembered position stays for when there is again
             return;
         }
 

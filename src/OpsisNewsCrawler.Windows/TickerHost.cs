@@ -1145,7 +1145,7 @@ public sealed partial class TickerHost : IDisposable
             var urgent = breakingItems.Any(i => !string.IsNullOrEmpty(i.Url))
                 ? (IEnumerable<NewsItem>)breakingItems
                 : breakingItems.Concat(ItemsFor(Config.MainSlots().A));
-            Window.SetItems(urgent, State.ScrollOffset);
+            Window.SetItems(urgent, State.ScrollOffset, keepPlace: false);   // urgent headlines start where the pixels are, so they are seen
         }
         else
         {

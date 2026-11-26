@@ -5,6 +5,7 @@
 Απαιτεί **.NET 11 Desktop Runtime**. Ως plugin: **Opsis 2.8 ή 3.0** (ίδιο συμβόλαιο plugin 1.0.0.0 με το host). Οι ρυθμίσεις σας διατηρούνται.
 
 ### Νέα
+- **Η μπάρα μένει στη θέση της** όταν ανανεώνονται ειδήσεις ή τιμές (χωρίς άλμα προς την αρχή).
 - **Θέματα:** σταθερή ταυτότητα για κάθε λίστα (διατηρείται σε μετονομασία), φίλτρα (θέμα, πηγή, περιοχή, βαθμός, χρόνος) στη μηχανή αντιστοίχισης.
 - **Αναδυόμενοι όροι:** λέξεις που ξαφνικά εμφανίζονται σε τίτλους τουλάχιστον τριών εκδοτών· μέτρο κάλυψης, όχι αλήθειας.
 - **Ιστορίες:** χρονολόγιο με τις πραγματικές ώρες δημοσίευσης, διαφορετικοί αριθμοί μεταξύ εκδοτών και κοινή πηγή (πρακτορείο ή ίδιο κείμενο) ως ενδείξεις για ανθρώπινη κρίση, χώρα που αναφέρεται (άγνωστη όταν δεν είναι σαφής).
@@ -22,6 +23,7 @@
 Needs the **.NET 11 Desktop Runtime**. As a plugin: **Opsis 2.8 or 3.0** (the same plugin contract 1.0.0.0 as the host). Your settings are kept.
 
 ### New
+- **The bar keeps its place** when news or prices refresh (no jump back to the beginning).
 - **Topics:** a stable identity for each watchlist (survives renames) and filters (topic, source, region, score, time) in the matcher.
 - **Emerging terms:** words that suddenly appear in headlines of at least three publishers; a measure of coverage, not of truth.
 - **Stories:** a timeline with real publication times; numbers that differ between publishers and a shared origin (agency or identical text) as hints for a person to judge; the country a story names (unknown when not clear).

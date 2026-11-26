@@ -6,6 +6,8 @@
 
 ### 0.29.0 — 2026-11-26: news intelligence, source quality, Chronikologio without Opsis
 
+- **The bar keeps its place on refresh:** the entry at the left edge is found again in the new list (`ScrollAnchor`), so new headlines or wider prices no longer jump the strip back or sideways; a category change still starts from the beginning, and urgent headlines still take over where they are seen. A strip that briefly shows a placeholder no longer forgets the position.
+
 Scope: the P1 items of the owner's backlog, extending what exists (no second engine, cache or store). "Done" means implemented with unit tests; nothing here was manually verified on physical Windows or in a live Opsis. P2 items (N07, N09, N11-N16, N19-N30, N39) are not in this release.
 
 | ID | Status |

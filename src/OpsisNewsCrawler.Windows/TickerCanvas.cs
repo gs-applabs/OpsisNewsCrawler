@@ -369,6 +369,10 @@ internal sealed class TickerCanvas : Control
     public int GetLoopLength() => loop;
     public bool IsScrollable() => loop > ClientSize.Width;
 
+    /// <summary>What is drawn now and where, so that a refresh can keep the reader's place (see <see cref="ScrollAnchor"/>).</summary>
+    public (IReadOnlyList<StripEntry> Entries, int Loop, double Offset) CapturePlace() =>
+        (entries.Select(e => new StripEntry(ScrollAnchor.IdentityOf(e.Item), e.X, e.Width)).ToArray(), loop, offset);
+
     public void SetShowIcons(bool value)
     {
         if (showIcons == value) return;
