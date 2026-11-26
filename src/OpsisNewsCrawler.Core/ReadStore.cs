@@ -9,6 +9,8 @@ namespace OpsisNewsCrawler.Core;
 public sealed class ReadStore
 {
     private static readonly TimeSpan Retention = TimeSpan.FromDays(14);
+    /// <summary>N38: the newest links only; a heavy reader never grows the file without end.</summary>
+    public const int MaxEntries = 5000;
 
     private readonly string path;
     private readonly Dictionary<string, DateTimeOffset> read = new(StringComparer.OrdinalIgnoreCase);
@@ -30,6 +32,7 @@ public sealed class ReadStore
     {
         if (string.IsNullOrEmpty(url)) return;
         read[url] = DateTimeOffset.UtcNow;
+        if (read.Count > MaxEntries) Trim();
         Save();
     }
 
@@ -37,6 +40,12 @@ public sealed class ReadStore
     {
         read.Clear();
         Save();
+    }
+
+    /// <summary>Keeps the newest 90 % of the limit, so trimming does not happen on every click.</summary>
+    private void Trim()
+    {
+        foreach (var key in read.OrderBy(p => p.Value).Take(read.Count - MaxEntries * 9 / 10).Select(p => p.Key).ToList()) read.Remove(key);
     }
 
     private void Load()

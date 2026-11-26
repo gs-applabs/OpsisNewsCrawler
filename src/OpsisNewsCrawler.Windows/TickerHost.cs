@@ -748,6 +748,7 @@ public sealed partial class TickerHost : IDisposable
         sessionCts = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
         suiteDispatcher ??= new CrawlerEventDispatch(SuiteEventHub.Publish);
         EvaluatePerformance();
+        FamilyFeedBridge.Sync();
         performanceTimer.Tick -= OnPerformanceTimer;
         performanceTimer.Tick += OnPerformanceTimer;
         performanceTimer.Start();
@@ -764,7 +765,14 @@ public sealed partial class TickerHost : IDisposable
 
     private void OnUpdateTimer(object? sender, EventArgs e) => _ = AutoCheckForUpdatesAsync();
 
-    private void OnPerformanceTimer(object? sender, EventArgs e) => EvaluatePerformance();
+    private void OnPerformanceTimer(object? sender, EventArgs e) => OnMinuteTick();
+
+    /// <summary>The one slow tick the host already has (60 s): performance tier and the family feed file (a stat and, only when it changed, a small read).</summary>
+    private void OnMinuteTick()
+    {
+        EvaluatePerformance();
+        FamilyFeedBridge.Sync();   // returns at once when a plugin of this process provides the flow
+    }
 
     private void StartBars()
     {
@@ -1137,7 +1145,7 @@ public sealed partial class TickerHost : IDisposable
             var urgent = breakingItems.Any(i => !string.IsNullOrEmpty(i.Url))
                 ? (IEnumerable<NewsItem>)breakingItems
                 : breakingItems.Concat(ItemsFor(Config.MainSlots().A));
-            Window.SetItems(urgent, State.ScrollOffset);
+            Window.SetItems(urgent, State.ScrollOffset, keepPlace: false);   // urgent headlines start where the pixels are, so they are seen
         }
         else
         {

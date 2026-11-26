@@ -31,6 +31,9 @@ public sealed class P2InsightsForm : Form
     private readonly FlatButton refresh = new();
     private readonly FlatComboBox clusterFilter = new() { Width=250 };
     private readonly List<StoryCluster> displayedClusters = new();
+    private readonly FlatText searchBox = new() { Width=220 };
+    private readonly FlatButton storyTimeline = new();
+    private readonly FlatButton focusReader = new();
     private readonly Label summary = new() { Dock=DockStyle.Bottom, Height=34, AutoEllipsis=true };
     private readonly ListView lines = new()
     {
@@ -42,7 +45,7 @@ public sealed class P2InsightsForm : Form
     public P2InsightsForm(TickerHost host)
     {
         this.host=host;
-        Text=Loc.IsGreek ? "Opsis News Crawler 0.28.1 — Κέντρο πληροφοριών" : "Opsis News Crawler 0.28.1 — Intelligence";
+        Text=Loc.IsGreek ? "Opsis News Crawler 0.29.0 — Κέντρο πληροφοριών" : "Opsis News Crawler 0.29.0 — Intelligence";
         StartPosition=FormStartPosition.CenterParent;
         Size=new Size(1060,680);
         MinimumSize=new Size(720,460);
@@ -100,6 +103,14 @@ public sealed class P2InsightsForm : Form
         openPortfolio.Click+=(_,_)=>host.ShowPortfolio();
         openAnalysis.Text=Loc.IsGreek?"Γραφήματα αγορών":"Market charts";
         openAnalysis.Click+=(_,_)=>host.ShowAnalysis();
+        searchBox.AccessibleName=Loc.IsGreek?"Αναζήτηση στις ειδήσεις":"Search the news";
+        searchBox.TextValueChanged+=(_,_)=>Reload();
+        storyTimeline.Text=Loc.IsGreek?"Χρονολόγιο ιστορίας":"Story timeline";
+        storyTimeline.Click+=(_,_)=>ShowStoryTimeline();
+        bar.Controls.Add(searchBox);bar.Controls.Add(storyTimeline);
+        focusReader.Text=Loc.IsGreek?"Λειτουργία εστίασης":"Focus mode";
+        focusReader.Click+=(_,_)=>ShowFocusReader();
+        bar.Controls.Add(focusReader);
         mediaPlaylist.Text=Loc.IsGreek?"Media Suite · M3U":"Media Suite · M3U";
         mediaPlaylist.Click+=(_,_)=>ExportMediaPlaylist();
         bar.Controls.Add(exportWeekly);bar.Controls.Add(digestScope);bar.Controls.Add(digestDate);bar.Controls.Add(importCalendar);bar.Controls.Add(exportCalendar);
@@ -130,8 +141,13 @@ public sealed class P2InsightsForm : Form
             control.Visible=views.SelectedIndex==4;
         clusterFilter.Visible=views.SelectedIndex==1;
         evidence.Enabled=views.SelectedIndex==1;
+        storyTimeline.Visible=views.SelectedIndex==1;
+        searchBox.Visible=views.SelectedIndex is 1 or 2;
+        focusReader.Visible=views.SelectedIndex is 1 or 2;
         newTransaction.Visible=openPortfolio.Visible=openAnalysis.Visible=views.SelectedIndex==3;
-        var news=host.RecentNews;
+        var news=searchBox.Visible && !string.IsNullOrWhiteSpace(searchBox.Value)
+            ? NewsSearch.Find(host.RecentNews,new NewsQuery(searchBox.Value))
+            : host.RecentNews;
         switch(views.SelectedIndex)
         {
             case 1:
@@ -145,11 +161,14 @@ public sealed class P2InsightsForm : Form
                 displayedClusters.AddRange(clusters.Take(150));
                 foreach(var g in displayedClusters)
                     visible.Add((g.Headline,
-                        Loc.IsGreek
+                        (Loc.IsGreek
                             ? $"{g.Reports.Count} δημοσιεύματα · {g.PublisherGroups} ομάδες εκδοτών · {g.LastUpdate:dd/MM HH:mm}"
-                            : $"{g.Reports.Count} reports · {g.PublisherGroups} publisher groups · {g.LastUpdate:dd/MM HH:mm}",g.Key));
+                            : $"{g.Reports.Count} reports · {g.PublisherGroups} publisher groups · {g.LastUpdate:dd/MM HH:mm}")+StoryNotes(g),g.Key));
                 break;
             case 2:
+                foreach(var e in EmergingTopics.Find(host.RecentNews,DateTimeOffset.Now))
+                    visible.Add((Loc.IsGreek?$"Αναδυόμενο θέμα: {e.Term}":$"Emerging term: {e.Term}",
+                        Loc.IsGreek?$"{e.RecentReports} τίτλοι · {e.RecentPublishers} εκδότες · κάλυψη, όχι επαλήθευση":$"{e.RecentReports} headlines · {e.RecentPublishers} publishers · coverage, not verification",null));
                 foreach(var m in TopicMatcher.Find(news,host.Config.TopicWatches))
                     visible.Add(($"{m.Topic.Name} · {m.Item.Title}",$"{m.Score}/100 · {m.Item.Source}",m.Item.Url));
                 break;
@@ -214,6 +233,41 @@ public sealed class P2InsightsForm : Form
         return Loc.IsGreek
             ? $"Αξία {v.Value:0.00} {currency} · μη πραγματοποιημένα {v.Unrealized:0.00} ({pct}) · {timing}"+(quote.Delayed?" · καθυστέρηση":"")
             : $"Value {v.Value:0.00} {currency} · unrealized {v.Unrealized:0.00} ({pct}) · {timing}"+(quote.Delayed?" · delayed":"");
+    }
+
+    /// <summary>N04/N05/N08: differing numbers, a shared origin and a named country, each shown as a hint for a person to judge.</summary>
+    private static string StoryNotes(StoryCluster g)
+    {
+        var parts=new List<string>();
+        foreach(var d in StoryAnalysis.Differences(g))
+            parts.Add((Loc.IsGreek?"διαφορετικοί αριθμοί: ":"differing numbers: ")+string.Join(" / ",d.Values.Take(6)));
+        foreach(var o in StoryAnalysis.CommonOrigins(g))
+            parts.Add(o.Agency is { } a
+                ? (Loc.IsGreek?"κοινή πηγή: ":"shared origin: ")+a
+                : (Loc.IsGreek?"ίδιο κείμενο σε πολλούς":"same text in several outlets"));
+        if(g.Reports.Count>0 && NewsGeo.Hint(g.Reports[0]) is { } geo) parts.Add(geo.CountryName);
+        return parts.Count==0?"":" · "+string.Join(" · ",parts);
+    }
+
+    /// <summary>N17: the stories of the current view in a large, distraction-free reader.</summary>
+    private void ShowFocusReader()
+    {
+        var stories=host.RecentNews.Where(n=>n.Kind==NewsItemKind.News);
+        if(!string.IsNullOrWhiteSpace(searchBox.Value)) stories=NewsSearch.Find(stories,new NewsQuery(searchBox.Value));
+        var selected=lines.SelectedIndices.Count>0&&lines.SelectedIndices[0]<visible.Count?visible[lines.SelectedIndices[0]].Url:null;
+        var list=stories.Take(200).ToList();
+        var start=Math.Max(0,list.FindIndex(n=>n.Url==selected));
+        using var reader=new FocusReaderForm(list,start);
+        reader.ShowDialog(this);
+    }
+
+    private void ShowStoryTimeline()
+    {
+        var index=lines.SelectedIndices.Count>0?lines.SelectedIndices[0]:-1;
+        if(index<0 || index>=displayedClusters.Count){summary.Text=Loc.IsGreek?"Διάλεξε μια ομάδα ειδήσεων.":"Select a story cluster.";return;}
+        var entries=StoryAnalysis.Timeline(displayedClusters[index]).Take(30)
+            .Select(t=>$"{t.At.ToLocalTime():dd/MM HH:mm}  {t.Source}  —  {t.Title}");
+        MessageBox.Show(this,string.Join(Environment.NewLine,entries),Loc.IsGreek?"Χρονολόγιο ιστορίας (ώρες δημοσίευσης)":"Story timeline (publication times)");
     }
 
     private void OpenSelected()

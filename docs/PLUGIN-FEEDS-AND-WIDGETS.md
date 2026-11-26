@@ -43,3 +43,7 @@ Opsis asks for the SHA-256 of a plugin DLL before it loads it (`%AppData%\Opsis\
 
 ## Not verified here
 Loading the plugin inside a real Opsis 2.4.3, and the widget replacement (those are Opsis-side).
+
+## "On this day" without Opsis (family feed file)
+
+Inside Opsis, Chronikologio and the Crawler are plugins of one process and the `san-simera` flow travels through `PluginFeeds`. When they run as separate programs, or only one of them is a plugin, Chronikologio writes its lines of the next days to `%LocalAppData%\Opsis\feeds\san-simera.json` and the Crawler (`FamilyFeedBridge`, checked on the host's existing 60-second tick) registers today's lines as the same feed. Rules: an in-process feed with the same key always wins; the file is only read by the Crawler; at most 256 KB, 200 lines of 300 characters, plain text, no links followed; a file without an entry for today shows nothing; the Crawler never writes it. Schema 1: `{"schema":1,"key":"san-simera","titleEl":"…","titleEn":"…","days":[{"date":"yyyy-MM-dd","lines":["…"]}]}`. Opsis is needed only for the calendar widget (Chronikologio) and the news widgets (Crawler).
