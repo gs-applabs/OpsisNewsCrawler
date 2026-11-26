@@ -1,5 +1,9 @@
 # Changelog
 
+### 0.29.0 — Chronikologio link without Opsis
+
+- `FamilyFeedBridge`: the Crawler shows the «On this day» flow of Chronikologio when the two run as separate programs, from the small family feed file `%LocalAppData%Opsiseedssan-simera.json` (see docs/PLUGIN-FEEDS-AND-WIDGETS.md). In Opsis nothing changes (the plugin feed wins). Read-only, bounded, no new timer. Tests added. Needs the matching Chronikologio change that writes the file.
+
 ### 0.29.0 — in preparation (branch `feat/0.29.0-news-intelligence`, not released)
 
 Scope: the P1 items N01–N40 of the owner's backlog (news intelligence, source quality), by extending what exists, never a parallel engine, cache or store. The status below says only what was checked in the code on 2026-11-26 (the symbol exists, or no symbol was found); "partial" means a feature exists that has not been reviewed against the acceptance criteria. Nothing here is verified by a test run on Windows.
