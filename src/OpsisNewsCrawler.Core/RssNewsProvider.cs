@@ -56,7 +56,12 @@ public sealed class RssNewsProvider : IDisposable
 
         public void MarkOk()
         {
-            lock (this) { LastOk = LastTry = DateTimeOffset.UtcNow; ConsecutiveFailures = 0; LastError = null; NextRetryAt = null; }
+            lock (this)
+            {
+                LastOk = LastTry = DateTimeOffset.UtcNow; ConsecutiveFailures = 0; LastError = null;
+                // N34: a source whose newest story is weeks old is asked less often (the cached stories are served meanwhile).
+                NextRetryAt = Items is { Count: > 0 } items ? FeedRetryPolicy.QuietDelay(items.Max(i => i.PublishedAt), LastOk.Value) is { } quiet ? LastOk.Value + quiet : null : null;
+            }
         }
         public void MarkFailed(string error, TimeSpan? retryAfter = null)
         {

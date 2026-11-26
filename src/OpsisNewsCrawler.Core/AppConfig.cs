@@ -609,6 +609,7 @@ public sealed class AppConfig
         TopicWatches = (TopicWatches ?? new()).Where(x => x is not null && !string.IsNullOrWhiteSpace(x.Name))
             .Select(x => { x.Name=x.Name.Trim()[..Math.Min(80,x.Name.Trim().Length)]; x.Terms=(x.Terms ?? new()).Where(t=>t.Trim().Length>=3).Select(t=>t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList(); x.Region=(x.Region??"").Trim(); return x; })
             .Take(50).ToList();
+        TopicWatch.EnsureStableIds(TopicWatches);
         EconomicEvents = (EconomicEvents ?? new()).Where(x => x is not null &&
             !string.IsNullOrWhiteSpace(x.Title) && x.Id.Length is >0 and <=100 &&
             x.Impact is >=0 and <=3).DistinctBy(x=>x.Id).OrderBy(x=>x.StartsAt).TakeLast(1000).ToList();
