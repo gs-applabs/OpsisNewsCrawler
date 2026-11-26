@@ -35,6 +35,8 @@
 | 📈 Τιμές | Μετοχές Euronext (Αθήνα με 15′ καθυστέρηση, Παρίσι, Άμστερνταμ, Βρυξέλλες, Λισσαβώνα, Μιλάνο, Όσλο), μέταλλα, πετρέλαιο/αέριο, ισοτιμίες ΕΚΤ· ειδοποιήσεις ορίων· οι τιμές επισημαίνονται ως καθυστερημένες |
 | 💼 Χαρτοφυλάκιο και ανάλυση | Αξία και κέρδος/ζημιά, RSI, SMA20/50, MACD, κεριά, δοκιμή στρατηγικής, δείκτης φόβου και απληστίας, διάθεση ειδήσεων |
 | 🗂 Θέματα και ιστορίες | Λίστες παρακολούθησης θεμάτων (λέξεις-κλειδιά και περιοχή), ομαδοποίηση δημοσιευμάτων ανά γεγονός με σύγκριση πηγών (δεν είναι έλεγχος αλήθειας), τοπικό χρονολόγιο μαζί με τις εφαρμογές Opsis |
+| 🔎 Αναζήτηση και εστίαση | Αναζήτηση στις ειδήσεις, λειτουργία εστίασης με πληκτρολόγιο, δύο δημοσιεύματα δίπλα δίπλα, αναδυόμενοι όροι, χρονολόγιο ιστορίας και ενδείξεις διαφορετικών αριθμών, κοινής πηγής και χώρας |
+| 📅 Χρονικολόγιο χωρίς Opsis | Η ροή «Σαν σήμερα» φτάνει στις μπάρες και όταν τα δύο προγράμματα τρέχουν χωριστά |
 | 📤 Εξαγωγές | Ημερήσια και εβδομαδιαία σύνοψη HTML (χωρίς δίκτυο, ασφαλής κωδικοποίηση, εκτύπωση σε PDF από τον browser), οικονομικό ημερολόγιο με φίλτρα (εισαγωγή JSON, εξαγωγή ICS), playlist M3U για το Opsis Media Suite |
 | 🧾 Ledger χαρτοφυλακίου | Αγορές, πωλήσεις, μερίσματα, split και προμήθειες ανά νόμισμα (χωρίς αυτόματη μετατροπή), σταθμικό κόστος, πραγματοποιημένο κέρδος/ζημιά, αποτίμηση από την τελευταία γνωστή τιμή· οι παλιές θέσεις μεταφέρονται ως αρχικό υπόλοιπο με επιβεβαίωση και επιστρέφουν αν αποτύχει η αποθήκευση |
 | 🔔 Ειδοποιήσεις τιμής | Τιμή ή ημερήσια μεταβολή %, περιθώριο επανεξοπλισμού, μέγιστη ηλικία δεδομένων· δεν ενεργοποιούνται από μηδενικές ή ελλιπείς τιμές |
@@ -143,6 +145,8 @@ A scrolling news, market-price and weather bar for the Windows desktop — above
 | 📈 Prices | Euronext shares (Athens 15′ delayed, Paris, Amsterdam, Brussels, Lisbon, Milan, Oslo), metals, oil/gas, ECB currency rates; price alerts; quotes are labelled delayed |
 | 💼 Portfolio and analysis | Value and profit/loss, RSI, SMA20/50, MACD, candlesticks, strategy back-test, fear & greed gauge, news mood |
 | 🗂 Topics and stories | Topic watchlists (keywords and region), stories grouped by event with a source comparison (not a fact check), a local timeline shared with the Opsis apps |
+| 🔎 Search and focus | Search the news, a keyboard focus reading mode, two reports side by side, emerging terms, a story timeline and hints on differing numbers, shared origin and country |
+| 📅 Chronikologio without Opsis | The On this day flow reaches the bars when the two programs run separately |
 | 📤 Exports | Daily and weekly HTML digests (offline, safely encoded, print to PDF from the browser), an economic calendar with filters (JSON import, ICS export), an M3U playlist for Opsis Media Suite |
 | 🧾 Portfolio ledger | Buys, sells, dividends, splits and fees per currency (no automatic conversion), weighted average cost, realised profit/loss, valuation from the last known price; old holdings move over as an opening balance after confirmation and come back if saving fails |
 | 🔔 Price alerts | Price or daily change %, re-arm margin, maximum data age; zero or missing prices never trigger them |

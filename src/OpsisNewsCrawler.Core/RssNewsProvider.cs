@@ -94,7 +94,7 @@ public sealed class RssNewsProvider : IDisposable
         http = new HttpClient(handler ?? new RedirectGuardHandler());
         http.Timeout = TimeSpan.FromSeconds(15);
         http.MaxResponseContentBufferSize = MaxFeedBytes;
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; OpsisNewsCrawler/0.28.1)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; OpsisNewsCrawler/0.29.0)");
         http.DefaultRequestHeaders.Accept.ParseAdd("application/rss+xml, application/atom+xml, application/xml, text/xml, */*");
     }
 

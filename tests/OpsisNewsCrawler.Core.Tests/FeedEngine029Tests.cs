@@ -88,7 +88,7 @@ public sealed class FeedEngine029Tests
         var feed = new FeedSource("Old", "https://old.example/rss");
         await provider.FetchAsync(new[] { feed }, 5, maxAgeHours: 720);
         var again = await provider.FetchAsync(new[] { feed }, 5, maxAgeHours: 720);
-        Assert.Equal(1, handler.Seen.Count);       // the second call served the cached story
+        Assert.Single(handler.Seen);              // the second call served the cached story
         Assert.Single(again);
         var health = provider.Health().Single();
         Assert.NotNull(health.NextRetryAt);

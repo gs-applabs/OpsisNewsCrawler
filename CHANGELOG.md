@@ -4,33 +4,32 @@
 
 - `FamilyFeedBridge`: the Crawler shows the «On this day» flow of Chronikologio when the two run as separate programs, from the small family feed file `%LocalAppData%Opsiseedssan-simera.json` (see docs/PLUGIN-FEEDS-AND-WIDGETS.md). In Opsis nothing changes (the plugin feed wins). Read-only, bounded, no new timer. Tests added. Needs the matching Chronikologio change that writes the file.
 
-### 0.29.0 — in preparation (branch `feat/0.29.0-news-intelligence`, not released)
+### 0.29.0 — 2026-11-26: news intelligence, source quality, Chronikologio without Opsis
 
-Scope: the P1 items N01–N40 of the owner's backlog (news intelligence, source quality), by extending what exists, never a parallel engine, cache or store. The status below says only what was checked in the code on 2026-11-26 (the symbol exists, or no symbol was found); "partial" means a feature exists that has not been reviewed against the acceptance criteria. Nothing here is verified by a test run on Windows.
+Scope: the P1 items of the owner's backlog, extending what exists (no second engine, cache or store). "Done" means implemented with unit tests; nothing here was manually verified on physical Windows or in a live Opsis. P2 items (N07, N09, N11-N16, N19-N30, N39) are not in this release.
 
-| ID | Status | Where / note |
-|---|---|---|
-| N01 topic folders | partial | `TopicWatch` / `TopicMatcher` (`Core/TopicWatch.cs`); stable IDs and folder filters not done |
-| N02 emerging topics | not started | no symbol found |
-| N03 story timeline | partial | `StoryExplorer.Cluster` (clusters with real publish times); no timeline view |
-| N04 conflicting reports | not started | `StoryExplorer` groups, does not diff |
-| N05 agency republication | partial | `PublisherIdentity`, `HeadlineDedup`, `NewsItem.StoryReports` |
-| N06 corrections/retractions | partial | `FactCheckSupport` |
-| N08 geographic category | not started | |
-| N10 local news search | not started | no search index (`GeoSearch` is places only) |
-| N17 focus mode, N18 two-column comparison | N18 partial | `P3EvidenceForm`; N17 not started |
-| N31 RSS validity | partial | `RssNewsProvider.Parse` (size/time limits, DTD off), `TestAsync` |
-| N32 source availability | partial | `RssNewsProvider.Health()`, diagnostics window |
-| N33 inactive sources | **implemented, untested on Windows** | `FeedActivityPolicy` (silent after 30 days without a new story, dormant after 14 days of failures), shown as a Status column in the RSS diagnostics window in 14 languages; describes only, never switches a source off; state is in memory (no new writes), so "dormant" is seen within a running session; tests added |
-| N34 adaptive refresh | partial | `RefreshScheduler`, `FeedRetryPolicy` |
-| N35 server overload protection | partial | global and per-host caps, `Retry-After`, 5 MB cap |
-| N36 conditional requests | partial | ETag / If-Modified-Since / 304 in `FetchOneAsync`; redirects guarded by `RedirectGuardHandler` |
-| N37 one Crawler cache | not reviewed | `DataCache` and per-feature caches exist |
-| N38 retention limits | not reviewed | |
-| N39 offline full-text search | not started | |
-| N40 temporary isolation of bad sources | partial | `CoolingDown` / backoff exists; no recovery probe |
+| ID | Status |
+|---|---|
+| N01 topic folders | done in code (stable ids, filter in the matcher); no filter control in the settings page |
+| N02 emerging topics | done: `EmergingTopics`, shown on the topic page |
+| N03 story timeline | done: `StoryAnalysis.Timeline`, button in the story page |
+| N04 conflicting reports | done: differing numbers only (`StoryAnalysis.Differences`) |
+| N05 agency republication | done: `StoryAnalysis.CommonOrigins` (agency names or identical text) with `PublisherIdentity` |
+| N06 corrections/retractions | existing: `FactCheckSupport.MentionsRetraction` shown in the source comparison (reviewed, unchanged) |
+| N08 geographic category | done: `NewsGeo` (one unambiguous country, else unknown), shown on story rows |
+| N10 local news search | done: `NewsSearch` over the news in memory, search box on the story and topic pages (no offline index: N39) |
+| N17 focus mode, N18 two-column comparison | done: `FocusReaderForm` |
+| N31 RSS validity | verified by tests (malformed feeds) |
+| N32 source availability | existing: `Health()` and diagnostics |
+| N33 inactive sources | done: `FeedActivityPolicy` (silent after 30 days without a new story, dormant after 14 days of failures, in memory) shown as a Status column in the RSS diagnostics; never switches a source off |
+| N34 adaptive refresh | done: quiet sources are polled less often (`FeedRetryPolicy.QuietDelay`) |
+| N35 server overload protection | existing: concurrency caps, `Retry-After`, size cap (covered by earlier tests) |
+| N36 conditional requests | verified by tests (conditional request, 304) |
+| N37 one Crawler cache | reviewed, unchanged: no second news cache was added |
+| N38 retention limits | done for the read list (5,000 newest); other stores were already bounded (read later 300, log 200 KB) |
+| N39 offline full-text search | not started (P2) |
+| N40 temporary isolation of bad sources | verified: back-off cool-down with one probe after it (existing) |
 
-Next steps (in order): N36/N35 review with tests, N40 recovery probe, N01 stable IDs, N03/N19 from `StoryExplorer`, N10 on one local index shared with N39.
 
 ### 0.28.1 — installer end-to-end findings fixed (2026-11-25)
 
