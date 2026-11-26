@@ -1,6 +1,6 @@
 # Changelog
 
-### 0.30.0 — 2026-11-26: analytics (P2 of the backlog)
+### 0.30.0 — 2026-11-26: analytics (P2 of the backlog); includes the news-intelligence work below, which was planned as 0.29.0 and not released on its own
 
 One Analytics window (Intelligence centre) over data the program already holds; no new provider, scheduler or cache except the opt-in archive. Implemented with unit tests and checked as rendered images with sample data (`--snapshot-analytics`), not manually on Windows.
 
@@ -21,11 +21,11 @@ One Analytics window (Intelligence centre) over data the program already holds; 
 | N01 | the topic filter is now in the intelligence centre |
 | N04 | now also shows a denial reported by only some outlets |
 
-### 0.29.0 — Chronikologio link without Opsis
+### 0.30.0 — Chronikologio link without Opsis
 
 - `FamilyFeedBridge`: the Crawler shows the «On this day» flow of Chronikologio when the two run as separate programs, from the small family feed file `%LocalAppData%Opsiseedssan-simera.json` (see docs/PLUGIN-FEEDS-AND-WIDGETS.md). In Opsis nothing changes (the plugin feed wins). Read-only, bounded, no new timer. Tests added. Needs the matching Chronikologio change that writes the file.
 
-### 0.29.0 — 2026-11-26: news intelligence, source quality, Chronikologio without Opsis
+### 0.30.0 — news intelligence, source quality (P1)
 
 - **The bar keeps its place on refresh:** the entry at the left edge is found again in the new list (`ScrollAnchor`), so new headlines or wider prices no longer jump the strip back or sideways; a category change still starts from the beginning, and urgent headlines still take over where they are seen. A strip that briefly shows a placeholder no longer forgets the position.
 
