@@ -10,7 +10,7 @@ namespace OpsisNewsCrawler.Core;
 public sealed record FeedTestResult(bool Ok, int Count, DateTimeOffset? Newest, string Error);
 
 /// <summary>Health of one feed URL: last success, last attempt, failures in a row and the last error message.</summary>
-public sealed record FeedHealth(string Url, DateTimeOffset? LastOk, DateTimeOffset? LastTry, int ConsecutiveFailures, string? LastError, DateTimeOffset? NextRetryAt = null);
+public sealed record FeedHealth(string Url, DateTimeOffset? LastOk, DateTimeOffset? LastTry, int ConsecutiveFailures, string? LastError, DateTimeOffset? NextRetryAt = null, DateTimeOffset? NewestItemAt = null);
 
 /// <summary>
 /// Downloads and parses RSS 2.0 / Atom feeds. A failing feed never breaks the others.
@@ -75,7 +75,8 @@ public sealed class RssNewsProvider : IDisposable
     public IReadOnlyList<FeedHealth> Health() => states.Select(kv =>
     {
         var s = kv.Value;
-        lock (s) return new FeedHealth(kv.Key, s.LastOk, s.LastTry, s.ConsecutiveFailures, s.LastError, s.NextRetryAt);
+        lock (s) return new FeedHealth(kv.Key, s.LastOk, s.LastTry, s.ConsecutiveFailures, s.LastError, s.NextRetryAt,
+            s.Items is { Count: > 0 } items ? items.Max(i => i.PublishedAt) : null);
     }).OrderBy(x => x.Url, StringComparer.OrdinalIgnoreCase).ToList();
 
     private void RecordFailure(string name)

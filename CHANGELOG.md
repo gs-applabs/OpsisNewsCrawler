@@ -1,5 +1,33 @@
 # Changelog
 
+### 0.29.0 — in preparation (branch `feat/0.29.0-news-intelligence`, not released)
+
+Scope: the P1 items N01–N40 of the owner's backlog (news intelligence, source quality), by extending what exists, never a parallel engine, cache or store. The status below says only what was checked in the code on 2026-11-26 (the symbol exists, or no symbol was found); "partial" means a feature exists that has not been reviewed against the acceptance criteria. Nothing here is verified by a test run on Windows.
+
+| ID | Status | Where / note |
+|---|---|---|
+| N01 topic folders | partial | `TopicWatch` / `TopicMatcher` (`Core/TopicWatch.cs`); stable IDs and folder filters not done |
+| N02 emerging topics | not started | no symbol found |
+| N03 story timeline | partial | `StoryExplorer.Cluster` (clusters with real publish times); no timeline view |
+| N04 conflicting reports | not started | `StoryExplorer` groups, does not diff |
+| N05 agency republication | partial | `PublisherIdentity`, `HeadlineDedup`, `NewsItem.StoryReports` |
+| N06 corrections/retractions | partial | `FactCheckSupport` |
+| N08 geographic category | not started | |
+| N10 local news search | not started | no search index (`GeoSearch` is places only) |
+| N17 focus mode, N18 two-column comparison | N18 partial | `P3EvidenceForm`; N17 not started |
+| N31 RSS validity | partial | `RssNewsProvider.Parse` (size/time limits, DTD off), `TestAsync` |
+| N32 source availability | partial | `RssNewsProvider.Health()`, diagnostics window |
+| N33 inactive sources | **implemented, untested on Windows** | `FeedActivityPolicy` (silent after 30 days without a new story, dormant after 14 days of failures), shown as a Status column in the RSS diagnostics window in 14 languages; describes only, never switches a source off; state is in memory (no new writes), so "dormant" is seen within a running session; tests added |
+| N34 adaptive refresh | partial | `RefreshScheduler`, `FeedRetryPolicy` |
+| N35 server overload protection | partial | global and per-host caps, `Retry-After`, 5 MB cap |
+| N36 conditional requests | partial | ETag / If-Modified-Since / 304 in `FetchOneAsync`; redirects guarded by `RedirectGuardHandler` |
+| N37 one Crawler cache | not reviewed | `DataCache` and per-feature caches exist |
+| N38 retention limits | not reviewed | |
+| N39 offline full-text search | not started | |
+| N40 temporary isolation of bad sources | partial | `CoolingDown` / backoff exists; no recovery probe |
+
+Next steps (in order): N36/N35 review with tests, N40 recovery probe, N01 stable IDs, N03/N19 from `StoryExplorer`, N10 on one local index shared with N39.
+
 ### 0.28.1 — installer end-to-end findings fixed (2026-11-25)
 
 - The installer end-to-end run on GitHub Windows runners (installer-e2e on main) installed, upgraded and uninstalled correctly, but its audits reported findings: the price-alert row made the PRICE ALERTS card wider than the page (it wraps now), the weather search buttons did the same in long translations (el, de; they wrap now), and three helper controls (alert metric, evidence filter, live priority) were not declared UI-only in the settings audit. `tools/ci-audit.ps1` now judges the report text, like the end-to-end test, and the audits pass in all 14 languages.

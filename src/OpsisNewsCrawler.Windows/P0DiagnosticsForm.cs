@@ -28,6 +28,7 @@ internal sealed class P0DiagnosticsForm : Form
         rows.Columns.Add(Loc.T("diag.lastSuccess"), 145);
         rows.Columns.Add(Loc.T("diag.failures"), 75);
         rows.Columns.Add(Loc.T("diag.nextAttempt"), 145);
+        rows.Columns.Add(Loc.T("diag.status"), 190);
         rows.Columns.Add(Loc.T("diag.error"), 240);
         Controls.Add(rows);
         Controls.Add(summary);
@@ -79,11 +80,20 @@ internal sealed class P0DiagnosticsForm : Form
             {
                 string When(DateTimeOffset? v) => v?.ToLocalTime().ToString("dd/MM HH:mm") ?? "—";
                 rows.Items.Add(new ListViewItem(new[] { h.Url, When(h.LastOk), h.ConsecutiveFailures.ToString(),
-                    When(h.NextRetryAt), h.LastError ?? "" }));
+                    When(h.NextRetryAt), ActivityText(h), h.LastError ?? "" }));
             }
         }
         finally { rows.EndUpdate(); }
     }
+
+    private static string ActivityText(FeedHealth h) => Loc.T(FeedActivityPolicy.Classify(h, DateTimeOffset.UtcNow) switch
+    {
+        FeedActivity.Working => "diag.st.working",
+        FeedActivity.TemporaryFailure => "diag.st.temp",
+        FeedActivity.Silent => "diag.st.silent",
+        FeedActivity.Dormant => "diag.st.dormant",
+        _ => "diag.st.unknown"
+    });
 
     protected override void Dispose(bool disposing)
     {
