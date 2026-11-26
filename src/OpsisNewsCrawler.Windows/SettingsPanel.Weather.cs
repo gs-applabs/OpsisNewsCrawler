@@ -44,7 +44,7 @@ public sealed partial class SettingsPanel
         geoAddButton = new FlatButton { Text = L("geo.add") };
         geoCleanupButton = new FlatButton { Text = L("geo.cleanup") };
         geoMyLocationButton = new FlatButton { Text = L("geo.myloc") };
-        var geoButtons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true };
+        var geoButtons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, MaximumSize = new Size(700, 0) };   // long translations wrap onto a second line
         geoButtons.Controls.Add(geoAddButton);
         geoButtons.Controls.Add(geoCleanupButton);
         geoButtons.Controls.Add(geoMyLocationButton);

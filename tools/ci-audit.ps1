@@ -25,7 +25,16 @@ foreach ($lang in $Languages) {
             if (Test-Path $report) { Get-Content $report | Where-Object { $_ -notmatch '^OK\s' } | Select-Object -First 60 | ForEach-Object { Write-Host "  $_" } }
             $failed = $true
         } else {
-            Write-Host "ok       $kind $lang"
+            # The exit code is 0 even when the report lists findings; the verdict is the report text (the installer end-to-end test uses the same rule).
+            $text = Get-Content $report -Raw
+            $clean = switch ($kind) {
+                "audit-settings" { $text -match "0 change nothing, 0 not shown again" -and $text -match "keyboard checks failed: 0" -and $text -notmatch "(?m)^ERROR" }
+                "audit-layout" { $text -match "nothing sticks out" }
+                default { $true }
+            }
+            if (-not $clean) { Write-Host "FINDINGS $kind $lang"; $text -split "?
+" | Where-Object { $_ -notmatch "^OKs" } | Select-Object -First 40 | ForEach-Object { Write-Host "  $_" }; $failed = $true }
+            else { Write-Host "ok       $kind $lang" }
         }
     }
 }

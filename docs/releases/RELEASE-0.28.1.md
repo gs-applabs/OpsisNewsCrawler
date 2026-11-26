@@ -1,4 +1,6 @@
-# Opsis News Crawler 0.28.0 — P0 + P1 + P2 + P3 (24/11/2026)
+# Opsis News Crawler 0.28.1 — P0 + P1 + P2 + P3 (25/11/2026)
+
+**0.28.1:** διορθώσεις διάταξης στις ρυθμίσεις (γραμμή ειδοποιήσεων τιμής, κουμπιά αναζήτησης καιρού σε μεγάλες μεταφράσεις) που βρήκε το installer-e2e· αυστηρότερος έλεγχος ποιότητας. Ίδια λειτουργικότητα, ρυθμίσεις και ABI 1.0.0.0. / **0.28.1:** settings layout fixes found by the installer end-to-end test (price-alert row, weather search buttons in long translations) and a stricter quality gate. Same features, settings and ABI 1.0.0.0. The text below describes 0.28.0, which 0.28.1 includes.
 
 ## Ελληνικά
 

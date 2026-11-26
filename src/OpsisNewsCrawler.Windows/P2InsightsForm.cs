@@ -42,7 +42,7 @@ public sealed class P2InsightsForm : Form
     public P2InsightsForm(TickerHost host)
     {
         this.host=host;
-        Text=Loc.IsGreek ? "Opsis News Crawler 0.28.0 — Κέντρο πληροφοριών" : "Opsis News Crawler 0.28.0 — Intelligence";
+        Text=Loc.IsGreek ? "Opsis News Crawler 0.28.1 — Κέντρο πληροφοριών" : "Opsis News Crawler 0.28.1 — Intelligence";
         StartPosition=FormStartPosition.CenterParent;
         Size=new Size(1060,680);
         MinimumSize=new Size(720,460);
