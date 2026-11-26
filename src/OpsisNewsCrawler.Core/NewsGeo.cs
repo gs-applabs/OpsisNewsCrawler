@@ -23,6 +23,9 @@ public static class NewsGeo
                     .Select(n => " " + Flat(n) + " ").Where(n => n.Trim().Length >= 4 && !Ambiguous.Contains(n.Trim())).Distinct().ToArray();
                 if (names.Length > 0) list.Add((country.Code, country.NameEn, continent.Key, names));
             }
+        // The weather catalog leaves out the home country (it has its own list of Greek cities): add it here.
+        if (!list.Any(c => c.Item1 == "GR"))
+            list.Add(("GR", "Greece", Continents.Key(Continent.Europe), new[] { " " + Flat("Greece") + " ", " " + Flat("Ελλάδα") + " ", " " + Flat("Ελλάδας") + " " }));
         return list;
     });
 

@@ -34,6 +34,7 @@ public sealed class P2InsightsForm : Form
     private readonly FlatText searchBox = new() { Width=220 };
     private readonly FlatButton storyTimeline = new();
     private readonly FlatButton focusReader = new();
+    private readonly FlatButton analyticsButton = new();
     private readonly Label summary = new() { Dock=DockStyle.Bottom, Height=34, AutoEllipsis=true };
     private readonly ListView lines = new()
     {
@@ -111,6 +112,9 @@ public sealed class P2InsightsForm : Form
         focusReader.Text=Loc.IsGreek?"Λειτουργία εστίασης":"Focus mode";
         focusReader.Click+=(_,_)=>ShowFocusReader();
         bar.Controls.Add(focusReader);
+        analyticsButton.Text=Loc.IsGreek?"Αναλύσεις":"Analytics";
+        analyticsButton.Click+=(_,_)=>host.ShowAnalytics();
+        bar.Controls.Add(analyticsButton);
         mediaPlaylist.Text=Loc.IsGreek?"Media Suite · M3U":"Media Suite · M3U";
         mediaPlaylist.Click+=(_,_)=>ExportMediaPlaylist();
         bar.Controls.Add(exportWeekly);bar.Controls.Add(digestScope);bar.Controls.Add(digestDate);bar.Controls.Add(importCalendar);bar.Controls.Add(exportCalendar);

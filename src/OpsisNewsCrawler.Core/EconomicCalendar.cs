@@ -7,7 +7,16 @@ namespace OpsisNewsCrawler.Core;
 /// <summary>An explicitly imported or manually entered economic event, not a live verified release feed.</summary>
 public sealed record EconomicEvent(string Id, string Title, string Country, DateTimeOffset StartsAt,
     string Source, string? Url = null, int Impact = 0, string? Actual = null, string? Forecast = null,
-    string? Previous = null);
+    string? Previous = null)
+{
+    /// <summary>N22/N23/N29: "results", "dividend-ex", "dividend-pay" or "macro" as the imported file declares it; empty = general.</summary>
+    public string? Category { get; init; }
+    /// <summary>Unit of the figures (%, EUR, index points) and the reference period (for example 2026-Q3), as the source states them.</summary>
+    public string? Unit { get; init; }
+    public string? Period { get; init; }
+    /// <summary>The earlier value when the source revised it.</summary>
+    public string? Revised { get; init; }
+}
 
 public static class EconomicCalendar
 {
@@ -20,13 +29,14 @@ public static class EconomicCalendar
     /// <summary>Filter the existing economic calendar, before its display limit.
     /// Past entries are available only when explicitly requested.</summary>
     public static IReadOnlyList<EconomicEvent> Select(IEnumerable<EconomicEvent> entries,
-        DateTimeOffset now, int days, int minimumImpact, string? country, bool past = false)
+        DateTimeOffset now, int days, int minimumImpact, string? country, bool past = false, string? category = null)
     {
         var range = TimeSpan.FromDays(Math.Clamp(days, 1, 90));
         var region = (country ?? "").Trim();
         return entries.Where(IsValid)
             .Where(x => past ? x.StartsAt < now && x.StartsAt >= now - range
                 : x.StartsAt >= now && x.StartsAt <= now + range)
+            .Where(x => string.IsNullOrWhiteSpace(category) || string.Equals(x.Category?.Trim(), category.Trim(), StringComparison.OrdinalIgnoreCase))
             .Where(x => x.Impact >= Math.Clamp(minimumImpact, 0, 3) &&
                 (region.Length == 0 || string.Equals(x.Country.Trim(), region, StringComparison.OrdinalIgnoreCase)))
             .OrderBy(x => past ? -x.StartsAt.UtcTicks : x.StartsAt.UtcTicks)

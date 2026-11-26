@@ -262,6 +262,46 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>The headlines loaded for the active category (a copy; UI thread).</summary>
     public IReadOnlyList<NewsItem> RecentNews => allItems.ToList();
 
+    private NewsArchive? newsArchive;
+    /// <summary>N39: the opt-in local headline archive, created only when something asks for it.</summary>
+    public NewsArchive Archive => newsArchive ??= new NewsArchive();
+
+    public void ShowAnalytics()
+    {
+        if (disposed) return;
+        if (analytics is null || analytics.IsDisposed) analytics = new AnalyticsForm(this);
+        analytics.Show();
+        analytics.Activate();
+    }
+
+    /// <summary>Renders every analytics view with sample headlines to PNG files (test aid; nothing is saved or fetched).</summary>
+    public void SnapshotAnalytics(string folder)
+    {
+        Directory.CreateDirectory(folder);
+        var now = DateTimeOffset.Now;
+        string[] titles =
+        {
+            "European Commission proposes new budget for 2027", "European Commission delays the budget vote", "Wildfire spreads near Athens, 5 homes damaged",
+            "Wildfire near Athens: 7 homes damaged", "Wildfire in Greece forces evacuations (Reuters)", "Japan markets rise after talks",
+            "France and Germany agree on energy plan", "Bank of Japan keeps rates unchanged"
+        };
+        allItems = Enumerable.Range(0, 24).Select(i => new NewsItem(titles[i % titles.Length] + (i >= titles.Length ? " (update " + i + ")" : ""),
+            "https://source" + (i % 4) + ".example/" + i, "Source " + (i % 4 + 1), now.AddMinutes(-17 * i), "Summary text of the sample headline number " + i + ".")).ToList();
+        using var form = new AnalyticsForm(this) { ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, Location = new Point(-4000, 0) };
+        form.Show();
+        for (var view = 0; view < AnalyticsForm.ViewCount; view++)
+        {
+            form.ShowView(view);
+            Application.DoEvents();
+            using var bitmap = new Bitmap(form.Width, form.Height);
+            form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+            bitmap.Save(Path.Combine(folder, $"analytics-{view:00}.png"), System.Drawing.Imaging.ImageFormat.Png);
+        }
+        form.Close();
+    }
+
+    private AnalyticsForm? analytics;
+
     /// <summary>Combined RSS feed health for the opt-in diagnostics window.</summary>
     public IReadOnlyList<FeedHealth> FeedHealth => news.Health().Concat(extraNewsProvider.Health())
         .GroupBy(h => h.Url, StringComparer.OrdinalIgnoreCase)
@@ -1483,6 +1523,9 @@ public sealed partial class TickerHost : IDisposable
         hazardDetail = null;
         portfolio?.Close();
         portfolio = null;
+        analytics?.Close();
+        analytics = null;
+        newsArchive?.Flush(DateTimeOffset.UtcNow);
         news.Dispose();
         SecondWindow?.Dispose();
         foreach (var extra in ExtraWindows) extra.Dispose();

@@ -90,6 +90,7 @@ public sealed partial class TickerHost
                     newsFailedFeeds = new();
                     DataCache.Save("news-" + category, allItems);
                     DetectBreaking(allItems);
+                    if (Config.ArchiveNews) Archive.Observe(allItems, DateTimeOffset.UtcNow);
                     foreach (var item in allItems.Where(i => i.Kind == NewsItemKind.News).Take(20))
                         SuiteEventHub.Publish(new SuiteEvent(SuiteEventKind.News, "crawler", item.Url,
                             item.Title, item.PublishedAt, item.Url, item.Summary));

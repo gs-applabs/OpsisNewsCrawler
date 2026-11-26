@@ -171,6 +171,16 @@ internal static class Program
             return 0;
         }
 
+        // --snapshot-analytics <folder> [--config f]: every view of the Analytics window as PNG, with made-up headlines (a visual check).
+        if (Array.IndexOf(args, "--snapshot-analytics") is >= 0 and var axAt && axAt + 1 < args.Length)
+        {
+            ApplicationConfiguration.Initialize();
+            var cfgAx = Array.IndexOf(args, "--config");
+            using var axHost = new TickerHost(cfgAx >= 0 && cfgAx + 1 < args.Length ? args[cfgAx + 1] : null);
+            axHost.SnapshotAnalytics(args[axAt + 1]);
+            return 0;
+        }
+
         if (Array.IndexOf(args, "--snapshot-analysis") is >= 0 and var anAt && anAt + 2 < args.Length)
         {
             ApplicationConfiguration.Initialize();
