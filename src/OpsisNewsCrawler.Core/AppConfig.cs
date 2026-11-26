@@ -117,6 +117,8 @@ public sealed class AppConfig
     public List<EconomicEvent> EconomicEvents { get; set; } = new();
     /// <summary>Saved local topic watchlists. No remote profiling.</summary>
     public List<TopicWatch> TopicWatches { get; set; } = new();
+    /// <summary>N39: keep a local archive of headlines for offline search (off unless the user turns it on).</summary>
+    public bool ArchiveNews { get; set; }
 
     /// <summary>Cities (ids of <see cref="GreekCities"/>) shown by a bar whose content is "Weather", in this order.</summary>
     public List<string> WeatherCities { get; set; } = GreekCities.DefaultSelection.ToList();

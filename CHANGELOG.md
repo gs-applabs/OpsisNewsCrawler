@@ -1,10 +1,31 @@
 # Changelog
 
-### 0.29.0 — Chronikologio link without Opsis
+### 0.30.0 — 2026-11-26: analytics (P2 of the backlog); includes the news-intelligence work below, which was planned as 0.29.0 and not released on its own
+
+One Analytics window (Intelligence centre) over data the program already holds; no new provider, scheduler or cache except the opt-in archive. Implemented with unit tests and checked as rendered images with sample data (`--snapshot-analytics`), not manually on Windows.
+
+| ID | Status |
+|---|---|
+| N07 article changes | done: headline/summary changes at one address, in the opt-in archive |
+| N09 people and organisations | done as a text pattern, with evidence links |
+| N11 world map, N12 heat map | done: continents shaded by publications naming one country |
+| N13 relation graph | done: co-occurrence graph (up to 20 links) |
+| N14 timeline, N15 trends, N19 coverage | done: bar chart per two hours, coverage list |
+| N16 mosaic, N20 layouts | N16 done; N20 uses the existing Widget Studio profiles (unchanged) |
+| N21 market heatmap | done |
+| N22 results, N23 dividends, N29 macro | done as calendar categories, unit, period and revision from the imported JSON |
+| N24 benchmark, N25 allocation, N26 volatility, N27 drawdown | done, with minimum samples and per-currency allocation |
+| N28 time-weighted return | done; unavailable without a price on each trade day or with a split |
+| N30 news and moves | done: coincidence in time, not cause |
+| N39 offline search | done as a scan of the opt-in archive (no full-text index) |
+| N01 | the topic filter is now in the intelligence centre |
+| N04 | now also shows a denial reported by only some outlets |
+
+### 0.30.0 — Chronikologio link without Opsis
 
 - `FamilyFeedBridge`: the Crawler shows the «On this day» flow of Chronikologio when the two run as separate programs, from the small family feed file `%LocalAppData%Opsiseedssan-simera.json` (see docs/PLUGIN-FEEDS-AND-WIDGETS.md). In Opsis nothing changes (the plugin feed wins). Read-only, bounded, no new timer. Tests added. Needs the matching Chronikologio change that writes the file.
 
-### 0.29.0 — 2026-11-26: news intelligence, source quality, Chronikologio without Opsis
+### 0.30.0 — news intelligence, source quality (P1)
 
 - **The bar keeps its place on refresh:** the entry at the left edge is found again in the new list (`ScrollAnchor`), so new headlines or wider prices no longer jump the strip back or sideways; a category change still starts from the beginning, and urgent headlines still take over where they are seen. A strip that briefly shows a placeholder no longer forgets the position.
 
