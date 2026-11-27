@@ -45,4 +45,33 @@ public static class TaskbarMaintenance
             ApplyLook: taskbarStyleChanged || (tick > 0 && tick % LookRefreshEvery == 0),
             Reposition: check);
     }
+
+    public const int MinimumIntegratedWidth = 180;
+    public const int ButtonPadding = 6;
+
+    // Clamp all occupied spans to the usable taskbar and account for padding
+    // BEFORE comparing against the minimum. Never expand a measured gap into buttons.
+    public static (int Left, int Right)? SelectFreeSpan(int left, int right,
+        IEnumerable<(int L, int R)> occupied)
+    {
+        if (right <= left) return null;
+        var reach = left;
+        (int Left, int Right)? best = null;
+        void Consider(int from, int to)
+        {
+            from += ButtonPadding;
+            to -= ButtonPadding;
+            if (to - from >= MinimumIntegratedWidth &&
+                (best is null || to - from > best.Value.Right - best.Value.Left))
+                best = (from, to);
+        }
+        foreach (var (l, r) in occupied.Select(x => (Math.Max(left, x.L), Math.Min(right, x.R)))
+                     .Where(x => x.Item2 > x.Item1).OrderBy(x => x.Item1))
+        {
+            if (l > reach) Consider(reach, l);
+            reach = Math.Max(reach, r);
+        }
+        Consider(reach, right);
+        return best;
+    }
 }

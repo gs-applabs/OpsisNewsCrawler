@@ -321,7 +321,10 @@ public sealed class TickerWindow : Form
     public bool TaskbarAutoDetect { get; set; } = true;
 
     private (int Left, int Right)? measuredSpan;
-    private bool measuring;
+    private bool spanMeasured;
+    private Task<TaskbarMetrics.Measurement>? measurementTask;
+    private int measurementTaskGeneration;
+    private bool integratedFallback;
 
     [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public bool IsEditMode => editMode;
@@ -913,17 +916,18 @@ public sealed class TickerWindow : Form
         var fullscreen = integrated ? TaskbarMaintenance.ConfirmFullscreen(candidate, fullscreenObserved, hiddenByFullscreen) : candidate;
         fullscreenObserved = candidate;
         hiddenByFullscreen = fullscreen;
-        if (fullscreen && Visible)
+        if (fullscreen)
         {
-            HidePreview();
-            Hide();
+            slideActive = false;
+            if (Visible) { HidePreview(); Hide(); }
         }
-        else if (!fullscreen && !Visible && !hiddenByTaskbar && (!integrated || Native.GetTaskbarHandle() != IntPtr.Zero))
+        else if (!integrated && !Visible && !hiddenByTaskbar)
         {
             Reposition();
             Show();
-            if (integrated) Native.RestoreAboveTaskbar(Handle);
         }
+        // Integrated visibility is owned exclusively by FollowTaskbarTick, which
+        // also knows the current Explorer/auto-hide state. No competing Show calls.
         if (fullscreen) return;
 
         if (!PauseOnForeground)
@@ -963,9 +967,13 @@ public sealed class TickerWindow : Form
             animToY = int.MinValue;
             fullscreenObserved = false;
             hiddenByFullscreen = false;
+            var wasHidden = hiddenByTaskbar;
             hiddenByTaskbar = false;
             observedTaskbar = IntPtr.Zero;
             measuredSpan = null;
+            spanMeasured = false;
+            integratedFallback = false;
+            if (wasHidden) HiddenByTaskbarChanged?.Invoke();
             measurementGeneration++;
         }
         position = value;
@@ -1076,23 +1084,34 @@ public sealed class TickerWindow : Form
                 break;
             case TickerPosition.TaskbarIntegrated:
                 var tb = Native.GetTaskbarRect();
-                if (tb.IsEmpty || tb.Width < tb.Height)
+                if (tb.IsEmpty)
                 {
-                    // Explorer may be restarting. Do not jump the embedded bar onto the desktop.
-                    if (running) return;
+                    if (running) return; // transient Explorer restart
+                    target = BottomStrip(screen, h);
+                    break;
+                }
+                integratedFallback = tb.Width < tb.Height || (TaskbarAutoDetect && spanMeasured &&
+                    (measuredSpan is not { } valid || Math.Min(tb.Right, valid.Right) - Math.Max(tb.Left, valid.Left) < TaskbarMaintenance.MinimumIntegratedWidth));
+                if (integratedFallback)
+                {
+                    // No safe horizontal gap: keep the ticker available above the
+                    // taskbar, rather than covering pinned apps or disappearing.
                     target = BottomStrip(screen, h);
                     break;
                 }
                 var left = tb.Left + Math.Max(0, TaskbarLeftOffset);
                 var right = tb.Right - Math.Max(0, TaskbarRightOffset);
-                if (TaskbarAutoDetect && measuredSpan is { } span && span.Right - span.Left >= 180)
+                if (TaskbarAutoDetect && measuredSpan is { } span)
                 {
                     left = Math.Max(tb.Left, span.Left);
                     right = Math.Min(tb.Right, span.Right);
                 }
-                // Clamp stale measurements and excessive offsets to the current taskbar bounds.
-                left = Math.Clamp(left, tb.Left, Math.Max(tb.Left, tb.Right - Math.Min(200, tb.Width)));
-                right = Math.Clamp(right, left + Math.Min(200, tb.Width), tb.Right);
+                else
+                {
+                    // Manual offsets retain their existing minimum; measured spans never grow into buttons.
+                    left = Math.Clamp(left, tb.Left, Math.Max(tb.Left, tb.Right - Math.Min(200, tb.Width)));
+                    right = Math.Clamp(right, left + Math.Min(200, tb.Width), tb.Right);
+                }
                 target = new Rectangle(left, tb.Top, right - left, tb.Height);
                 if (target != lastLoggedIntegrated)
                 {
@@ -1137,16 +1156,25 @@ public sealed class TickerWindow : Form
             // A bar inside the taskbar hides and shows together with it - and slides out and in like the taskbar does,
             // not a jump (the bar above the taskbar already does the same).
             var taskbar = Native.GetTaskbarHandle();
-            if (taskbar == IntPtr.Zero) return; // transient Explorer restart
+            if (taskbar == IntPtr.Zero)
+            {
+                slideActive = false;
+                if (Visible) { HidePreview(); Hide(); }
+                observedTaskbar = IntPtr.Zero;
+                return;
+            }
             if (taskbar != observedTaskbar)
             {
                 observedTaskbar = taskbar;
                 measuredSpan = null;
+                spanMeasured = false;
+                slideActive = false;
                 measurementGeneration++;
                 autoHide = Native.IsTaskbarAutoHide();
                 lastTaskbarStyle = "";
                 appliedBackdrop = null;
             }
+            CompleteTaskbarMeasurement();
             var cloaked = autoHide && Native.IsTaskbarHiddenByAutoHide();
             if (cloaked != hiddenByTaskbar)
             {
@@ -1172,6 +1200,12 @@ public sealed class TickerWindow : Form
                     var tbTop = Native.GetTaskbarRect();
                     StartSlide(Top, tbTop.IsEmpty ? Top : tbTop.Top);
                 }
+            }
+            if (hiddenByFullscreen)
+            {
+                slideActive = false;
+                if (Visible) Hide();
+                return;
             }
             if (slideActive)
             {
@@ -1202,7 +1236,7 @@ public sealed class TickerWindow : Form
                 ApplyLook(); lastTaskbarStyle = style;
             }
             if (todo.Reposition) Reposition();
-            if (!flyout && TaskbarAutoDetect && !measuring && (taskbarTick % 66 == 2 || measuredSpan is null && taskbarTick % 10 == 2))
+            if (!flyout && TaskbarAutoDetect && measurementTask is null && (taskbarTick % 66 == 2 || !spanMeasured && taskbarTick % 10 == 2))
                 MeasureTaskbarInBackground();
             return;
         }
@@ -1291,26 +1325,34 @@ public sealed class TickerWindow : Form
 
     private void MeasureTaskbarInBackground()
     {
-        measuring = true;
-        var generation = measurementGeneration;
-        _ = Task.Run(() => TaskbarMetrics.MeasureFreeSpan()).ContinueWith(t =>
+        measurementTaskGeneration = measurementGeneration;
+        measurementTask = Task.Run(() =>
         {
-            var span = t.IsCompletedSuccessfully ? t.Result : null;
-            if (t.IsFaulted) _ = t.Exception;
-            if (IsDisposed || !IsHandleCreated) return;
-            try
-            {
-                BeginInvoke(new Action(() =>
-                {
-                    measuring = false;
-                    if (IsDisposed || !running || generation != measurementGeneration || position != TickerPosition.TaskbarIntegrated || !TaskbarAutoDetect) return;
-                    if (span is null || span == measuredSpan) return;
-                    measuredSpan = span;
-                    if (!slideActive && !hiddenByTaskbar && !hiddenByFullscreen && !Native.IsShellFlyoutActive()) Reposition();
-                }));
-            }
-            catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException) { }
+            try { return TaskbarMetrics.MeasureFreeSpan(); }
+            catch (Exception ex) when (ex is not OutOfMemoryException) { return default; }
         });
+    }
+
+    // Poll the single worker from the existing UI timer. No BeginInvoke callback
+    // can be lost when Explorer or this form recreates its window handle.
+    private void CompleteTaskbarMeasurement()
+    {
+        if (measurementTask is not { IsCompleted: true } completed) return;
+        measurementTask = null;
+        if (!completed.IsCompletedSuccessfully) { _ = completed.Exception; return; }
+        if (measurementTaskGeneration != measurementGeneration || !TaskbarAutoDetect) return;
+        var measurement = completed.Result;
+        if (!measurement.Known) return;
+        if (spanMeasured && measuredSpan == measurement.Span) return;
+        spanMeasured = true;
+        measuredSpan = measurement.Span;
+        if (!slideActive && !hiddenByTaskbar && !hiddenByFullscreen && !Native.IsShellFlyoutActive()) Reposition();
+    }
+
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        if (!IsDisposed && running) RequestSample();
     }
 
     private const int WM_NCHITTEST = 0x84, WM_EXITSIZEMOVE = 0x232, WM_SETCURSOR = 0x20;

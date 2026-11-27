@@ -476,9 +476,9 @@ public sealed class AppConfig
             {
                 config = new AppConfig { IsFirstRun = true };
                 config.Normalize();
-                config.Save(path);
-                // A clean install has no config yet: the choices of the setup (language, default bar, start with Windows) must still be applied.
+                // Apply the one-time setup choices before creating the first config.
                 ApplyFirstRun(config, path);
+                config.Save(path);
                 return config;
             }
 
@@ -507,20 +507,19 @@ public sealed class AppConfig
         {
             if (!File.Exists(file)) return;
             using var doc = JsonDocument.Parse(File.ReadAllText(file));
-            if (doc.RootElement.TryGetProperty("Language", out var lang) && lang.GetString() is { Length: > 0 } code)
-            {
+            // An existing config is authoritative, even if an old setup marker survived.
+            if (config.IsFirstRun && doc.RootElement.TryGetProperty("Language", out var lang) &&
+                lang.ValueKind == JsonValueKind.String && lang.GetString() is { Length: > 0 } code)
                 config.Language = code;
-                config.Save(configPath);
-            }
             if (doc.RootElement.TryGetProperty("StartWithWindows", out var sw) && sw.ValueKind == JsonValueKind.True) config.StartWithWindowsRequested = true;
-            if (doc.RootElement.TryGetProperty("Position", out var p) &&
-                Enum.TryParse<TickerPosition>(p.GetString(), true, out var position) &&
+            if (config.IsFirstRun && doc.RootElement.TryGetProperty("Position", out var p) &&
+                p.ValueKind == JsonValueKind.String && Enum.TryParse<TickerPosition>(p.GetString(), true, out var position) &&
                 position is TickerPosition.BottomTaskbar or TickerPosition.TaskbarIntegrated)
             {
                 config.Position = position;
                 if (position == TickerPosition.TaskbarIntegrated) config.SecondBarEnabled = false;
-                config.Save(configPath);
             }
+            if (config.IsFirstRun && !config.TrySave(configPath)) return;
             File.Delete(file);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)

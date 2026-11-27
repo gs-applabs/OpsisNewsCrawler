@@ -1036,7 +1036,8 @@ begin
     end
     else if Wish then
       Json := '{"StartWithWindows":true}';
-    if Json <> '' then SaveStringToFile(Dir + '\first-run.json', Json, False);
+    if Json <> '' then SaveStringToFile(Dir + '\first-run.json', Json, False)
+    else if FileExists(Dir + '\config.json') then DeleteFile(Dir + '\first-run.json');
   end;
 end;
 

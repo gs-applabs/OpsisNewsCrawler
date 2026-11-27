@@ -90,8 +90,7 @@ internal static class Native
         if (!GetWindowRect(fg, out var r)) return false;
         var hasCaption = (GetWindowLong(fg, GWL_STYLE) & WS_CAPTION) == WS_CAPTION;
         var bounds = targetMonitor ?? Screen.FromHandle(fg).Bounds;
-        if (targetMonitor is not null && Screen.FromHandle(fg).Bounds != bounds) return false;
-        return OpsisNewsCrawler.Core.TaskbarMaintenance.CoversMonitor(hasCaption, r.Left, r.Top, r.Right, r.Bottom, bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
+         return OpsisNewsCrawler.Core.TaskbarMaintenance.CoversMonitor(hasCaption, r.Left, r.Top, r.Right, r.Bottom, bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
     }
 
     // ---- taskbar geometry ----------------------------------------------------------------

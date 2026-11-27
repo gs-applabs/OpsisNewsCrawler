@@ -126,8 +126,31 @@ public class InstallMigrationTests
             File.WriteAllText(Path.Combine(dir, "first-run.json"), "{\"Position\":\"BottomTaskbar\",\"Language\":\"el\",\"StartWithWindows\":true}");
             var config = AppConfig.Load(Path.Combine(dir, "config.json"));
             Assert.True(config.StartWithWindowsRequested);
+            Assert.Equal("el", config.Language);
+            Assert.Equal(TickerPosition.BottomTaskbar, config.Position);
             Assert.False(File.Exists(Path.Combine(dir, "first-run.json")));     // applied once
             Assert.DoesNotContain("StartWithWindowsRequested", File.ReadAllText(Path.Combine(dir, "config.json")));   // never saved as a setting
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+    [Fact]
+    public void StaleFirstRunMarkerCannotOverrideExistingUserChoices()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "crawler-upgrade-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "config.json");
+            new AppConfig { Language = "de", Position = TickerPosition.Top, CheckForUpdates = false }.Save(path);
+            File.WriteAllText(Path.Combine(dir, "first-run.json"),
+                "{\"Language\":\"en\",\"Position\":\"TaskbarIntegrated\",\"StartWithWindows\":true}");
+            var config = AppConfig.Load(path);
+            Assert.Equal("de", config.Language);
+            Assert.Equal(TickerPosition.Top, config.Position);
+            Assert.False(config.CheckForUpdates);
+            Assert.True(config.StartWithWindowsRequested);
+            Assert.False(File.Exists(Path.Combine(dir, "first-run.json")));
+            Assert.Equal("de", AppConfig.Load(path).Language);
         }
         finally { Directory.Delete(dir, true); }
     }

@@ -71,4 +71,13 @@ public class TaskbarMaintenanceTests
         Assert.True(TaskbarMaintenance.ConfirmFullscreen(true, false, true));
         Assert.False(TaskbarMaintenance.ConfirmFullscreen(false, true, true));
     }
+
+    [Fact]
+    public void AutomaticGapIncludesPaddingAndNeverOverlapsButtons()
+    {
+        var span = TaskbarMaintenance.SelectFreeSpan(0, 1000, new[] { (-20, 200), (392, 800), (790, 1050) });
+        Assert.Equal((206, 386), span!.Value);
+        Assert.Null(TaskbarMaintenance.SelectFreeSpan(0, 1000, new[] { (0, 200), (391, 1000) }));
+        Assert.Null(TaskbarMaintenance.SelectFreeSpan(0, 1000, new[] { (-10, 1020) }));
+    }
 }
