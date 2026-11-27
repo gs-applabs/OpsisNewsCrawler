@@ -67,7 +67,7 @@ internal static class Native
     /// True when another program (video player, browser in F11, game, presentation) is shown fullscreen.
     /// The ticker must not be drawn on top of it.
     /// </summary>
-    internal static bool IsFullscreenAppActive(IntPtr ownHandle, Func<IntPtr, bool>? isHostWindow = null)
+    internal static bool IsFullscreenAppActive(IntPtr ownHandle, Func<IntPtr, bool>? isHostWindow = null, Rectangle? targetMonitor = null)
     {
         var fg = GetForegroundWindow();
         if (fg == IntPtr.Zero || fg == ownHandle || fg == GetShellWindow()) return false;
@@ -80,17 +80,18 @@ internal static class Native
 
         var name = new StringBuilder(256);
         var len = GetClassName(fg, name, name.Capacity);
-        if (len > 0 && ShellClasses.Contains(name.ToString(0, len))) return false;
+        if (len > 0 && (ShellClasses.Contains(name.ToString(0, len)) || IsShellFlyout(fg, name.ToString(0, len)))) return false;
 
         // 2 = busy (fullscreen app), 3 = Direct3D fullscreen, 4 = presentation mode.
-        if (!ownProcess && SHQueryUserNotificationState(out var qs) == 0 && qs is 2 or 3 or 4) return true;
+        if (targetMonitor is null && !ownProcess && SHQueryUserNotificationState(out var qs) == 0 && qs is 3 or 4) return true;
 
         // Geometric check. A maximized window with an auto-hide taskbar also covers the monitor,
         // but it keeps its title bar; real fullscreen windows have none.
         if (!GetWindowRect(fg, out var r)) return false;
-        if ((GetWindowLong(fg, GWL_STYLE) & WS_CAPTION) == WS_CAPTION) return false;
-        var bounds = Screen.FromHandle(fg).Bounds;
-        return r.Left <= bounds.Left && r.Top <= bounds.Top && r.Right >= bounds.Right && r.Bottom >= bounds.Bottom;
+        var hasCaption = (GetWindowLong(fg, GWL_STYLE) & WS_CAPTION) == WS_CAPTION;
+        var bounds = targetMonitor ?? Screen.FromHandle(fg).Bounds;
+        if (targetMonitor is not null && Screen.FromHandle(fg).Bounds != bounds) return false;
+        return OpsisNewsCrawler.Core.TaskbarMaintenance.CoversMonitor(hasCaption, r.Left, r.Top, r.Right, r.Bottom, bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
     }
 
     // ---- taskbar geometry ----------------------------------------------------------------
@@ -202,14 +203,16 @@ internal static class Native
     /// that always lies above everything) are tiny or lie elsewhere and are ignored: putting this window above them is impossible (they put themselves back) and made the old
     /// check ask every second.
     /// </summary>
-    private static IntPtr CoveringTopmostAbove(IntPtr hwnd)
+    private static IntPtr CoveringTopmostAbove(IntPtr hwnd, IntPtr onlyWindow = default)
     {
         const uint GW_HWNDPREV = 3;
         const int GWL_EXSTYLE = -20, WS_EX_TOPMOST = 0x8;
         if (!GetWindowRect(hwnd, out var mine)) return IntPtr.Zero;
         for (var above = GetWindow(hwnd, GW_HWNDPREV); above != IntPtr.Zero; above = GetWindow(above, GW_HWNDPREV))
         {
-            if (!IsWindowVisible(above) || (GetWindowLongEx(above, GWL_EXSTYLE) & WS_EX_TOPMOST) == 0) continue;
+            if (onlyWindow != IntPtr.Zero && above != onlyWindow) continue;
+            if (!IsWindowVisible(above) || (onlyWindow == IntPtr.Zero && (GetWindowLongEx(above, GWL_EXSTYLE) & WS_EX_TOPMOST) == 0)) continue;
+            if (DwmGetWindowAttribute(above, 14, out var cloaked, sizeof(int)) == 0 && cloaked != 0) continue;
             if (!GetWindowRect(above, out var other)) continue;
             if (other.Right - other.Left < 8 || other.Bottom - other.Top < 8) continue;                        // a helper window, not something that can hide the bar
             var overlapW = Math.Min(mine.Right, other.Right) - Math.Max(mine.Left, other.Left);
@@ -221,6 +224,43 @@ internal static class Native
 
     /// <summary>True when nothing that is always on top and really covers this window lies above it (so it does not need to be put on top again).</summary>
     internal static bool IsAtTopOfTopmost(IntPtr hwnd) => CoveringTopmostAbove(hwnd) == IntPtr.Zero;
+
+    internal static bool IsTaskbarCovering(IntPtr hwnd)
+    {
+        var taskbar = GetTaskbarHandle();
+        return taskbar != IntPtr.Zero && CoveringTopmostAbove(hwnd, taskbar) != IntPtr.Zero;
+    }
+
+    // Raise just above Explorer's taskbar, not above unrelated always-on-top windows.
+    internal static void RestoreAboveTaskbar(IntPtr hwnd)
+    {
+        var taskbar = GetTaskbarHandle();
+        if (taskbar == IntPtr.Zero || !IsTaskbarCovering(hwnd)) return;
+        var previous = GetWindow(taskbar, 3 /* GW_HWNDPREV */);
+        SetWindowPos(hwnd, previous == IntPtr.Zero ? new IntPtr(-1) : previous, 0, 0, 0, 0, 1 | 2 | 0x10);
+    }
+
+    internal static bool IsShellFlyoutActive()
+    {
+        var fg = GetForegroundWindow();
+        if (fg == IntPtr.Zero) return false;
+        var name = new StringBuilder(128);
+        return GetClassName(fg, name, name.Capacity) > 0 && IsShellFlyout(fg, name.ToString());
+    }
+
+    private static bool IsShellFlyout(IntPtr hwnd, string name)
+    {
+        if (!OpsisNewsCrawler.Core.TaskbarMaintenance.IsShellFlyout(name)) return false;
+        // CoreWindow is also used by ordinary UWP apps; it is not proof of a shell flyout.
+        if (!name.Equals("Windows.UI.Core.CoreWindow", StringComparison.OrdinalIgnoreCase)) return true;
+        GetWindowThreadProcessId(hwnd, out var pid);
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById((int)pid);
+            return process.ProcessName is "explorer" or "ShellExperienceHost" or "StartMenuExperienceHost" or "SearchHost" or "SearchApp";
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception) { return false; }
+    }
 
     /// <summary>The class name of the window that covers this one from above (empty when none): for the log.</summary>
     internal static string TopmostAbove(IntPtr hwnd)

@@ -14,7 +14,7 @@ public static class TaskbarMaintenance
     public const int CheckEvery = 30;
 
     /// <summary>Ticks between two looks at the z-order (a few window calls, no change to the window): the bar is put back quickly when the taskbar covers it, and only then.</summary>
-    public const int TopCheckEvery = 10;
+    public const int TopCheckEvery = 2;
 
     /// <summary>Ticks between two unconditional re-applications of the look (a recovery after Explorer restarted; about 30-90 s).</summary>
     public const int LookRefreshEvery = 900;
@@ -27,6 +27,14 @@ public static class TaskbarMaintenance
     };
 
     public static bool IsShellFlyout(string? className) => !string.IsNullOrEmpty(className) && ShellFlyoutClasses.Contains(className, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>A foreground window must actually cover this monitor and lack a normal caption. A global busy notification alone is not fullscreen.</summary>
+    public static bool CoversMonitor(bool hasCaption, int left, int top, int right, int bottom, int screenLeft, int screenTop, int screenRight, int screenBottom) =>
+        !hasCaption && left <= screenLeft && top <= screenTop && right >= screenRight && bottom >= screenBottom;
+
+    /// <summary>Two consecutive fullscreen observations suppress a transient foreground transition. Leaving fullscreen restores immediately.</summary>
+    public static bool ConfirmFullscreen(bool candidate, bool previouslyObserved, bool alreadyHidden) =>
+        candidate && (previouslyObserved || alreadyHidden);
 
     public static Actions Decide(int tick, bool taskbarStyleChanged, bool shellFlyoutHasFocus, bool alreadyOnTop)
     {
