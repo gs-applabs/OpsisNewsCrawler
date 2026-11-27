@@ -69,8 +69,9 @@ internal sealed class P0DiagnosticsForm : Form
         previousFrames = frames;
         previousSample = sample;
         previousCpu = cpu;
+        var files = SafeFile.Diagnostics;
         summary.Text = Loc.T("diag.metrics", percent, mem, gdi, disk.Writes, disk.Skips, host.RunningRefreshes)
-            + $" • FPS: {fps:N1} • RSS: {host.NetworkReceivedBytes / 1024.0:N0} KiB";
+            + $" • FPS: {fps:N1} • RSS: {host.NetworkReceivedBytes / 1024.0:N0} KiB • File I/O: {files.Writes:N0} / {files.Bytes / 1024.0:N0} KiB";
         var health = host.FeedHealth;
         rows.BeginUpdate();
         try

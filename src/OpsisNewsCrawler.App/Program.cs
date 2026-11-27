@@ -379,7 +379,14 @@ internal static class Program
             settings.ShowSettings(); // handy for testing and shortcuts
         }
 
-        Application.Run(host.Window);
+        ResourceProbe? probe = null;
+        var probeAt = Array.IndexOf(args, "--resource-soak");
+        if (probeAt >= 0 && probeAt + 2 < args.Length && configArgAt >= 0 &&
+            Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true" &&
+            int.TryParse(args[probeAt + 2], out var seconds))
+            probe = new ResourceProbe(host, args[probeAt + 1], seconds);
+        try { Application.Run(host.Window); }
+        finally { probe?.Dispose(); }
         trayTimer.Stop();
         tray.Icon = staticIcon;
         liveTrayIcon?.Dispose();

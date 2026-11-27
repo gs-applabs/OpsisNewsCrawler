@@ -212,7 +212,7 @@ public sealed class YahooQuoteProvider : IQuoteProvider
                     break;
                 }
             }
-            if (changed) store.Save();
+            if (changed) store.SaveIfDue();
         }
         return wanted.Where(i => cache.ContainsKey(i.Code)).Select(i => cache[i.Code].Quote).ToList();
     }

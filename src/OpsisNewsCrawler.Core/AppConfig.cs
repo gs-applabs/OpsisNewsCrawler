@@ -537,7 +537,7 @@ public sealed class AppConfig
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            SafeFile.WriteAllText(path, JsonSerializer.Serialize(this, JsonOptions));
+            SafeFile.WriteAllTextIfChanged(path, JsonSerializer.Serialize(this, JsonOptions));
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

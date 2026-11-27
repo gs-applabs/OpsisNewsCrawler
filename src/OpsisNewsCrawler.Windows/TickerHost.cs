@@ -816,6 +816,7 @@ public sealed partial class TickerHost : IDisposable
         var urls = Config.Categories.SelectMany(c => c.Feeds).Select(f => f.Url).ToArray();
         news.RetainSources(urls);
         extraNewsProvider.RetainSources(urls);
+        quotes.Store.SaveIfDue();
         EvaluatePerformance();
         FamilyFeedBridge.Sync();   // returns at once when a plugin of this process provides the flow
     }
@@ -929,6 +930,8 @@ public sealed partial class TickerHost : IDisposable
         portfolioOpen = false;
         analytics?.Close();
         analytics = null;
+        quotes.Store.Save();
+        newsArchive?.Flush(DateTimeOffset.UtcNow);
     }
 
     /// <summary>True while the bars are paused from the tray menu (the scrolling stands still).</summary>
@@ -1536,6 +1539,7 @@ public sealed partial class TickerHost : IDisposable
         analytics?.Close();
         analytics = null;
         newsArchive?.Flush(DateTimeOffset.UtcNow);
+        quotes.Store.Save();
         news.Dispose();
         extraNewsProvider.Dispose();
         SecondWindow?.Dispose();
