@@ -6,6 +6,21 @@
 
 <p align="center"><a href="#at-a-glance--με-μια-ματιά">Overview / Επισκόπηση</a> · <a href="#full-documentation--αναλυτική-τεκμηρίωση">Full documentation / Τεκμηρίωση</a> · <a href="https://github.com/gs-applabs/OpsisNewsCrawler/issues">Support / Υποστήριξη</a> · <a href="https://github.com/gs-applabs">GS App Labs</a></p>
 
+## Current screenshot gallery / Νέα στιγμιότυπα
+
+<a href="docs/product-snapshots/snapshot-bar/snapshot-bar.png"><img src="docs/product-snapshots/snapshot-bar/snapshot-bar.png" width="100%" alt="Desktop news and market tickers"/></a>
+
+<table>
+<tr>
+<td width="50%" valign="top"><a href="docs/product-snapshots/snapshot-portfolio/snapshot-portfolio.png"><img src="docs/product-snapshots/snapshot-portfolio/snapshot-portfolio.png" width="100%" alt="Portfolio / Χαρτοφυλάκιο"/></a><br/><sub>Portfolio / Χαρτοφυλάκιο</sub></td>
+<td width="50%" valign="top"><a href="docs/product-snapshots/hazards/snapshot-hazard-icons.png"><img src="docs/product-snapshots/hazards/snapshot-hazard-icons.png" width="100%" alt="Hazard indicators / Δείκτες κινδύνων"/></a><br/><sub>Hazard indicators / Δείκτες κινδύνων</sub></td>
+</tr>
+</table>
+
+**[Browse application screenshots / Προβολή στιγμιοτύπων](docs/product-snapshots/README.md)** · [Capture workflow / Μηχανισμός λήψης](../../actions/workflows/product-snapshots.yml)
+
+<sub>Application-rendered previews, including synthetic analytics and hazard illustrations. / Πραγματική απεικόνιση με ενδεικτικά δεδομένα αναλύσεων και κινδύνων.</sub>
+
 ## At a glance / Με μια ματιά
 
 | | What you can do / Τι μπορείς να κάνεις |
@@ -291,9 +306,3 @@ Needs the .NET 11 SDK and Inno Setup 6/7. Layout: `src/OpsisNewsCrawler.Core` (m
 Ελληνικά: ελεύθερη χρήση, αντιγραφή, τροποποίηση και διανομή, με την προϋπόθεση να διατηρείται η σημείωση πνευματικών δικαιωμάτων και η άδεια· το λογισμικό παρέχεται «ως έχει», χωρίς εγγύηση. Εκδότης όλων των αρχείων: gs-applabs.
 
 English: you may use, copy, modify and distribute the program as long as the copyright notice and the licence text are kept; it is provided "as is", without warranty. Publisher of all files: gs-applabs.
-
-
-## Current screenshot gallery / Νέα στιγμιότυπα
-
-[Browse application screenshots / Προβολή στιγμιοτύπων](docs/product-snapshots/README.md)
-
