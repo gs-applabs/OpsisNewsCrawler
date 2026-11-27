@@ -45,8 +45,29 @@ public sealed class LocaleFilesTests
         }
     }
 
-    // Keys that are legitimately the same in every language (the product name, the MIT licence text, technical names).
-    private static readonly HashSet<string> SameEverywhere = new() { "app.name", "license.text", "dep.dotnet", "fmt.monitor", "note.hostTheme", "hazard.range" };
+    // GearWin-style gate: every explicitly numbered release heading must be in each localized in-app history.
+    [Fact]
+    public void EveryChangelogVersionAppearsInEveryLocalizedHistory()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "CHANGELOG.md"))) root = root.Parent;
+        Assert.NotNull(root);
+        var changelog = File.ReadAllText(Path.Combine(root!.FullName, "CHANGELOG.md"));
+        var releases = System.Text.RegularExpressions.Regex.Matches(changelog,
+            @"(?m)^#{2,3} (\d+\.\d+\.\d+)(?![\d.])").Select(m => m.Groups[1].Value).Distinct().ToArray();
+        Assert.Contains("0.30.0", releases);
+        Assert.True(releases.Length > 40);
+        foreach (var lang in Codes)
+        {
+            var history = Load(lang)["history.text"];
+            foreach (var release in releases)
+                Assert.Matches(@"(?m)^" + System.Text.RegularExpressions.Regex.Escape(release) + @"(?![\d.])", history);
+            Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(history, @"(?m)^0\.30\.0(?![\d.])").Count);
+        }
+    }
+
+    // Keys that are legitimately the same in every language (product name and technical names).
+    private static readonly HashSet<string> SameEverywhere = new() { "app.name", "dep.dotnet", "fmt.monitor", "note.hostTheme", "hazard.range" };
 
     [Theory]
     [InlineData("ar")] [InlineData("de")] [InlineData("es")] [InlineData("fr")] [InlineData("hi")] [InlineData("it")]
