@@ -51,6 +51,8 @@ public sealed partial class TickerHost
         refreshingQuotes = true;
         var epoch = startEpoch;
         var token = DemandToken("quotes");
+        var ui = SynchronizationContext.Current;
+        var uiThread = Environment.CurrentManagedThreadId;
         try
         {
             void Show(IReadOnlyList<NewsItem> list)
@@ -66,9 +68,9 @@ public sealed partial class TickerHost
                     PushAll();
                 }
 
-                if (!Window.IsHandleCreated) return;
-                if (Window.InvokeRequired) Window.BeginInvoke(new Action(Apply));
-                else Apply();
+                if (Environment.CurrentManagedThreadId == uiThread) Apply();
+                else if (Window.IsHandleCreated) Window.BeginInvoke(new Action(Apply));
+                else ui?.Post(_ => Apply(), null);
             }
 
             // Each source shows up as soon as it has answered; a slow one cannot keep the others waiting.

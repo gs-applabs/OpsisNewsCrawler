@@ -179,8 +179,7 @@ public sealed partial class TickerHost
                 UpdateMiniWeather();
                 UpdateLiveIcon();
             }
-            if (!Window.IsHandleCreated) return;
-            if (Window.InvokeRequired) Window.BeginInvoke(new Action(Apply)); else Apply();
+            if (Window.IsHandleCreated && Window.InvokeRequired) Window.BeginInvoke(new Action(Apply)); else Apply();
             if (started && epoch == startEpoch && (readings.Count == 0 || failed)) _ = RetryWeatherLater();
         }
         catch (OperationCanceledException)

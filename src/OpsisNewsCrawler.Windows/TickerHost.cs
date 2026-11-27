@@ -112,10 +112,13 @@ public sealed partial class TickerHost : IDisposable
     public event Action<UpdateInfo>? UpdateFound;
 
     /// <summary>Asks GitHub about a newer release. Returns null for "up to date", throws only network exceptions.</summary>
-    public async Task<UpdateInfo?> CheckForUpdatesAsync()
+    public Task<UpdateInfo?> CheckForUpdatesAsync() => CheckForUpdatesCoreAsync(lifetimeToken);
+
+    private async Task<UpdateInfo?> CheckForUpdatesCoreAsync(CancellationToken token)
     {
         var current = Version.TryParse(AboutTexts.Version, out var v) ? v : new Version(0, 0);
-        var found = await UpdateChecker.CheckAsync(current, lifetimeToken);
+        var found = await UpdateChecker.CheckAsync(current, token);
+        token.ThrowIfCancellationRequested();
         Config.LastUpdateCheck = DateTimeOffset.Now;
         SaveConfig();
         AvailableUpdate = found;
@@ -129,6 +132,7 @@ public sealed partial class TickerHost : IDisposable
 
     private readonly System.Windows.Forms.Timer updateTimer = new() { Interval = (int)TimeSpan.FromHours(24).TotalMilliseconds };
     private bool autoChecking;
+    private CancellationTokenSource? updateLease;
 
     /// <summary>Raised (on the UI thread) once per version when an automatic check finds a newer release: the tray shows a notification.</summary>
     public event Action<UpdateInfo>? UpdateAnnounce;
@@ -143,21 +147,22 @@ public sealed partial class TickerHost : IDisposable
     {
         if (!started || !Config.CheckForUpdates || autoChecking || disposed) return;
         var checkEpoch = startEpoch;
+        var token = updateLease?.Token ?? SessionToken;
         autoChecking = true;
         try
         {
-            for (var attempt = 0; attempt < 4 && started && checkEpoch == startEpoch && !disposed; attempt++)
+            for (var attempt = 0; attempt < 4 && started && checkEpoch == startEpoch && !disposed && Config.CheckForUpdates && !token.IsCancellationRequested; attempt++)
             {
                 try
                 {
-                    var found = await CheckForUpdatesAsync();
-                    if (!started || checkEpoch != startEpoch) return;
+                    var found = await CheckForUpdatesCoreAsync(token);
+                    if (!started || checkEpoch != startEpoch || token.IsCancellationRequested || !Config.CheckForUpdates) return;
                     // Inside Opsis the balloon is Opsis' job (the card in the settings still shows the update); never while a full-screen app is in front.
                     if (found is not null && !HostedByOpsis && UpdateAnnouncePolicy.ShouldAnnounce(Config.LastNotifiedUpdate, found.Tag))
                     {
                         if (Window.IsHandleCreated && Native.IsFullscreenAppActive(Window.Handle, hostWindowDetector))
                         {
-                            _ = RetryUpdateAnnounceLater();
+                            _ = RetryUpdateAnnounceLater(token);
                             return;
                         }
                         Config.LastNotifiedUpdate = found.Tag;
@@ -168,8 +173,8 @@ public sealed partial class TickerHost : IDisposable
                 }
                 catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
                 {
-                    if (disposed || cts.IsCancellationRequested) return;
-                    await Task.Delay(TimeSpan.FromMinutes(1), lifetimeToken).ConfigureAwait(true);   // offline: wait for the network
+                    if (disposed || token.IsCancellationRequested) return;
+                    await Task.Delay(TimeSpan.FromMinutes(1), token).ConfigureAwait(true);   // offline: wait for the network
                 }
             }
         }
@@ -182,21 +187,21 @@ public sealed partial class TickerHost : IDisposable
         }
     }
 
-    private async Task RetryUpdateAnnounceLater()
+    private async Task RetryUpdateAnnounceLater(CancellationToken token)
     {
         try
         {
-            await Task.Delay(TimeSpan.FromMinutes(15), lifetimeToken).ConfigureAwait(true);
-            _ = AutoCheckForUpdatesAsync();
+            await Task.Delay(TimeSpan.FromMinutes(15), token).ConfigureAwait(true);
+            if (!token.IsCancellationRequested) _ = AutoCheckForUpdatesAsync();
         }
         catch (OperationCanceledException) { }
     }
 
-    private async Task FirstUpdateCheckAsync(int epoch)
+    private async Task FirstUpdateCheckAsync(int epoch, CancellationToken token)
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(30), lifetimeToken).ConfigureAwait(true);
+            await Task.Delay(TimeSpan.FromSeconds(30), token).ConfigureAwait(true);
             if (started && !disposed && startEpoch == epoch) _ = AutoCheckForUpdatesAsync();
         }
         catch (OperationCanceledException) { }
@@ -920,6 +925,8 @@ public sealed partial class TickerHost : IDisposable
         portfolioOpen = false;
         analytics?.Close();
         analytics = null;
+        analysis?.Close();
+        analysis = null;
         quoteService?.Store.Save();
         newsArchive?.Flush(DateTimeOffset.UtcNow);
     }
@@ -1047,6 +1054,7 @@ public sealed partial class TickerHost : IDisposable
             timer.Start();
             if (key == "news" && NeedsActiveNews && !hasRealItems) LoadCachedNews();
             if (key == "weather" && !hasWeather) LoadCachedWeather();
+            if (key is "news" or "weather" && BarsOn) PushAll();
             refreshScheduler.TryRun(key, refresh, lease.Token);
         }
         Sync("news", refreshTimer, NeedsNews, () => RefreshAsync(force: true));
@@ -1057,13 +1065,26 @@ public sealed partial class TickerHost : IDisposable
         breakingTimer.Enabled = started && BarsOn && (Config.BreakingEnabled || Config.PriceAlerts.Any(a => a.Enabled));
         if (started && Config.CheckForUpdates)
         {
-            if (!updateTimer.Enabled) { updateTimer.Start(); _ = FirstUpdateCheckAsync(startEpoch); }
+            if (updateLease is null)
+            {
+                updateLease = CancellationTokenSource.CreateLinkedTokenSource(SessionToken);
+                updateTimer.Start();
+                _ = FirstUpdateCheckAsync(startEpoch, updateLease.Token);
+            }
         }
-        else updateTimer.Stop();
+        else
+        {
+            updateTimer.Stop();
+            updateLease?.Cancel();
+            updateLease?.Dispose();
+            updateLease = null;
+        }
     }
 
     internal string[] ActiveRefreshServices => activeServices.Keys.OrderBy(k => k).ToArray();
     internal bool MarketStoreInitialized => quoteService is not null;
+    internal bool AutomaticUpdatesActive => updateLease is not null;
+    internal bool HasActiveRefreshTimers => refreshTimer.Enabled || quoteTimer.Enabled || weatherTimer.Enabled || hazardTimer.Enabled || alertTimer.Enabled;
 
     private bool IsActiveCategory(string? id) => string.IsNullOrWhiteSpace(id) || string.Equals(id, Config.ActiveCategory, StringComparison.OrdinalIgnoreCase);
 
@@ -1311,7 +1332,7 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>Finds new urgent headlines; the first time one is seen the intro plays and the bar turns red.</summary>
     private void DetectBreaking(List<NewsItem> items)
     {
-        if (!Config.BreakingEnabled || (!Config.MainSlots().Has(SlotKind.News) && !breakingActive)) return;
+        if (!BarsOn || !Config.BreakingEnabled || (!Config.MainSlots().Has(SlotKind.News) && !breakingActive)) return;
         var engine = new BreakingEngine(new BreakingOptions(BreakingEngine.ParseSensitivity(Config.BreakingSensitivity), Config.BreakingKeywords,
             TimeSpan.FromMinutes(Config.BreakingMaxAgeMinutes), breakingFeedback));
         // Several signals, not one word: confirmation by other publishers, speed, freshness, source reliability, disaster data, negative filters (see BreakingEngine).
@@ -1574,6 +1595,9 @@ public sealed partial class TickerHost : IDisposable
         refreshScheduler.Dispose();
         refreshTimer.Dispose();
         performanceTimer.Dispose();
+        updateLease?.Cancel();
+        updateLease?.Dispose();
+        updateLease = null;
         updateTimer.Dispose();
         quoteTimer.Dispose();
         snoozeTimer.Dispose();

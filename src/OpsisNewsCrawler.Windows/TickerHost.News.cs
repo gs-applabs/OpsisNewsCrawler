@@ -26,7 +26,7 @@ public sealed partial class TickerHost
                 var category = id;
                 void Apply()
                 {
-                    if (disposed || !started || epoch != startEpoch || !ExtraNewsCategories().Contains(category, StringComparer.OrdinalIgnoreCase)) return;
+                    if (disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !ExtraNewsCategories().Contains(category, StringComparer.OrdinalIgnoreCase)) return;
                     if (items.Count > 0)
                     {
                         extraNews[category] = items.ToList();
