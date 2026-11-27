@@ -58,8 +58,11 @@ public sealed partial class TickerHost : IDisposable
     private CancellationToken SessionToken => sessionCts?.Token ?? lifetimeToken;
     private CrawlerEventDispatch? suiteDispatcher;
 
-    private void PublishSuiteEvent(SuiteEvent message) =>
-        suiteDispatcher?.TryPublish(message);
+    private void PublishSuiteEvent(SuiteEvent message)
+    {
+        if (disposed || !started) return;
+        (suiteDispatcher ??= new CrawlerEventDispatch(SuiteEventHub.Publish)).TryPublish(message);
+    }
 
     // breaking news
     private readonly System.Windows.Forms.Timer breakingTimer = new() { Interval = 5000 };
@@ -92,7 +95,7 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>Number of periodic refresh operations currently executing.</summary>
     public int RunningRefreshes => refreshScheduler.RunningCount;
     /// <summary>Successful RSS payload bytes; local process counter (not an upload).</summary>
-    public long NetworkReceivedBytes => news.DownloadedBytes + extraNewsProvider.DownloadedBytes;
+    public long NetworkReceivedBytes => news.DownloadedBytes;
 
     /// <summary>The main bar.</summary>
     public TickerWindow Window { get; }
@@ -313,10 +316,7 @@ public sealed partial class TickerHost : IDisposable
     private AnalyticsForm? analytics;
 
     /// <summary>Combined RSS feed health for the opt-in diagnostics window.</summary>
-    public IReadOnlyList<FeedHealth> FeedHealth => news.Health().Concat(extraNewsProvider.Health())
-        .GroupBy(h => h.Url, StringComparer.OrdinalIgnoreCase)
-        .Select(g => g.OrderByDescending(h => h.LastTry).First())
-        .OrderBy(h => h.Url, StringComparer.OrdinalIgnoreCase).ToList();
+    public IReadOnlyList<FeedHealth> FeedHealth => news.Health();
 
     /// <summary>Raised when the user right-clicks a bar. The standalone app opens its window, the plugin asks Opsis to show its tab.</summary>
     public event Action? SettingsRequested;
@@ -796,7 +796,6 @@ public sealed partial class TickerHost : IDisposable
         started = true;
         unchecked { startEpoch++; }
         sessionCts = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
-        suiteDispatcher ??= new CrawlerEventDispatch(SuiteEventHub.Publish);
         EvaluatePerformance();
         FamilyFeedBridge.Sync();
         performanceTimer.Tick -= OnPerformanceTimer;
@@ -822,8 +821,7 @@ public sealed partial class TickerHost : IDisposable
         PruneExtraCategories();
         var urls = Config.Categories.SelectMany(c => c.Feeds).Select(f => f.Url).ToArray();
         news.RetainSources(urls);
-        extraNewsProvider.RetainSources(urls);
-        quoteService?.Store.SaveIfDue();
+         quoteService?.Store.SaveIfDue();
         EvaluatePerformance();
         FamilyFeedBridge.Sync();   // returns at once when a plugin of this process provides the flow
     }
@@ -1244,7 +1242,6 @@ public sealed partial class TickerHost : IDisposable
     private readonly Dictionary<string, List<NewsItem>> extraNews = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTimeOffset> extraNewsAt = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<string>> extraNewsFailed = new(StringComparer.OrdinalIgnoreCase);
-    private readonly RssNewsProvider extraNewsProvider = new();
     private bool refreshingExtra;
 
     private void PruneExtraCategories()
@@ -1652,7 +1649,6 @@ public sealed partial class TickerHost : IDisposable
         newsArchive?.Flush(DateTimeOffset.UtcNow);
         quoteService?.Store.Save();
         news.Dispose();
-        extraNewsProvider.Dispose();
         SecondWindow?.Dispose();
         foreach (var extra in ExtraWindows) extra.Dispose();
         monitorWindows.Clear();

@@ -111,6 +111,12 @@ public sealed class RssNewsProvider : IDisposable
     public async Task<IReadOnlyList<NewsItem>> FetchAsync(
         IEnumerable<FeedSource> sources, int maxPerFeed, CancellationToken cancellationToken = default,
         int maxAgeHours = 168, bool newestFirst = false)
+        => await FetchAsync(sources, maxPerFeed, cancellationToken, maxAgeHours, newestFirst, TimeSpan.Zero);
+
+    /// <summary>For consumers of the same host-owned provider: reuse recently validated feeds between category refreshes.</summary>
+    public async Task<IReadOnlyList<NewsItem>> FetchAsync(
+        IEnumerable<FeedSource> sources, int maxPerFeed, CancellationToken cancellationToken,
+        int maxAgeHours, bool newestFirst, TimeSpan reuseWithin)
     {
         lock (failLock) failedFeeds = new();
         using var global = new SemaphoreSlim(MaxConcurrentFeeds);
@@ -129,7 +135,7 @@ public sealed class RssNewsProvider : IDisposable
                 int previous;
                 while ((previous = Volatile.Read(ref peakRequests)) < active &&
                        Interlocked.CompareExchange(ref peakRequests, active, previous) != previous) { }
-                try { return await FetchOneAsync(source, maxPerFeed, cancellationToken).ConfigureAwait(false); }
+                try { return await FetchOneAsync(source, maxPerFeed, cancellationToken, reuseWithin).ConfigureAwait(false); }
                 finally { Interlocked.Decrement(ref activeRequests); }
             }
             finally { if (acquired) domain.Release(); global.Release(); }
@@ -242,15 +248,20 @@ public sealed class RssNewsProvider : IDisposable
         }
     }
 
-    private async Task<List<NewsItem>> FetchOneAsync(FeedSource source, int maxItems, CancellationToken ct)
+    private async Task<List<NewsItem>> FetchOneAsync(FeedSource source, int maxItems, CancellationToken ct, TimeSpan reuseWithin = default)
     {
         var state = states.GetOrAdd(source.Url, _ => new FeedState());
+        List<NewsItem> Cached() => state.Items?.Take(maxItems).Select(i =>
+            i.Source == source.Name ? i : i with { Source = source.Name }).ToList() ?? new();
         lock (state)
         {
+            if (reuseWithin > TimeSpan.Zero && maxItems <= CachedItemsPerFeed && state.ConsecutiveFailures == 0 &&
+                state.Items is not null && state.LastOk is { } ok && DateTimeOffset.UtcNow - ok < reuseWithin)
+                return Cached();
             if (state.CoolingDown)
             {
                 if (state.ConsecutiveFailures > 0) RecordFailure(source.Name);
-                return state.Items?.Take(maxItems).ToList() ?? new List<NewsItem>();
+                return Cached();
             }
         }
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -268,7 +279,7 @@ public sealed class RssNewsProvider : IDisposable
             if (response.StatusCode == HttpStatusCode.NotModified && state.Items is not null)
             {
                 state.MarkOk();
-                return state.Items.Take(maxItems).ToList();
+                return Cached();
             }
             if (response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.ServiceUnavailable)
             {

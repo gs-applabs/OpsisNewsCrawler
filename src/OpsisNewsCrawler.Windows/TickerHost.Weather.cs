@@ -105,6 +105,8 @@ public sealed partial class TickerHost
         var provider = HostWeatherProvider;
         if (!HostedByOpsis || provider is null) return Array.Empty<WeatherReading>();
         var readings = new List<WeatherReading>(ids.Count);
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budget.CancelAfter(TimeSpan.FromSeconds(12));
         foreach (var cityId in ids.Take(12))
         {
             ct.ThrowIfCancellationRequested();
@@ -112,11 +114,12 @@ public sealed partial class TickerHost
             if (city is null) continue;
             try
             {
-                var json = await provider(city.Lat, city.Lon).WaitAsync(TimeSpan.FromSeconds(12), ct);
+                var json = await provider(city.Lat, city.Lon).WaitAsync(budget.Token);
                 var parsed = HostWeatherPayload.Parse(city.Id, json, DateTimeOffset.UtcNow);
                 if (parsed is not null) readings.Add(parsed);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (OperationCanceledException) when (budget.IsCancellationRequested) { break; }
             catch (Exception ex) { Log.Write("Opsis shared weather unavailable: " + ex.GetType().Name); }
         }
         return readings;
@@ -155,9 +158,15 @@ public sealed partial class TickerHost
             var ids = Config.WeatherCities.Distinct().ToList();
             if (!NeedsWeatherForBars) ids = ids.Take(1).ToList();   // only the icon wants it
             var shared = await TryHostWeatherAsync(ids, token);
-            var fromHost = shared.Count > 0;
-            var readings = fromHost ? shared : await weather.FetchAsync(ids, token);
-            var failed = !fromHost && weather.LastFailed;
+            var missing = HostWeatherPayload.MissingCities(ids, shared);
+            var fallback = missing.Length == 0 ? Array.Empty<WeatherReading>() : await weather.FetchAsync(missing, token);
+            token.ThrowIfCancellationRequested();
+            var freshFallback = weather.LastFailed && missing.Length > 0
+                ? Array.Empty<WeatherReading>()
+                : fallback.Where(r => missing.Contains(r.CityId, StringComparer.OrdinalIgnoreCase)).ToArray();
+            var fresh = HostWeatherPayload.Merge(ids, shared, freshFallback, Array.Empty<WeatherReading>());
+            var failed = HostWeatherPayload.MissingCities(ids, fresh).Length > 0;
+            var readings = HostWeatherPayload.Merge(ids, fresh, fallback, weatherReadings);
             void Apply()
             {
                 if (disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !NeedsWeather) return;
@@ -169,7 +178,7 @@ public sealed partial class TickerHost
                     if (!failed)
                     {
                         weatherDataAt = DateTimeOffset.Now;
-                        if (!fromHost) DataCache.Save("weather", readings.ToList()); // Opsis already caches its own weather
+                        if (shared.Count == 0) DataCache.Save("weather", readings.ToList()); // Opsis already caches its own weather
                     }
                 }
                 foreach (var item in WeatherForDisplay().Where(x => x.Kind == NewsItemKind.Weather).Take(15))
@@ -201,18 +210,22 @@ public sealed partial class TickerHost
         }
     }
 
+    private bool weatherRetryPending;
     private async Task RetryWeatherLater()
     {
+        if (weatherRetryPending || !NeedsWeather || disposed || !started) return;
+        weatherRetryPending = true;
         var epoch = startEpoch;
         var token = DemandToken("weather");
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(60), token);
-            if (!disposed && started && epoch == startEpoch && NeedsWeather) RequestRefresh("weather", RefreshWeatherAsync);
+            if (!disposed && started && epoch == startEpoch && NeedsWeather && !token.IsCancellationRequested) RequestRefresh("weather", RefreshWeatherAsync);
         }
         catch (OperationCanceledException)
         {
         }
+        finally { weatherRetryPending = false; }
     }
 
     /// <summary>Where the small weather bar is: the saved place, or the middle of the primary desktop.</summary>

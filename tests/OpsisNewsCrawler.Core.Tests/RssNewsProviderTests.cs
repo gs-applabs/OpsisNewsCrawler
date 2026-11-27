@@ -66,4 +66,33 @@ public sealed class RssNewsProviderTests
         const string rss = "<rss><channel><item><title>Invalid</title><link>javascript:alert(1)</link></item></channel></rss>";
         Assert.Empty(RssNewsProvider.Parse(Encoding.UTF8.GetBytes(rss), "Example", 10));
     }
+
+    [Fact]
+    public async Task SharedFeedAcrossCategoriesReusesDownloadButKeepsEachSourceLabel()
+    {
+        var handler = new CountingFeedHandler();
+        using var provider = new RssNewsProvider(handler);
+        var url = "https://example.com/feed";
+        var first = await provider.FetchAsync(new[] { new FeedSource("Category A", url) }, 8,
+            CancellationToken.None, 168, false, TimeSpan.FromSeconds(30));
+        var second = await provider.FetchAsync(new[] { new FeedSource("Category B", url) }, 8,
+            CancellationToken.None, 168, false, TimeSpan.FromSeconds(30));
+        Assert.Equal(1, handler.Calls);
+        Assert.Equal("Category A", Assert.Single(first).Source);
+        Assert.Equal("Category B", Assert.Single(second).Source);
+        Assert.Single(provider.Health());
+    }
+
+    private sealed class CountingFeedHandler : HttpMessageHandler
+    {
+        public int Calls;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref Calls);
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("<rss><channel><item><title>A shared headline</title><link>https://example.com/story</link></item></channel></rss>")
+            });
+        }
+    }
 }

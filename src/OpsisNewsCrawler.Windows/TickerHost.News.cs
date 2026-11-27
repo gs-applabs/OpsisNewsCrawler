@@ -21,8 +21,8 @@ public sealed partial class TickerHost
             foreach (var id in wanted)
             {
                 if (disposed || !started || epoch != startEpoch || token.IsCancellationRequested) return;
-                var items = await extraNewsProvider.FetchAsync(Config.GetFeeds(id), Config.MaxItemsPerFeed, token, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst);
-                var failedFeeds = extraNewsProvider.LastFailedFeeds.ToList();
+                var items = await news.FetchAsync(Config.GetFeeds(id), Config.MaxItemsPerFeed, token, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst, TimeSpan.FromSeconds(30));
+                var failedFeeds = news.LastFailedFeeds.ToList();
                 var category = id;
                 void Apply()
                 {
@@ -80,7 +80,7 @@ public sealed partial class TickerHost
         try
         {
             var category = Config.ActiveCategory;
-            var items = await news.FetchAsync(Config.GetFeeds(category), Config.MaxItemsPerFeed, token, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst);
+            var items = await news.FetchAsync(Config.GetFeeds(category), Config.MaxItemsPerFeed, token, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst, TimeSpan.FromSeconds(30));
             var failedFeeds = news.LastFailedFeeds.ToList();
             if (disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !NeedsActiveNews || !string.Equals(category, Config.ActiveCategory, StringComparison.OrdinalIgnoreCase)) return; // the category changed meanwhile; a new refresh is running
 
@@ -98,7 +98,7 @@ public sealed partial class TickerHost
                     DetectBreaking(allItems);
                     if (Config.ArchiveNews) Archive.Observe(allItems, DateTimeOffset.UtcNow);
                     foreach (var item in allItems.Where(i => i.Kind == NewsItemKind.News).Take(20))
-                        SuiteEventHub.Publish(new SuiteEvent(SuiteEventKind.News, "crawler", item.Url,
+                        PublishSuiteEvent(new SuiteEvent(SuiteEventKind.News, "crawler", item.Url,
                             item.Title, item.PublishedAt, item.Url, item.Summary));
                 }
                 else

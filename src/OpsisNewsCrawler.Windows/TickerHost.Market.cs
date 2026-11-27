@@ -63,7 +63,7 @@ public sealed partial class TickerHost
                     hasQuotes = true;
                     if (list.Count > 0 || stockItems.Count == 0) stockItems = list; // nothing came back: keep what is shown
                     foreach (var item in stockItems.Where(x => x.Kind == NewsItemKind.Quote).Take(40))
-                        SuiteEventHub.Publish(new SuiteEvent(SuiteEventKind.Market, "crawler", item.Source,
+                        PublishSuiteEvent(new SuiteEvent(SuiteEventKind.Market, "crawler", item.Source,
                             item.Title, item.PublishedAt, item.Url, item.Summary));
                     PushAll();
                 }
