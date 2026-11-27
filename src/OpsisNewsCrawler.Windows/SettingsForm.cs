@@ -55,11 +55,7 @@ public sealed class SettingsForm : Form
             iconFrame = (iconFrame + 1) % iconFrames.Length;
             Icon = iconFrames[iconFrame];
         };
-        VisibleChanged += (_, _) =>
-        {
-            if (Visible) iconTimer.Start();
-            else { iconTimer.Stop(); ReleaseIconFrames(); }
-        };
+        VisibleChanged += OnIconVisibilityChanged;
 
         HandleCreated += (_, _) => Theme.ApplyTitleBar(this);
         Theme.Changed += OnThemeChanged;
@@ -76,6 +72,13 @@ public sealed class SettingsForm : Form
     }
 
     private void OnLiveIconChanged() => iconFramesStale = true;
+
+    private void OnIconVisibilityChanged(object? sender, EventArgs e)
+    {
+        if (Disposing || IsDisposed) return;
+        if (Visible) iconTimer.Start();
+        else { iconTimer.Stop(); ReleaseIconFrames(); }
+    }
 
     private void ReleaseIconFrames()
     {
@@ -99,6 +102,7 @@ public sealed class SettingsForm : Form
         {
             Theme.Changed -= OnThemeChanged;
             LiveIconState.Changed -= OnLiveIconChanged;
+            VisibleChanged -= OnIconVisibilityChanged;
             iconTimer.Stop();
             iconTimer.Dispose();
             ReleaseIconFrames();

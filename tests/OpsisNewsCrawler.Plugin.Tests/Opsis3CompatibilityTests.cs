@@ -27,4 +27,17 @@ public sealed class Opsis3CompatibilityTests
         // Opsis 2.8 and 3.0 skip a plugin DLL whose AssemblyVersion is not exactly 1.0.0.0.
         Assert.Equal(new Version(1, 0, 0, 0), typeof(OpsisNewsCrawlerPlugin).Assembly.GetName().Version);
     }
+    [Fact]
+    public void SafeModeHandshakeAndExplicitStopDoNotCreateTickerHost()
+    {
+        var plugin = new OpsisNewsCrawlerPlugin();
+        var provider = new Func<double, double, Task<string>>((_, _) => Task.FromResult("{}"));
+        plugin.SetOpsisP0Environment(true, true, provider);
+        plugin.Start();
+        plugin.Stop();
+        plugin.SetOpsisP0Environment(false, false, provider);
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var controller = typeof(OpsisNewsCrawlerPlugin).GetField("_controller", flags)!.GetValue(plugin)!;
+        Assert.Null(controller.GetType().GetField("_host", flags)!.GetValue(controller));
+    }
 }
