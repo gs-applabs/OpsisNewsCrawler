@@ -148,15 +148,18 @@ public sealed partial class SettingsPanel
         alertMetric = new FlatComboBox { Width = 150 };
         alertMetric.SetItems(Loc.IsGreek ? new[] { "Τιμή", "Μεταβολή %" } : new[] { "Price", "Change %" }, 0);
         alertThreshold = new FlatText { Width = 100 };
-        var addAlert = new FlatButton { Text = L("btn.new") };
+        var addAlert = new FlatButton { Name = "addPriceAlert", Text = L("btn.new") };
         addAlert.Click += (_, _) => AddAlert();
-        var removeAlert = new FlatButton { Text = L("btn.delete") };
+        var removeAlert = new FlatButton { Name = "removePriceAlert", Text = L("btn.delete") };
         removeAlert.Click += (_, _) => RemoveAlert();
         var alertRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, MaximumSize = new Size(660, 0) };   // wraps instead of making the card wider than the page
         alertRow.Controls.AddRange(new Control[] { alertInstrument, alertMetric, alertDirection, alertThreshold, addAlert, removeAlert });
         alertFlow.Controls.Add(alertRow);
         alertMargin = new FlatText { Width = 100 }; alertMargin.Value = "0";
         alertAge = new FlatNumber(); alertAge.Configure(0, 10080, 1);
+        // Draft fields only become settings when the Add action creates an alert.
+        foreach (var draft in new Control[] { alertInstrument, alertMetric, alertDirection, alertThreshold, alertMargin, alertAge, addAlert, removeAlert })
+            transientControls.Add(draft);
         alertFlow.Controls.Add(Row(Loc.IsGreek ? "Περιθώριο επανόπλισης (μονάδες ή ποσοστιαίες μονάδες)" : "Re-arm margin (units or percentage points)", alertMargin, 330));
         alertFlow.Controls.Add(Row(Loc.IsGreek ? "Μέγιστη ηλικία τιμής (λεπτά, 0 = χωρίς όριο)" : "Maximum quote age (minutes, 0 = unlimited)", alertAge, 330));
         alertCard.Controls.Add(alertFlow);
@@ -180,7 +183,7 @@ public sealed partial class SettingsPanel
         if (alertInstrument is null || alertInstrument.IsDisposed) return;
         var choices = workWatch.Where(w => w.Enabled).ToList();
         var signature = string.Join("|", choices.Select(c => c.Source + ":" + c.Market + ":" + c.Code));
-        if (signature == alertChoicesSignature) return;
+        if (signature == alertChoicesSignature && alertInstrument.Count == choices.Count) return;
         alertChoicesSignature = signature;
         alertChoices = choices;
         alertInstrument.SetItems(choices.Select(c => string.IsNullOrEmpty(c.Symbol) ? c.DisplayName(Loc.IsGreek) : c.Symbol + " — " + c.DisplayName(Loc.IsGreek)), choices.Count > 0 ? 0 : -1);

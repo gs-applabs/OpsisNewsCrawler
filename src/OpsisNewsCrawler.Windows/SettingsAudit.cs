@@ -16,7 +16,7 @@ public static class SettingsAudit
     private static readonly HashSet<string> Skipped = new(StringComparer.Ordinal) { "startWithWindows" };
 
     // Helper controls of forms (add a price alert, pick a market, pick a preset): they edit a list or a temporary choice, not a stored setting.
-    private static readonly HashSet<string> UiOnly = new(StringComparer.Ordinal) { "alertDirection", "alertInstrument", "alertMetric", "evidenceFilter", "livePriority", "marketCombo", "presets", "worldContinent", "worldCountry", "worldFeedContinent", "worldFeedCountry" };
+    private static readonly HashSet<string> UiOnly = new(StringComparer.Ordinal) { "alertAge", "alertDirection", "alertInstrument", "alertMetric", "evidenceFilter", "livePriority", "marketCombo", "presets", "worldContinent", "worldCountry", "worldFeedContinent", "worldFeedCountry" };
 
     /// <summary>Runs the audit and writes the report; returns true when nothing is wrong (used as the exit code of the command and by CI).</summary>
     public static bool Run(TickerHost host, string reportPath)
@@ -63,7 +63,14 @@ public static class SettingsAudit
         {
             if (!panel.SelectPage(section) || panel.SelectedAboutSection != section)
             { errors++; report.AppendLine($"ERROR     about section {section} not reachable"); }
-            else report.AppendLine($"OK        about section {section} reachable");
+            else
+            {
+                panel.SelectPage("instructions");
+                var button = panel.Controls.Find("about-" + section, true).Single();
+                typeof(Control).GetMethod("OnClick", flags)!.Invoke(button, new object[] { EventArgs.Empty });
+                if (panel.SelectedAboutSection != section) { errors++; report.AppendLine($"ERROR     about button {section}"); }
+                else report.AppendLine($"OK        about section {section} reachable and button works");
+            }
         }
         panel.SelectTab(0);
         // Check the actual host-to-window route, not just selected indices in the settings UI.
@@ -100,6 +107,8 @@ public static class SettingsAudit
         }
         try { errors += AuditTopicButtons(panel, host, report); }
         catch (Exception ex) { errors++; report.AppendLine($"ERROR     topic button audit: {ex.GetType().Name}: {ex.Message}"); }
+        try { errors += AuditPriceAlertButtons(panel, host, report); }
+        catch (Exception ex) { errors++; report.AppendLine($"ERROR     price alert button audit: {ex}"); }
         foreach (var field in fields)
         {
             var control = field.GetValue(panel);
@@ -223,6 +232,58 @@ public static class SettingsAudit
         finally
         {
             host.Config.TopicWatches = saved;
+            host.SaveConfig();
+            panel.LoadFromConfig();
+            panel.SelectTab(0);
+        }
+        return failed;
+    }
+
+    private static int AuditPriceAlertButtons(SettingsPanel panel, TickerHost host, StringBuilder report)
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        T Field<T>(string name) => (T)typeof(SettingsPanel).GetField(name, flags)!.GetValue(panel)!;
+        var savedAlerts = host.Config.PriceAlerts.Select(a => a.Clone()).ToList();
+        var savedWatch = host.Config.Watchlist.Select(a => a.Clone()).ToList();
+        int failed = 0;
+        void Check(string name, bool ok)
+        {
+            if (!ok) failed++;
+            report.AppendLine($"{(ok ? "OK       " : "ERROR    ")} {name}");
+        }
+        void Click(string name) =>
+            typeof(Control).GetMethod("OnClick", flags)!.Invoke(panel.Controls.Find(name, true).Single(), new object[] { EventArgs.Empty });
+        try
+        {
+            host.Config.PriceAlerts = new();
+            if (!host.Config.Watchlist.Any(w => w.Enabled))
+                host.Config.Watchlist = QuoteInstrument.Defaults().Take(1).Select(w => { var c = w.Clone(); c.Enabled = true; return c; }).ToList();
+            panel.LoadFromConfig();
+            if (!panel.SelectPage("markets")) throw new InvalidOperationException("Markets page missing");
+            var instrument = Field<FlatComboBox>("alertInstrument");
+            instrument.SelectedIndex = 0;
+            Field<FlatComboBox>("alertMetric").SelectedIndex = 0;
+            Field<FlatComboBox>("alertDirection").SelectedIndex = 0;
+            Field<FlatText>("alertThreshold").Value = "-1";
+            Click("addPriceAlert");
+            Check("price alert: rejects invalid threshold", Field<List<PriceAlert>>("workAlerts").Count == 0);
+            Field<FlatText>("alertThreshold").Value = "123.45";
+            Field<FlatText>("alertMargin").Value = "0.5";
+            Field<FlatNumber>("alertAge").Value = 15;
+            Click("addPriceAlert");
+            panel.FlushPendingChanges();
+            var a = host.Config.PriceAlerts.Single();
+            Check("price alert: persists threshold, margin and age", a.Threshold == 123.45m && a.RearmMargin == 0.5m && a.MaxAgeMinutes == 15);
+            panel.LoadFromConfig();
+            Field<FlatList>("alertList").SelectedIndex = 0;
+            Click("removePriceAlert");
+            panel.FlushPendingChanges();
+            Check("price alert: deletion persists", host.Config.PriceAlerts.Count == 0);
+        }
+        finally
+        {
+            host.Config.PriceAlerts = savedAlerts;
+            host.Config.Watchlist = savedWatch;
             host.SaveConfig();
             panel.LoadFromConfig();
             panel.SelectTab(0);

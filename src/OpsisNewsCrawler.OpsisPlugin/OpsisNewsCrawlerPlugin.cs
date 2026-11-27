@@ -109,7 +109,7 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
         Version,
         "Μπάρα ειδήσεων και τιμών για την επιφάνεια εργασίας: RSS ανά κατηγορία, τιμές Euronext Athens, μετάλλων και πετρελαίου, δύο μπάρες.",
         "News and price bar for the desktop: RSS per category, Euronext Athens, metals and oil prices, two bars.",
-        "Opsis Team",
+        "gs-applabs",
         "MIT",
         new[]
         {

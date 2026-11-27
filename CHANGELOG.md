@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.30.0 — candidate maintenance (2026-11-27)
+
+- Reorganized settings and fixed independent taskbar background material selection, primary/secondary appearance routing, visibility recovery, and repeated compositor updates. Added real HWND and UI action regression checks.
+- Preserved topic identities, improved RSS timeouts and redirects, and hardened live previews.
+- Unified Help / Instructions, License and Version History in the GearWin layout; localized navigation and current candidate history, single embedded repository MIT license, keyboard F1. Candidate changes are not a separate release; verification is tracked in the quality audit.
+
 ### 0.30.0 — 2026-11-26: analytics (P2 of the backlog); includes the news-intelligence work below, which was planned as 0.29.0 and not released on its own
 
 One Analytics window (Intelligence centre) over data the program already holds; no new provider, scheduler or cache except the opt-in archive. Implemented with unit tests and checked as rendered images with sample data (`--snapshot-analytics`), not manually on Windows.
