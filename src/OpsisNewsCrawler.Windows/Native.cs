@@ -237,6 +237,9 @@ internal static class Native
         var taskbar = GetTaskbarHandle();
         if (taskbar == IntPtr.Zero || !IsTaskbarCovering(hwnd)) return;
         var previous = GetWindow(taskbar, 3 /* GW_HWNDPREV */);
+        // Insert after the nearest topmost predecessor; never demote our own topmost flag.
+        while (previous != IntPtr.Zero && (GetWindowLongEx(previous, -20) & 0x8) == 0)
+            previous = GetWindow(previous, 3);
         SetWindowPos(hwnd, previous == IntPtr.Zero ? new IntPtr(-1) : previous, 0, 0, 0, 0, 1 | 2 | 0x10);
     }
 
@@ -317,7 +320,7 @@ internal static class Native
     private struct WindowCompositionAttributeData { public int Attribute; public IntPtr Data; public int SizeOfData; }
     [DllImport("user32.dll")] private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
 
-    private static void SetAccent(IntPtr hwnd, int state, int gradientColor)
+    private static bool SetAccent(IntPtr hwnd, int state, int gradientColor)
     {
         var policy = new AccentPolicy { AccentState = state, GradientColor = gradientColor };
         var size = Marshal.SizeOf(policy);
@@ -326,9 +329,9 @@ internal static class Native
         {
             Marshal.StructureToPtr(policy, ptr, false);
             var data = new WindowCompositionAttributeData { Attribute = 19, Data = ptr, SizeOfData = size }; // WCA_ACCENT_POLICY
-            SetWindowCompositionAttribute(hwnd, ref data);
+            return SetWindowCompositionAttribute(hwnd, ref data) != 0;
         }
-        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return false; }
         finally { Marshal.FreeHGlobal(ptr); }
     }
 
@@ -343,7 +346,7 @@ internal static class Native
     /// <paramref name="tint"/> the colour and <paramref name="alpha"/> (0-255) how strong it is; alpha 0 = no tint at all, so the
     /// taskbar shows through unchanged. The window content (text, logos) is never affected.
     /// </summary>
-    internal static void SetBackdrop(IntPtr hwnd, string style, Color tint, int alpha) =>
+    internal static bool SetBackdrop(IntPtr hwnd, string style, Color tint, int alpha) =>
         SetAccent(hwnd, BackdropState(style), (Math.Clamp(alpha, 0, 255) << 24) | (tint.B << 16) | (tint.G << 8) | tint.R); // ABGR
 
     /// <summary>

@@ -117,6 +117,15 @@ public sealed class TickerWindow : Form
     private string themeModeName = "system";
     private string colorMode = "theme";
     private string backdropStyle = "acrylic";
+    private (IntPtr Handle, string Style, int Tint, int Alpha)? appliedBackdrop;
+
+    private void ApplyBackdrop(string style, Color tint, int alpha)
+    {
+        if (!IsHandleCreated) return;
+        var next = (Handle, style, tint.ToArgb(), alpha);
+        if (appliedBackdrop == next) return;
+        if (Native.SetBackdrop(Handle, style, tint, alpha)) appliedBackdrop = next;
+    }
     private Color customColor = Color.FromArgb(0x4A, 0x90, 0xD9);
 
     public event Action? RefreshRequested;
@@ -420,6 +429,7 @@ public sealed class TickerWindow : Form
 
     protected override void OnHandleCreated(EventArgs e)
     {
+        appliedBackdrop = null;
         ApplyShapeRegion();   // the shape was chosen before the window existed
         base.OnHandleCreated(e);
         Native.MarkNoSnap(Handle); // DeskZones must not snap the strip while the user moves it
@@ -428,6 +438,7 @@ public sealed class TickerWindow : Form
 
     protected override void OnHandleDestroyed(EventArgs e)
     {
+        appliedBackdrop = null;
         Native.ClearNoSnap(Handle);
         base.OnHandleDestroyed(e);
     }
@@ -535,7 +546,7 @@ public sealed class TickerWindow : Form
     /// <summary>The background may have changed (position, theme, wallpaper, display): measure once, after things have settled.</summary>
     private void RequestSample()
     {
-        if (IsDisposed || !AutoTextActive) { sampleSlow.Stop(); sampleDebounce.Stop(); return; }
+        if (IsDisposed || !running || !Visible || !AutoTextActive) { sampleSlow.Stop(); sampleDebounce.Stop(); return; }
         WireSampling();
         sampleDebounce.Stop();
         sampleDebounce.Start();
@@ -616,7 +627,7 @@ public sealed class TickerWindow : Form
             var hoverOverlay = light ? Color.FromArgb(34, 0, 0, 0) : Color.FromArgb(48, 255, 255, 255);
             canvas.SetLook(text, tintSource, hoverOverlay, text, !light);
             canvasB.SetLook(text, tintSource, hoverOverlay, text, !light);
-            if (IsHandleCreated) Native.SetBackdrop(Handle, backdropStyle, tint, (int)Math.Round(255 * Math.Clamp(Theme.Opacity, 0.3, 1.0)));
+            ApplyBackdrop(backdropStyle, tint, (int)Math.Round(255 * Math.Clamp(Theme.Opacity, 0.3, 1.0)));
             return;
         }
 
@@ -637,7 +648,7 @@ public sealed class TickerWindow : Form
                 canvas.SetLook(st.Text, st.SourceText, st.HoverOverlay, st.Text, darkSurface);
                 canvasB.SetLook(st.Text, st.SourceText, st.HoverOverlay, st.Text, darkSurface);
             }
-            if (IsHandleCreated) Native.SetBackdrop(Handle, material, Color.Black, 0);
+            ApplyBackdrop(material, Color.Black, 0);
             return;
         }
 
@@ -646,7 +657,7 @@ public sealed class TickerWindow : Form
             // The bar on the desktop looks like the Opsis DeskStrip: the same dark glass (blur behind, tint 0x202228 at 40 %), white text.
             canvas.SetLook(Color.White, Color.FromArgb(150, 205, 255), Color.FromArgb(48, 255, 255, 255), Color.White, true);
             canvasB.SetLook(Color.White, Color.FromArgb(150, 205, 255), Color.FromArgb(48, 255, 255, 255), Color.White, true);
-            if (IsHandleCreated) Native.SetBackdrop(Handle, "blur", Color.FromArgb(0x28, 0x22, 0x20), 0x66);
+            ApplyBackdrop("blur", Color.FromArgb(0x28, 0x22, 0x20), 0x66);
             return;
         }
 
@@ -666,7 +677,7 @@ public sealed class TickerWindow : Form
             var baseColor = Theme.IsDark ? Color.FromArgb(0x20, 0x20, 0x20) : Color.FromArgb(0xF3, 0xF3, 0xF3);
             // Dark text needs a light surface behind it: the light theme never gets more transparent than ~75 %.
             var (glass, glassAlpha) = Native.GlassTint(baseColor, Theme.Accent, Theme.Opacity, Theme.IsDark ? 18 : 0xC0);
-            Native.SetBackdrop(Handle, backdropStyle, glass, glassAlpha);
+            ApplyBackdrop(backdropStyle, glass, glassAlpha);
         }
     }
 
@@ -896,7 +907,7 @@ public sealed class TickerWindow : Form
             HidePreview();
             Hide();
         }
-        else if (!fullscreen && !Visible && !hiddenByTaskbar)
+        else if (!fullscreen && !Visible && !hiddenByTaskbar && (!integrated || Native.GetTaskbarHandle() != IntPtr.Zero))
         {
             Reposition();
             Show();
@@ -1123,6 +1134,7 @@ public sealed class TickerWindow : Form
                 measurementGeneration++;
                 autoHide = Native.IsTaskbarAutoHide();
                 lastTaskbarStyle = "";
+                appliedBackdrop = null;
             }
             var cloaked = autoHide && Native.IsTaskbarHiddenByAutoHide();
             if (cloaked != hiddenByTaskbar)
@@ -1172,7 +1184,12 @@ public sealed class TickerWindow : Form
             var flyout = Native.IsShellFlyoutActive();
             var todo = TaskbarMaintenance.Decide(taskbarTick, style != lastTaskbarStyle, flyout, taskbarTick % TaskbarMaintenance.TopCheckEvery != 0 || !Native.IsTaskbarCovering(Handle));
             if (todo.KeepOnTop) Native.RestoreAboveTaskbar(Handle);
-            if (todo.ApplyLook) { ApplyLook(); lastTaskbarStyle = style; }
+            if (todo.ApplyLook)
+            {
+                // Rare recovery is deliberate; normal refreshes never reapply identical composition.
+                if (taskbarTick % TaskbarMaintenance.LookRefreshEvery == 0) appliedBackdrop = null;
+                ApplyLook(); lastTaskbarStyle = style;
+            }
             if (todo.Reposition) Reposition();
             if (!flyout && TaskbarAutoDetect && !measuring && (taskbarTick % 66 == 2 || measuredSpan is null && taskbarTick % 10 == 2))
                 MeasureTaskbarInBackground();
@@ -1344,9 +1361,15 @@ public sealed class TickerWindow : Form
 
     public void StartTicker()
     {
+        if (running) return;
         running = true;
+        autoHide = Native.IsTaskbarAutoHide();
+        var integrated = position == TickerPosition.TaskbarIntegrated;
+        var hidden = integrated && autoHide && Native.IsTaskbarHiddenByAutoHide();
+        if (hiddenByTaskbar != hidden) { hiddenByTaskbar = hidden; HiddenByTaskbarChanged?.Invoke(); }
         Reposition();
-        Show();
+        if (!hidden && (!integrated || Native.GetTaskbarHandle() != IntPtr.Zero)) Show();
+        RequestSample();
         taskbarTimer.Start();
         stepper.Restart(clock.Elapsed.TotalSeconds);
         focusTimer.Start();
@@ -1360,7 +1383,7 @@ public sealed class TickerWindow : Form
         slideActive = false;
         fullscreenObserved = false;
         hiddenByFullscreen = false;
-        hiddenByTaskbar = false;
+        if (hiddenByTaskbar) { hiddenByTaskbar = false; HiddenByTaskbarChanged?.Invoke(); }
         animToY = int.MinValue;
         taskbarTimer.Stop();
         sampleDebounce.Stop();
@@ -1373,6 +1396,7 @@ public sealed class TickerWindow : Form
         HidePreview();
         scrollTimer.Stop();
         focusTimer.Stop();
+        toastTimer.Stop();
         Hide();
     }
 

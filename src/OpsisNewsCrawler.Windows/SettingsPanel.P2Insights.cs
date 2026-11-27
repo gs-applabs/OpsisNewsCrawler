@@ -26,9 +26,12 @@ public sealed partial class SettingsPanel
         topicName=new FlatText { Width=210 };
         topicTerms=new FlatText { Width=300 };
         topicRegion=new FlatText { Width=150 };
-        var inputs=new FlowLayoutPanel { AutoSize=true, FlowDirection=FlowDirection.LeftToRight, WrapContents=true, MaximumSize=new Size(740,0) };
-        inputs.Controls.Add(topicName); inputs.Controls.Add(topicTerms); inputs.Controls.Add(topicRegion);
-        inner.Controls.Add(inputs);
+        topicName.AccessibleName = L("col.name");
+        topicTerms.AccessibleName = Loc.IsGreek ? "Λέξεις-κλειδιά (με κόμμα)" : "Keywords (comma-separated)";
+        topicRegion.AccessibleName = Loc.IsGreek ? "Περιοχή (προαιρετικά)" : "Region (optional)";
+        inner.Controls.Add(Row(topicName.AccessibleName, topicName, 235));
+        inner.Controls.Add(Row(topicTerms.AccessibleName, topicTerms, 235));
+        inner.Controls.Add(Row(topicRegion.AccessibleName, topicRegion, 235));
         var add=new FlatButton { Text=Loc.IsGreek ? "Προσθήκη θέματος" : "Add topic" };
         add.Click += (_,_) =>
         {

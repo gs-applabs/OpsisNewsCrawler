@@ -34,6 +34,21 @@ internal sealed class FlatNav : Control
     public event EventHandler? SelectedIndexChanged;
 
     private Control? badge;
+    private Control? footer;
+    private bool footerShown;
+    public void SetFooter(Control value)
+    {
+        footer = value;
+        Controls.Add(value);
+        LayoutPages();
+    }
+
+    public void ShowFooter(bool visible)
+    {
+        if (footerShown == visible) return;
+        footerShown = visible;
+        LayoutPages();
+    }
 
     /// <summary>A small control (the animated program icon) shown in the title band of the content pane.</summary>
     public Control? Badge
@@ -181,7 +196,13 @@ internal sealed class FlatNav : Control
     private void LayoutPages()
     {
         search.Location = new Point(RailLeft + 14, SearchTop);
-        foreach (var p in pages) p.SetBounds(ContentLeft, TitleHeight, ContentWidth, Math.Max(0, Height - TitleHeight));
+        var footerHeight = footerShown && footer is not null ? Math.Min(footer.Height, Math.Max(0, Height - TitleHeight - 100)) : 0;
+        foreach (var p in pages) p.SetBounds(ContentLeft, TitleHeight, ContentWidth, Math.Max(0, Height - TitleHeight - footerHeight));
+        if (footer is not null)
+        {
+            footer.Visible = footerHeight > 0;
+            if (footerHeight > 0) footer.SetBounds(ContentLeft, Height - footerHeight, ContentWidth, footerHeight);
+        }
         if (badge is not null)
             badge.Location = new Point(Rtl ? ContentLeft + 22 : ContentLeft + ContentWidth - badge.Width - 22, Math.Max(2, (TitleHeight - badge.Height) / 2 - 2));
     }
@@ -318,7 +339,8 @@ internal sealed class FlatNav : Control
         // the title of the page that is shown
         if (selected >= 0)
         {
-            var title = new Rectangle(ContentLeft + 22, 10, Math.Max(0, ContentWidth - 44), 34);
+            var reserve = badge is null ? 0 : badge.Width + 12;
+            var title = new Rectangle(ContentLeft + 22 + (Rtl ? reserve : 0), 10, Math.Max(0, ContentWidth - 44 - reserve), 34);
             TextRenderer.DrawText(g, SelectedTitle, TitleFont, title, Theme.Text,
                 rtlFlag | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
             using var line = new Pen(Theme.Border);

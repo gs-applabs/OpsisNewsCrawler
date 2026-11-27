@@ -340,7 +340,7 @@ public sealed partial class SettingsPanel : UserControl
     {
         if (!Visible || !built || barPreview is null || barPreview.IsDisposed || tabs is null) return;
         var show = previewPages.Contains(tabs.SelectedIndex);
-        if (barPreview.Visible != show) barPreview.Visible = show;
+        tabs.ShowFooter(show);
         if (!show) return;
         var dark = themeMode.SelectedIndex switch { 1 => false, 2 => true, 3 or 4 or 6 => true, 5 => false, _ => Theme.IsDark };
         barPreview.SetState(new BarPreviewState(
@@ -418,9 +418,10 @@ public sealed partial class SettingsPanel : UserControl
         bar.Controls.Add(status);
         // The lifetime-owned auto-apply handler is registered once in the constructor.
 
-        barPreview = new BarPreview { Dock = DockStyle.Bottom, Visible = false };
+        barPreview = new BarPreview { Visible = false };
+        tabs.SetFooter(barPreview);
+        tabs.SelectedIndexChanged += (_, _) => UpdatePreview();
         Controls.Add(tabs);
-        Controls.Add(barPreview);
         Controls.Add(bar);
         built = true;
 
