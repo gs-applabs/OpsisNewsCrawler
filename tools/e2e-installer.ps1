@@ -300,17 +300,60 @@ Start-Sleep -Seconds 2
 # the audits run with a throw-away configuration (isolated registry), once per forced tier
 foreach ($tier in @('', 'Low', 'High')) {
     $env:OPSISNEWSCRAWLER_FORCE_TIER = $tier
-    foreach ($kind in 'audit-settings', 'audit-layout') {
+    foreach ($kind in 'audit-settings', 'audit-layout', 'audit-scroll') {
         $cfg = Join-Path $Out "$kind-$tier.json"
         $rep = Join-Path $Out "$kind-$tier.txt"
         Set-Content $cfg '{"Language":"en","Position":"Top"}' -Encoding utf8
         $p = Start-Process -FilePath $exe -ArgumentList "--$kind", "`"$rep`"", '--config', "`"$cfg`"" -PassThru
-        if (-not $p.WaitForExit(600000)) { $p.Kill() }
-        # The verdict is the report (what the audit found); the exit code of the process is shown too. A clean report with an exit code other than 0
-        # (seen once on a runner, the process ended badly after writing it) is a warning, not a finding about the settings.
+        if (-not $p.WaitForExit(600000)) { $p.Kill(); $p.WaitForExit(); throw "Timeout: $kind tier=$tier" }
+        # Both report and process must be clean; a crash after a report is still a failure.
         $text = if (Test-Path $rep) { Get-Content $rep -Raw } else { '' }
         $clean = if ($kind -eq 'audit-settings') { $text -match '0 change nothing, 0 not shown again' -and $text -match 'keyboard checks failed: 0' -and $text -notmatch '(?m)^ERROR' }
-                 else { $text -match 'nothing sticks out' }
+                 elseif ($kind -eq 'audit-layout') { $text -match 'nothing sticks out' }
+                 else { $text -match '(?m)^Scroll audit: [1-9][0-9]* pages that scroll, [1-9][0-9]* checks, 0 moved, 0 errors\s* {
+            Write-Host "::group::DIAGNOSTIC $kind tier=$tier exit=$($p.ExitCode)"
+            Write-Host "Report exists: $(Test-Path $rep); characters: $($text.Length)"
+            if ($text) { Write-Host ($text.Substring(0, [Math]::Min(6000, $text.Length))) }
+            else { Write-Host 'Report file is absent or empty: possible command-line/config/installed runtime issue.' }
+            if (Test-Path $log) {
+                Write-Host 'Recent process log lines:'
+                Get-Content $log -Tail 35 | Out-Host
+            }
+            Write-Host "::endgroup::"
+        }
+        Check $clean "$kind with tier '$(if ($tier) { $tier } else { 'detected' })' reports nothing wrong (exit code $($p.ExitCode))"
+    }
+}
+$env:OPSISNEWSCRAWLER_FORCE_TIER = ''
+if (Test-Path $log) {
+    $forced = @(Select-String -Path $log -Pattern 'Performance tier: (Low|High) \(forced\)').Count
+    Check ($forced -ge 2) 'a forced Low and a forced High tier were both applied (crawler.log)'
+    Copy-Item $log (Join-Path $Out 'crawler.log') -ErrorAction SilentlyContinue
+}
+
+# ---- 4. uninstall -----------------------------------------------------------------------------------------------------------------------
+$uninstaller = Join-Path $MachineDir 'unins000.exe'
+Check (Test-Path $uninstaller) 'the uninstaller is there'
+$code = Run-Setup $uninstaller @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') 'uninstall.log'
+for ($i = 0; $i -lt 60 -and (Test-Path $MachineDir); $i++) { Start-Sleep -Seconds 1 }       # the uninstaller hands over to a helper and returns early
+Check (-not (Test-Path (Join-Path $MachineDir 'OpsisNewsCrawler.exe'))) 'the program file is gone'
+Check (-not (Test-Path $MachineDir) -or @(Get-ChildItem $MachineDir -Recurse -File -ErrorAction SilentlyContinue).Count -eq 0) 'no files are left in the Program Files folder'
+Check (-not (Reg-Key 'HKLM' $UninstallKey)) 'the uninstall entry is gone (HKLM)'
+Check (-not (Test-Path $menu)) 'the Start menu folder is gone'
+Check ($null -eq (Reg-Value 'HKLM' $RunKey 'Opsis News Crawler') -and $null -eq (Reg-Value 'HKCU' $RunKey 'Opsis News Crawler')) 'no start-up value is left (HKLM / HKCU Run)'
+Check (@(Programs-Copies).Count -eq 0) 'no OpsisNewsCrawler.exe is left anywhere in the program folders'
+Check (Test-Path $SettingsDir) 'the settings in %AppData% are kept by a silent uninstall (by design)'
+
+# ---- limits -----------------------------------------------------------------------------------------------------------------------------
+Note 'the UAC prompt (the runner is an administrator without prompts), SmartScreen, a real graphics card, several monitors and per-monitor DPI cannot be tested on a runner'
+$report.Add('')
+$report.Add("**Result: $(if ($failures -eq 0) { 'all checks passed' } else { "$failures check(s) FAILED" })**")
+$report | Set-Content (Join-Path $Out 'report.md')
+if ($env:GITHUB_STEP_SUMMARY) { $report | Add-Content $env:GITHUB_STEP_SUMMARY }
+if ($failures -gt 0) { exit 1 }
+exit 0   # without this the exit code of the last native command (taskkill, the uninstaller) leaks out as the result of the script
+ -and $text -notmatch '(?m)^(MOVED|ERROR)' }
+        $clean = $clean -and ($p.ExitCode -eq 0)
         if (-not $clean) {
             Write-Host "::group::DIAGNOSTIC $kind tier=$tier exit=$($p.ExitCode)"
             Write-Host "Report exists: $(Test-Path $rep); characters: $($text.Length)"
