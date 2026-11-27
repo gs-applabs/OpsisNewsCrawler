@@ -23,6 +23,11 @@
 
 **[Browse application screenshots / Προβολή στιγμιοτύπων](docs/product-snapshots/README.md)** · [Capture workflow / Μηχανισμός λήψης](../../actions/workflows/product-snapshots.yml)
 
+**[30-second video tour](https://github.com/gs-applabs/gs-applabs/blob/main/assets/showcase/crawler.mp4) · [Animated screenshot preview](https://github.com/gs-applabs/gs-applabs/blob/main/assets/showcase/crawler.gif) · [Social preview](https://github.com/gs-applabs/gs-applabs/blob/main/assets/showcase/crawler-social.png)**
+
+<sub>Real screenshot slideshows, not live recordings. / Παρουσιάσεις πραγματικών στιγμιοτύπων, όχι ζωντανή καταγραφή.</sub>
+
+
 <sub>Application-rendered previews, including synthetic analytics and hazard illustrations. / Πραγματική απεικόνιση με ενδεικτικά δεδομένα αναλύσεων και κινδύνων.</sub>
 
 ## At a glance / Με μια ματιά
