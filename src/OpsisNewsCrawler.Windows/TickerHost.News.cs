@@ -9,7 +9,7 @@ public sealed partial class TickerHost
 {
     private async Task RefreshExtraNewsAsync()
     {
-        if (disposed || !started || refreshingExtra) return;
+        if (disposed || !started || !NeedsNews || refreshingExtra) return;
         PruneExtraCategories();
         var wanted = ExtraNewsCategories();
         if (wanted.Count == 0) return;
@@ -126,7 +126,7 @@ public sealed partial class TickerHost
             if (pendingForced && !disposed && started)
             {
                 pendingForced = false;
-                _ = RefreshAsync(force: true);
+                RequestRefresh("news", () => RefreshAsync(force: true), latest: true);
             }
         }
     }

@@ -393,8 +393,15 @@ internal sealed class TickerCanvas : Control
         Invalidate();
     }
 
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        if (!IsDisposed && Visible && showIcons) RequestIcons();
+    }
+
     private void RequestIcons()
     {
+        if (IsDisposed || !Visible || !IsHandleCreated || !showIcons) return;
         foreach (var host in entries.Where(e => e.Item.Kind == NewsItemKind.News).Select(e => e.Host).Where(h => h.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             FaviconCache.Request(host, () =>

@@ -190,7 +190,7 @@ public sealed class AppConfig
     public bool WelcomeDisabled { get; set; }
     /// <summary>Version for which the Opsis family window was offered after the welcome guide.</summary>
     public string SuiteOfferedVersion { get; set; } = "";
-    /// <summary>1 = the update logic of 0.13.6 (check on by default); older settings files get the new default once.</summary>
+    /// <summary>1 = current update logic. Preserve an explicit user choice when migrating older settings.</summary>
     public int UpdateLogicVersion { get; set; }
     public DateTimeOffset LastUpdateCheck { get; set; } = DateTimeOffset.MinValue;
 
@@ -548,7 +548,7 @@ public sealed class AppConfig
 
     internal void Normalize()
     {
-        if (UpdateLogicVersion < 1) { CheckForUpdates = true; UpdateLogicVersion = 1; }
+        if (UpdateLogicVersion < 1) UpdateLogicVersion = 1;
         NewsRefreshSeconds = RefreshIntervalSeconds;
         PerformanceMode = PerformanceClassifier.ModeText(PerformanceClassifier.ParseMode(PerformanceMode));
         NetworkCostMode = NetworkCostMode == "metered" ? "metered" : "normal";   // "auto" | "low" | "balanced" | "high"

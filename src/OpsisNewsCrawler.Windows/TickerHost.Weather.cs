@@ -208,7 +208,7 @@ public sealed partial class TickerHost
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(60), token);
-            if (!disposed && started && epoch == startEpoch && NeedsWeather) _ = RefreshWeatherAsync();
+            if (!disposed && started && epoch == startEpoch && NeedsWeather) RequestRefresh("weather", RefreshWeatherAsync);
         }
         catch (OperationCanceledException)
         {

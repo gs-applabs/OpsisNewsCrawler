@@ -347,19 +347,20 @@ public sealed partial class TickerHost : IDisposable
 
         refreshTimer.Tick += (_, _) =>
         {
-            // While another program is in front the ticker is frozen; it refreshes when the desktop is back.
-            if (!Window.IsPausedByForeground) refreshScheduler.TryRun("news", () => RefreshAsync(force: false), lifetimeToken);
+            // Visible widgets still need their own data if a foreground application freezes a ticker.
+            if (!Window.IsPausedByForeground || newsWidgetUsers > 0) RequestRefresh("news", () => RefreshAsync(force: false));
         };
         quoteTimer.Tick += (_, _) =>
         {
             // Re-evaluate the interval as the exchange session opens/closes.
             quoteTimer.Interval = PerformanceProfile.Current.Scaled(GetQuoteRefreshIntervalMilliseconds() / 1000) * 1000;
-            if (!Window.IsPausedByForeground) refreshScheduler.TryRun("quotes", () => RefreshQuotesAsync(), lifetimeToken);
+            if (!Window.IsPausedByForeground || marketWidgetUsers > 0 || portfolioOpen || analysis is { IsDisposed: false } || Config.PriceAlerts.Any(a => a.Enabled))
+                RequestRefresh("quotes", () => RefreshQuotesAsync());
         };
         Loc.Changed += OnLanguageChanged;
-        weatherTimer.Tick += (_, _) => refreshScheduler.TryRun("weather", RefreshWeatherAsync, lifetimeToken);
-        hazardTimer.Tick += (_, _) => refreshScheduler.TryRun("hazards", RefreshHazardsAsync, lifetimeToken);
-        alertTimer.Tick += (_, _) => refreshScheduler.TryRun("weather-alerts", CheckWeatherAlertsAsync, lifetimeToken);
+        weatherTimer.Tick += (_, _) => RequestRefresh("weather", RefreshWeatherAsync);
+        hazardTimer.Tick += (_, _) => RequestRefresh("hazards", RefreshHazardsAsync);
+        alertTimer.Tick += (_, _) => RequestRefresh("weather-alerts", CheckWeatherAlertsAsync);
         snoozeTimer.Tick += (_, _) =>
         {
             snoozeTimer.Stop();
@@ -391,8 +392,8 @@ public sealed partial class TickerHost : IDisposable
         };
         w.RefreshRequested += () =>
         {
-            refreshScheduler.TryRun("news", () => RefreshAsync(force: false), lifetimeToken);
-            refreshScheduler.TryRun("quotes", () => RefreshQuotesAsync(), lifetimeToken);
+            RequestRefresh("news", () => RefreshAsync(force: false));
+            RequestRefresh("quotes", () => RefreshQuotesAsync());
         };
         w.ItemOpened += item =>
         {
@@ -500,7 +501,7 @@ public sealed partial class TickerHost : IDisposable
     private void OnLanguageChanged()
     {
         // Texts built from the language (placeholders, quote labels) are rebuilt.
-        if (started) _ = RefreshQuotesAsync(force: true);
+        if (started) RequestRefresh("quotes", () => RefreshQuotesAsync(force: true), latest: true);
         PushAll();
         UpdateMiniWeather();
     }
@@ -640,9 +641,9 @@ public sealed partial class TickerHost : IDisposable
             {
                 await Task.Delay(TimeSpan.FromSeconds(6));
                 if (disposed || !started) return;
-                _ = RefreshAsync(force: true);
-                _ = RefreshQuotesAsync();
-                _ = RefreshWeatherAsync();
+                RequestRefresh("news", () => RefreshAsync(force: true), latest: true);
+                RequestRefresh("quotes", () => RefreshQuotesAsync());
+                RequestRefresh("weather", RefreshWeatherAsync);
             }));
         }
         catch (InvalidOperationException) { }
@@ -958,8 +959,8 @@ public sealed partial class TickerHost : IDisposable
     public void Refresh()
     {
         if (disposed || !started) return;
-        _ = RefreshAsync(force: true);
-        _ = RefreshQuotesAsync(force: true);
+        RequestRefresh("news", () => RefreshAsync(force: true), latest: true);
+        RequestRefresh("quotes", () => RefreshQuotesAsync(force: true), latest: true);
     }
 
     public void SetMode(TickerMode mode) => SetCategory(mode.ToString());
@@ -987,8 +988,11 @@ public sealed partial class TickerHost : IDisposable
         State2.SetScrollOffset(0);
         allItems = new();
         newsFailedFeeds = new();
+        hasRealItems = false;
+        newsDataAt = null;
         if (NeedsActiveNews) LoadCachedNews();
-        _ = RefreshAsync(force: true);
+        ReconcileDemand();
+        RequestRefresh("news", () => RefreshAsync(force: true), latest: true);
     }
 
     public void SetPosition(TickerPosition position)
@@ -1032,13 +1036,39 @@ public sealed partial class TickerHost : IDisposable
     private bool NeedsWeatherAlerts => BarsOn && Config.WeatherAlertsEnabled && Config.BreakingEnabled;
 
     private readonly Dictionary<string, CancellationTokenSource> activeServices = new(StringComparer.Ordinal);
+    private string newsDemandSignature = "";
+    private bool reconcilingDemand;
+
+    private void RequestRefresh(string key, Func<Task> work, bool latest = false)
+    {
+        if (disposed || !started || !activeServices.TryGetValue(key, out var lease)) return;
+        if (latest) refreshScheduler.RunLatest(key, work, lease.Token);
+        else refreshScheduler.TryRun(key, work, lease.Token);
+    }
     private CancellationToken DemandToken(string key) =>
         activeServices.TryGetValue(key, out var source) ? source.Token : SessionToken;
 
     // One owner for refresh timers. No separate daemon and no dormant timer wakeups.
     private void ReconcileDemand()
     {
-        if (disposed) return;
+        if (disposed || reconcilingDemand) return;
+        reconcilingDemand = true;
+        try { ReconcileDemandCore(); }
+        finally { reconcilingDemand = false; }
+    }
+
+    private void ReconcileDemandCore()
+    {
+        // Category-only widgets must not fetch the unrelated primary category.
+        var signature = started && NeedsNews
+            ? (NeedsActiveNews ? Config.ActiveCategory : "") + "|" + string.Join("|", ExtraNewsCategories().OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+            : "";
+        if (!string.Equals(signature, newsDemandSignature, StringComparison.OrdinalIgnoreCase))
+        {
+            newsDemandSignature = signature;
+            if (activeServices.Remove("news", out var previous)) { previous.Cancel(); previous.Dispose(); }
+            PruneExtraCategories();
+        }
         void Sync(string key, System.Windows.Forms.Timer timer, bool wanted, Func<Task> refresh)
         {
             wanted &= started;
@@ -1055,7 +1085,7 @@ public sealed partial class TickerHost : IDisposable
             if (key == "news" && NeedsActiveNews && !hasRealItems) LoadCachedNews();
             if (key == "weather" && !hasWeather) LoadCachedWeather();
             if (key is "news" or "weather" && BarsOn) PushAll();
-            refreshScheduler.TryRun(key, refresh, lease.Token);
+            refreshScheduler.RunLatest(key, refresh, lease.Token);
         }
         Sync("news", refreshTimer, NeedsNews, () => RefreshAsync(force: true));
         Sync("quotes", quoteTimer, NeedsStocks, () => RefreshQuotesAsync());
@@ -1136,6 +1166,7 @@ public sealed partial class TickerHost : IDisposable
     public void NewsWidgetCategoryChanged()
     {
         if (disposed || !started || newsWidgetUsers == 0) return;
+        ReconcileDemand();
         var category = WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId;
         if (category.Length == 0 || Config.FindCategory(category) is null ||
             IsActiveCategory(category)) return;
@@ -1150,7 +1181,7 @@ public sealed partial class TickerHost : IDisposable
         if (extraNewsAt.TryGetValue(category, out var lastFetched) &&
             now - lastFetched.ToUniversalTime() < minGap) return;
         newsWidgetFetchAttempt[category] = now;
-        _ = RefreshExtraNewsAsync();
+        RequestRefresh("news", () => RefreshAsync(force: false));
     }
 
     // ---- no internet / a provider is down: the last stored data plus a message ----------------
@@ -1258,6 +1289,8 @@ public sealed partial class TickerHost : IDisposable
     private void PushAll()
     {
         if (disposed) return;
+        // A stopped/hidden main strip should not rebuild layouts or request icons.
+        if (started && !BarsOn) return;
         if (breakingActive && breakingItems.Count > 0)
         {
             // Urgent headlines take over the main bar until they are read or time out.
@@ -1471,7 +1504,7 @@ public sealed partial class TickerHost : IDisposable
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(60), token);
-            if (!disposed && started && epoch == startEpoch && BarsOn) _ = RefreshQuotesAsync();
+            if (!disposed && started && epoch == startEpoch && BarsOn) RequestRefresh("quotes", () => RefreshQuotesAsync());
         }
         catch (OperationCanceledException)
         {
@@ -1497,11 +1530,11 @@ public sealed partial class TickerHost : IDisposable
         portfolioOpen = open;
         if (!open) portfolio = null;
         ReconcileDemand();
-        if (open) _ = RefreshQuotesAsync(force: true);
+        if (open) RequestRefresh("quotes", () => RefreshQuotesAsync(force: true), latest: true);
     }
 
     /// <summary>Asks the price sources again now (also when no bar shows prices).</summary>
-    public void RefreshPortfolio() => _ = RefreshQuotesAsync(force: true);
+    public void RefreshPortfolio() => RequestRefresh("quotes", () => RefreshQuotesAsync(force: true), latest: true);
 
     /// <summary>Opens the portfolio window (one at a time) and brings it to the front.</summary>
     public void ShowPortfolio()

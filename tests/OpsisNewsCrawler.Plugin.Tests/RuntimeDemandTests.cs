@@ -28,8 +28,8 @@ public sealed class RuntimeDemandTests
                 host.Start();
                 Assert.Empty(host.ActiveRefreshServices);
                 Assert.False(host.HasActiveRefreshTimers);
-                Assert.False(host.AutomaticUpdatesActive);
-                Assert.False(host.MarketStoreInitialized);
+                Assert.True(!host.AutomaticUpdatesActive, "Automatic updates must stay disabled after migration");
+                Assert.True(!host.MarketStoreInitialized, "Disabled market feature must not load history");
                 host.Config.CheckForUpdates = true;
                 host.ApplyConfig();
                 Assert.True(host.AutomaticUpdatesActive);
