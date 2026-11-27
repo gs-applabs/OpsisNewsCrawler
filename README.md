@@ -1,3 +1,32 @@
+<p align="center"><img src="https://raw.githubusercontent.com/gs-applabs/gs-applabs/main/assets/projects/crawler.svg" width="100%" alt="OPSIS News Crawler — News, markets and weather"/></p>
+
+<p align="center"><strong>Follow news, markets and weather without leaving your Windows desktop.</strong><br/>Η ενημέρωση στο επίκεντρο της επιφάνειας εργασίας σου.</p>
+
+<p align="center"><a href="https://github.com/gs-applabs/OpsisNewsCrawler/releases/download/v0.30.0/OpsisNewsCrawler-Setup.exe"><img alt="Download v0.30.0" src="https://img.shields.io/badge/DOWNLOAD-v0.30.0-087EA4?style=for-the-badge"/></a> <a href="https://github.com/gs-applabs/OpsisNewsCrawler/releases/latest"><img alt="Release notes" src="https://img.shields.io/badge/RELEASE-NOTES-334155?style=for-the-badge"/></a></p>
+
+<p align="center"><a href="#at-a-glance--με-μια-ματιά">Overview / Επισκόπηση</a> · <a href="#full-documentation--αναλυτική-τεκμηρίωση">Full documentation / Τεκμηρίωση</a> · <a href="https://github.com/gs-applabs/OpsisNewsCrawler/issues">Support / Υποστήριξη</a> · <a href="https://github.com/gs-applabs">GS App Labs</a></p>
+
+## At a glance / Με μια ματιά
+
+| | What you can do / Τι μπορείς να κάνεις |
+|---|---|
+| **Live feeds / Ροές** | Desktop ticker, RSS and weather / Μπάρα ειδήσεων, RSS και καιρός |
+| **Intelligence / Πληροφόρηση** | Topic timelines, article comparison and search / Χρονολόγια, συγκρίσεις και αναζήτηση |
+| **Analytics / Αναλύσεις** | Market and news visualizations, optional local archive / Οπτικοποιήσεις και προαιρετικό αρχείο |
+
+### Get started / Ξεκίνημα
+
+- **Installer:** [OpsisNewsCrawler-Setup.exe](https://github.com/gs-applabs/OpsisNewsCrawler/releases/download/v0.30.0/OpsisNewsCrawler-Setup.exe) · [SHA-256](https://github.com/gs-applabs/OpsisNewsCrawler/releases/download/v0.30.0/OpsisNewsCrawler-Setup.exe.sha256)
+- **Requirements / Απαιτήσεις:** Windows 11 · .NET 11 Desktop Runtime · optional OPSIS host.
+- **What's new / Νέα έκδοση:** News intelligence, analytics and independent Chronikologio integration. / Νέο κέντρο πληροφόρησης και αναλύσεων.
+- **Known limits / Όρια:** Text heuristics are not fact-checking; market analytics are not investment advice. Interactive Windows acceptance testing is not complete. / Οι αναλύσεις δεν αποτελούν επαλήθευση ειδήσεων ή επενδυτική σύσταση.
+
+See the [published release](https://github.com/gs-applabs/OpsisNewsCrawler/releases/tag/v0.30.0) for verification details. Review installation prompts and compare the checksum before running the installer. / Δείτε τις σημειώσεις έκδοσης και επαληθεύστε το SHA-256 πριν από την εγκατάσταση.
+
+---
+
+## Full documentation / Αναλυτική τεκμηρίωση
+
 <p align="center"><img src="docs/img/icon-wide.png" width="560" alt="Opsis News Crawler"/></p>
 
 <h1 align="center">Opsis News Crawler</h1>
