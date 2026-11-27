@@ -130,6 +130,14 @@ public sealed class SettingsForm : Form
             DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
             bmp.Save(Path.Combine(folder, $"tab{i}.png"));
         }
+        foreach (var section in new[] { "license", "history" })
+        {
+            if (!panel.SelectPage(section)) continue;
+            Application.DoEvents();
+            using var bmp = new Bitmap(Width, Height);
+            DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
+            bmp.Save(Path.Combine(folder, $"about-{section}.png"));
+        }
         Hide();
     }
 

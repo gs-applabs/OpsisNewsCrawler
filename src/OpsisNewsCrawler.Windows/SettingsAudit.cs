@@ -59,6 +59,13 @@ public static class SettingsAudit
         material.SelectedIndex = originalMaterial;
         panel.LoadFromConfig();
         panel.SelectTab(0);
+        foreach (var section in new[] { "instructions", "license", "history" })
+        {
+            if (!panel.SelectPage(section) || panel.SelectedAboutSection != section)
+            { errors++; report.AppendLine($"ERROR     about section {section} not reachable"); }
+            else report.AppendLine($"OK        about section {section} reachable");
+        }
+        panel.SelectTab(0);
         // Check the actual host-to-window route, not just selected indices in the settings UI.
         var cfg = host.Config;
         var oldPosition = cfg.Position;

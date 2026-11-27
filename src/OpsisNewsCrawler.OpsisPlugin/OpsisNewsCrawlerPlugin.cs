@@ -113,10 +113,9 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
         "MIT",
         new[]
         {
-            new PluginAboutSection("Βοήθεια", "Help", AboutTexts.Help),
-            new PluginAboutSection("Οδηγίες χρήσης", "Instructions", AboutTexts.Instructions),
-            new PluginAboutSection("Ιστορικό εκδόσεων", "Version history", AboutTexts.History),
+            new PluginAboutSection("Βοήθεια / Οδηγίες", "Help / Instructions", AboutTexts.Guide),
             new PluginAboutSection("Άδεια χρήσης", "License", AboutTexts.License),
+            new PluginAboutSection("Ιστορικό εκδόσεων", "Version history", AboutTexts.History),
         });
 
     public IReadOnlyList<PluginMenuItem> GetTrayMenuItems() => BuildTrayMenu(

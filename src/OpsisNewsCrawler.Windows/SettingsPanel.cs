@@ -370,12 +370,14 @@ public sealed partial class SettingsPanel : UserControl
     {
         RightToLeft = Loc.IsRtl ? RightToLeft.Yes : RightToLeft.No;
         var selectedTab = built ? CurrentLeaf() : 0;
+        var aboutSection = selectedAboutSection;
         SuspendLayout();
         foreach (var c in Controls.Cast<Control>().ToList()) c.Dispose();
         Controls.Clear();
         dirtyTrackingAttached = false;
         Build();
         SelectTab(selectedTab);
+        if (showAboutTabs) SelectAboutSection(aboutSection);
         ResumeLayout(true);
     }
 
@@ -414,12 +416,11 @@ public sealed partial class SettingsPanel : UserControl
         info.Add(("dependencies", L("tab.dependencies"), BuildDependencies(), false));
         if (showAboutTabs)
         {
-            info.Add(("help", L("tab.help"), BuildInfoPage(() => AboutTexts.Help, host), false));
-            info.Add(("instructions", L("tab.instructions"), BuildInfoPage(() => AboutTexts.Instructions, host), false));
-            info.Add(("history", L("tab.history"), BuildInfoPage(() => AboutTexts.History), false));
-            info.Add(("license", L("tab.license"), BuildInfoPage(() => AboutTexts.License), false));
+            info.Add(("help", AboutTexts.HelpTitle, BuildAboutPage(), false));
         }
         AddGroup(Loc.T("pk.information"), info.ToArray());
+        if (showAboutTabs)
+            foreach (var alias in new[] { "instructions", "license", "history" }) pageIds[alias] = pageIds["help"];
 
         // Every change is saved by itself a moment after it is made (see AutoApply): there is no Apply button, and the window closes with its own X.
         // Export / import of the settings live on the General page (card "Backup of the settings").
@@ -460,6 +461,7 @@ public sealed partial class SettingsPanel : UserControl
     {
         if (!pageIds.TryGetValue(id, out var index)) return false;
         SelectTab(index);
+        if (id is "help" or "instructions" or "license" or "history") SelectAboutSection(id);
         return true;
     }
 
@@ -1185,25 +1187,86 @@ public sealed partial class SettingsPanel : UserControl
         UpdateStockStatus(CatalogFor(SelectedMic).Count);
     }
 
-    private static Control BuildInfoPage(Func<string> text, TickerHost? host = null)
+    private string selectedAboutSection = "instructions";
+    private readonly Dictionary<string, Control> aboutPages = new();
+    private readonly Dictionary<string, FlatButton> aboutButtons = new();
+
+    // Same three-section pattern as GearWin; shared controls, one destination, no extra background timer.
+    private Control BuildAboutPage()
+    {
+        aboutPages.Clear();
+        aboutButtons.Clear();
+        var page = new Panel { Padding = new Padding(8, 6, 8, 6) };
+        var body = new Panel { Dock = DockStyle.Fill };
+        var header = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true,
+            Padding = new Padding(8, 4, 8, 4) };
+        foreach (var (id, caption, text) in new (string, string, Func<string>)[]
+        {
+            ("instructions", AboutTexts.HelpTitle, () => AboutTexts.Guide),
+            ("license", L("tab.license"), () => AboutTexts.License),
+            ("history", L("tab.history"), () => AboutTexts.History)
+        })
+        {
+            var button = new FlatButton { Text = caption, Name = "about-" + id };
+            transientControls.Add(button);
+            button.Click += (_, _) => SelectAboutSection(id);
+            header.Controls.Add(button);
+            aboutButtons.Add(id, button);
+            var section = BuildInfoPage(text, id == "instructions" ? host : null);
+            section.Dock = DockStyle.Fill;
+            section.Visible = false;
+            body.Controls.Add(section);
+            aboutPages.Add(id, section);
+        }
+        page.Controls.Add(body);
+        page.Controls.Add(header);
+        SelectAboutSection("instructions");
+        return page;
+    }
+
+    private void SelectAboutSection(string id)
+    {
+        if (id == "help") id = "instructions";
+        if (!aboutPages.ContainsKey(id)) return;
+        selectedAboutSection = id;
+        foreach (var (key, page) in aboutPages) page.Visible = key == id;
+        foreach (var (key, button) in aboutButtons) button.SetPrimary(key == id);
+    }
+
+    internal string SelectedAboutSection => selectedAboutSection;
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == Keys.F1 && showAboutTabs)
+        {
+            FlushPendingChanges();
+            SelectPage("help");
+            return true;
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    private Control BuildInfoPage(Func<string> text, TickerHost? infoHost = null)
     {
         var page = new Panel { Padding = new Padding(8, 6, 8, 6) };
         var box = new TextBox
         {
             Multiline = true, ReadOnly = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, BorderStyle = BorderStyle.None,
-            Font = new Font("Segoe UI", 10f), TabStop = false, Tag = "surface",
+            Font = new Font("Segoe UI", 10f), TabStop = true, Tag = "surface",
             Text = text().Replace("\r\n", "\n").Replace("\n", "\r\n")
         };
         var frame = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 12, 8, 12), Tag = "surface" };
         frame.Controls.Add(box);
         page.Controls.Add(frame);
-        if (host is not null)
+        if (infoHost is not null)
         {
             var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, Padding = new Padding(16, 4, 8, 4) };
             var welcome = new FlatButton { Text = Loc.T("tray.welcome") };
             var family = new FlatButton { Text = Loc.T("tray.suite") };
-            welcome.Click += (_, _) => host.ShowWelcome();
-            family.Click += (_, _) => host.ShowSuite();
+            transientControls.Add(welcome);
+            transientControls.Add(family);
+            welcome.Click += (_, _) => infoHost.ShowWelcome();
+            family.Click += (_, _) => infoHost.ShowSuite();
             bar.Controls.Add(welcome);
             bar.Controls.Add(family);
             page.Controls.Add(bar);   // Top, added after the Fill frame so it docks above it

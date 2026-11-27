@@ -119,7 +119,10 @@ jobs:
             if (!$p.WaitForExit(180000)) { $p.Kill(); throw "Snapshot timeout: $lang" }
             if ($p.ExitCode -ne 0) { throw "Snapshot failed: $lang ($($p.ExitCode))" }
             $shots = @(Get-ChildItem -LiteralPath $out -Filter 'tab*.png' -File)
-            if ($shots.Count -lt 21) { throw "Missing settings pages: $lang ($($shots.Count))" }
+            if ($shots.Count -ne 18) { throw "Missing settings pages: $lang ($($shots.Count))" }
+            foreach ($section in @('license','history')) {
+              if (!(Test-Path (Join-Path $out "about-$section.png"))) { throw "Missing about section: $lang / $section" }
+            }
           }
       - name: Upload settings screenshots
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
