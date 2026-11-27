@@ -50,6 +50,7 @@ jobs:
           path: |
             Output/OpsisNewsCrawler-Setup.exe
             Output/OpsisNewsCrawler-Setup.exe.sha256
+            Output/payload-hashes.json
           retention-days: 7
 
   wizard-shots:
@@ -80,7 +81,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-2022]
-        scenario: [fresh, from-per-user, from-latest, update-helper]
+        scenario: [fresh, from-per-user, from-latest, from-candidate, update-helper]
         include:
           - os: windows-2025
             scenario: fresh

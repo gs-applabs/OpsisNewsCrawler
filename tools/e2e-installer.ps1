@@ -9,7 +9,7 @@
 #
 # Results: <Out>\report.md (also the job summary), the Inno logs, crawler.log, a screenshot. Exit code 1 on any failed check.
 param(
-    [Parameter(Mandatory)][ValidateSet('fresh', 'from-per-user', 'from-latest', 'update-helper', 'integrated')][string]$Scenario,
+    [Parameter(Mandatory)][ValidateSet('fresh', 'from-per-user', 'from-latest', 'from-candidate', 'update-helper', 'integrated')][string]$Scenario,
     [Parameter(Mandatory)][string]$NewSetup,
     [string]$Repository = 'gs-applabs/OpsisNewsCrawler',
     [string]$PerUserTag = 'v0.17.0',
@@ -37,6 +37,12 @@ function Check([bool]$ok, [string]$what) {
     $line = "- **$mark** $what"
     $script:report.Add($line)
     Write-Host "$mark  $what"
+}
+function Stop-OnFailure([string]$why) {
+    $script:report.Add("- **BLOCKED** $why")
+    $script:report | Set-Content (Join-Path $Out 'report.md')
+    if ($env:GITHUB_STEP_SUMMARY) { $script:report | Add-Content $env:GITHUB_STEP_SUMMARY }
+    throw $why
 }
 function Note([string]$text) { $script:report.Add("- _NOT VERIFIED_ $text"); Write-Host "NOT VERIFIED  $text" }
 function Run-Setup([string]$exe, [string[]]$arguments, [string]$logName) {
@@ -166,7 +172,18 @@ if ($Scenario -eq 'integrated') {
 
 # ---- 1. the old version ----------------------------------------------------------------------------------------------------------------
 $oldIsPerUser = $false
-if ($Scenario -ne 'fresh') {
+if ($Scenario -eq 'from-candidate') {
+    # Install and run this exact candidate, then reinstall it with no force option.
+    $tag = 'current candidate'
+    $code = Run-Setup $NewSetup @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/MODE=separate','/DEPS=none') 'candidate-first-install.log'
+    if ($code -ne 0) { Stop-OnFailure "Candidate initial install failed ($code)" }
+    New-Item -ItemType Directory -Force $SettingsDir | Out-Null
+    Set-Content (Join-Path $SettingsDir 'config.json') '{"Language":"de","ScrollSpeed":80,"CheckForUpdates":false,"WelcomeDisabled":true}' -Encoding utf8
+    $oldExe = Join-Path $MachineDir 'OpsisNewsCrawler.exe'
+    $oldRunning = Start-Process -FilePath $oldExe -PassThru
+    Start-Sleep -Seconds 8
+    if ($oldRunning.HasExited) { Stop-OnFailure 'Candidate did not remain running before reinstall' }
+} elseif ($Scenario -ne 'fresh') {
     $tag = if ($Scenario -eq 'from-per-user') { $PerUserTag } else { (& gh release view --repo $Repository --json tagName --jq .tagName) }
     $oldDir = Join-Path $Out 'old'
     New-Item -ItemType Directory -Force $oldDir | Out-Null
@@ -212,8 +229,11 @@ if ($Scenario -ne 'fresh') {
 
 # ---- 2. the new setup ------------------------------------------------------------------------------------------------------------------
 $newArgs = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/MODE=separate', '/BAR=above', '/DEPS=none')
-if ($Scenario -eq 'from-per-user') { $newArgs += '/TASKS="startup"' }
-if ($Scenario -eq 'from-latest') { $newArgs += '/CLOSEAPPLICATIONS' }   # as the program starts the setup of an update
+if ($Scenario -eq 'from-per-user') { $newArgs += '/TASKS="startup"','/CLOSEAPPLICATIONS','/FORCECLOSEAPPLICATIONS' }
+# Explicit forced recovery is permitted for the legacy release only. Candidate
+# reinstalls MUST close gracefully, never hide a regression behind forced exit.
+if ($Scenario -eq 'from-latest') { $newArgs += '/CLOSEAPPLICATIONS','/FORCECLOSEAPPLICATIONS' }
+if ($Scenario -eq 'from-candidate') { $newArgs += '/CLOSEAPPLICATIONS' }
 if ($Scenario -eq 'update-helper') {
     $oldVersion = [version](($oldExeInfo = (Get-Item $oldExe).VersionInfo.ProductVersion).Split('+')[0])
     if ($oldVersion -lt [version]'0.20.3') {
@@ -235,6 +255,7 @@ if ($Scenario -eq 'update-helper') {
     $finished = $helper.WaitForExit(240000)
     Check $finished 'the update helper finished'
     Check ($finished -and $helper.ExitCode -eq 0) "the update helper succeeded (exit code $(if ($finished) { $helper.ExitCode } else { 'none' }))"
+    if (!$finished -or $helper.ExitCode -ne 0) { Stop-OnFailure 'Update helper failed; no further product audit' }
     $logLine = if (Test-Path $helperLog) { (Get-Content $helperLog | Select-Object -Last 1) } else { '' }
     Check ($logLine -like '*|ok|0|*') "last-update.log says the update worked: $logLine"
     Start-Sleep -Seconds 8
@@ -246,13 +267,25 @@ if ($Scenario -eq 'update-helper') {
 } else {
     $code = Run-Setup $NewSetup $newArgs 'new-setup.log'
     Check ($code -eq 0) "the new setup finished (exit code $code)"
-    if ($Scenario -eq 'from-latest') {
+    if ($code -ne 0) { Stop-OnFailure "Setup failed ($code); do not audit the old installed binaries" }
+    if ($Scenario -in 'from-latest','from-candidate') {
         Start-Sleep -Seconds 1
-        Check ($oldRunning.HasExited -or -not (Get-Process -Id $oldRunning.Id -ErrorAction SilentlyContinue)) 'the installer closed the running old program'
+        $closed = $oldRunning.HasExited -or -not (Get-Process -Id $oldRunning.Id -ErrorAction SilentlyContinue)
+        Check $closed 'the installer closed the running old program'
+        if (!$closed) { Stop-OnFailure 'Old process still running; no further product audit' }
     }
 }
 Start-Sleep -Seconds 2
 
+$manifest = Join-Path (Split-Path -Parent $NewSetup) 'payload-hashes.json'
+if (!(Test-Path $manifest)) { Stop-OnFailure 'Exact candidate payload hash manifest missing' }
+$expectedPayload = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+foreach ($entry in $expectedPayload.PSObject.Properties) {
+    $installed = Join-Path $MachineDir $entry.Name
+    $match = (Test-Path -LiteralPath $installed) -and ((Get-FileHash -LiteralPath $installed -Algorithm SHA256).Hash -eq $entry.Value)
+    Check $match "installed $($entry.Name) matches staged candidate SHA-256"
+    if (!$match) { Stop-OnFailure 'Installed binary is not the candidate under test' }
+}
 $version = Expected-Version
 Check (Test-Path (Join-Path $MachineDir 'OpsisNewsCrawler.exe')) 'the program is in Program Files'
 if ($version) { Check (((Get-Item (Join-Path $MachineDir 'OpsisNewsCrawler.exe')).VersionInfo.ProductVersion) -like "$version*") "the installed program is version $version" }
