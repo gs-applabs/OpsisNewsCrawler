@@ -33,10 +33,32 @@ public static class SettingsAudit
         var apply = typeof(SettingsPanel).GetMethod("ApplySettings", BindingFlags.NonPublic | BindingFlags.Instance)
                     ?? throw new InvalidOperationException("ApplySettings not found");
         var fields = typeof(SettingsPanel).GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
-            .Where(f => f.FieldType.Name is "FlatCheckBox" or "FlatComboBox" or "FlatNumber" or "FlatSlider" && !Skipped.Contains(f.Name))
+            .Where(f => f.FieldType.Name is "FlatCheckBox" or "FlatToggle" or "FlatComboBox" or "FlatNumber" or "FlatSlider" && !Skipped.Contains(f.Name))
             .OrderBy(f => f.Name, StringComparer.Ordinal).ToList();
 
         int noEffect = 0, notShown = 0, ok = 0, skipped = 0, errors = 0;
+        if (!panel.SearchFindsPage(Loc.T("lbl.taskbarBackdrop"), "appearance"))
+        { errors++; report.AppendLine("ERROR     taskbar material not found by settings search"); }
+        else report.AppendLine("OK        taskbar material found by settings search");
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var color = (FlatComboBox)typeof(SettingsPanel).GetField("taskbarColor", flags)!.GetValue(panel)!;
+        var material = (FlatComboBox)typeof(SettingsPanel).GetField("taskbarBackdrop", flags)!.GetValue(panel)!;
+        var originalColor = color.SelectedIndex;
+        var originalMaterial = material.SelectedIndex;
+        foreach (var tint in Enumerable.Range(0, color.Count))
+        {
+            color.SelectedIndex = tint;
+            if (!material.Enabled) { errors++; report.AppendLine($"ERROR     taskbar material disabled for tint {tint}"); continue; }
+            foreach (var preset in Enumerable.Range(0, material.Count))
+            {
+                material.SelectedIndex = preset;
+                if (material.SelectedIndex != preset) { errors++; report.AppendLine($"ERROR     taskbar material selection {preset} failed for tint {tint}"); }
+            }
+        }
+        color.SelectedIndex = originalColor;
+        material.SelectedIndex = originalMaterial;
+        panel.LoadFromConfig();
+        panel.SelectTab(0);
         foreach (var field in fields)
         {
             var control = field.GetValue(panel);

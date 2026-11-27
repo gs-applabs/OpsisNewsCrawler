@@ -29,6 +29,7 @@ internal sealed class FlatNav : Control
     private int hover = -1;        // entry index under the pointer
     private int scrollY;
     private string filter = "";
+    private readonly HashSet<int> matchingLeaves = new();
 
     public event EventHandler? SelectedIndexChanged;
 
@@ -53,12 +54,15 @@ internal sealed class FlatNav : Control
         search = new TextBox
         {
             Size = new Size(RailWidth - 28, 27), BorderStyle = BorderStyle.FixedSingle,
-            PlaceholderText = Loc.T("settings.search"), Font = new Font("Segoe UI", 9f), Tag = "surface"
+            PlaceholderText = Loc.T("settings.search"), AccessibleName = Loc.T("settings.search"), Font = new Font("Segoe UI", 9f), Tag = "surface"
         };
         search.TextChanged += (_, _) =>
         {
             filter = search.Text.Trim();
             scrollY = 0;
+            matchingLeaves.Clear();
+            if (filter.Length > 0)
+                foreach (var entry in entries.Where(e => e.Page is not null && MatchesText(e))) matchingLeaves.Add(entry.Leaf);
             var firstMatch = entries.FirstOrDefault(e => e.Page is not null && Matches(e));
             if (selected >= 0 && !Matches(entries.First(e => e.Leaf == selected)) && firstMatch is not null) SelectedIndex = firstMatch.Leaf;
             Invalidate();
@@ -85,6 +89,7 @@ internal sealed class FlatNav : Control
             selected = value;
             for (var i = 0; i < pages.Count; i++) pages[i].Visible = i == value;
             LayoutPages();
+            RevealSelection();
             Invalidate();
             SelectedIndexChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -122,9 +127,13 @@ internal sealed class FlatNav : Control
         System.Globalization.CultureInfo.CurrentCulture.CompareInfo.IndexOf(value, term,
             System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace) >= 0;
 
-    private bool Matches(Entry e)
+    private bool Matches(Entry e) => filter.Length == 0 || matchingLeaves.Contains(e.Leaf);
+
+    internal void SearchFor(string query) => search.Text = query;
+    internal bool SearchMatches(int leaf) => leaf >= 0 && leaf < pages.Count && (filter.Length == 0 || matchingLeaves.Contains(leaf));
+
+    private bool MatchesText(Entry e)
     {
-        if (filter.Length == 0) return true;
         if (e.Page is null) return false;
         var haystack = e.Title + " " + string.Join(" ", SearchLabels(e.Page));
         return filter.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(term => ContainsText(haystack, term));
@@ -157,6 +166,16 @@ internal sealed class FlatNav : Control
             hits.Add((new Rectangle(RailLeft + 10, y, RailWidth - 20, h), i));
             y += h;
         }
+    }
+
+    private void RevealSelection()
+    {
+        Measure();
+        var hit = hits.FirstOrDefault(h => entries[h.Entry].Leaf == selected && entries[h.Entry].Page is not null);
+        if (hit.Rect.IsEmpty) return;
+        if (hit.Rect.Top < ListTop) scrollY -= ListTop - hit.Rect.Top;
+        else if (hit.Rect.Bottom > Height - 10) scrollY += hit.Rect.Bottom - (Height - 10);
+        Measure();
     }
 
     private void LayoutPages()
@@ -222,6 +241,21 @@ internal sealed class FlatNav : Control
     {
         if (keyData == (Keys.Control | Keys.F)) { search.Focus(); search.SelectAll(); return true; }
         if (keyData == Keys.Escape && search.Focused && search.TextLength > 0) { search.Clear(); return true; }
+        if (search.Focused && keyData is Keys.Down or Keys.Up)
+        {
+            var candidates = entries.Where(e => e.Page is not null && Matches(e)).Select(e => e.Leaf).ToList();
+            if (candidates.Count > 0)
+            {
+                var index = candidates.IndexOf(selected);
+                SelectedIndex = candidates[Math.Clamp(index < 0 ? 0 : index + (keyData == Keys.Down ? 1 : -1), 0, candidates.Count - 1)];
+            }
+            return true;
+        }
+        if (search.Focused && keyData == Keys.Enter)
+        {
+            if (selected >= 0 && SearchMatches(selected)) pages[selected].SelectNextControl(null, true, true, true, false);
+            return true;
+        }
         return base.ProcessCmdKey(ref msg, keyData);
     }
 

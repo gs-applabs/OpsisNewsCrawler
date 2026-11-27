@@ -241,6 +241,11 @@ public sealed partial class SettingsPanel : UserControl
         Theme.Changed += OnThemeChanged;
         Loc.Changed += OnLanguageChanged;
         previewTimer.Tick += (_, _) => UpdatePreview();
+        autoApplyTimer.Tick += (_, _) =>
+        {
+            autoApplyTimer.Stop();
+            if (!IsDisposed && !Disposing && !loading && built && hasUnsavedChanges) ApplySettings();
+        };
         Build();
         overviewTimer.Tick += (_, _) => RefreshOverview();
         if (Visible && IsHandleCreated) { previewTimer.Start(); overviewTimer.Start(); }
@@ -249,7 +254,7 @@ public sealed partial class SettingsPanel : UserControl
     protected override void OnVisibleChanged(EventArgs e)
     {
         base.OnVisibleChanged(e);
-        if (IsDisposed) return;
+        if (IsDisposed || Disposing) return;
         if (Visible)
         {
             previewTimer.Start();
@@ -258,6 +263,7 @@ public sealed partial class SettingsPanel : UserControl
         }
         else
         {
+            FlushPendingChanges();
             previewTimer.Stop();
             overviewTimer.Stop();
             sourceTimer.Stop();
@@ -268,6 +274,8 @@ public sealed partial class SettingsPanel : UserControl
     {
         if (disposing)
         {
+            autoApplyTimer.Stop();
+            autoApplyTimer.Dispose();
             previewTimer.Stop();
             if (performanceInfoHandler is not null) host.PerformanceChanged -= performanceInfoHandler;
             overviewTimer.Stop();
@@ -406,12 +414,7 @@ public sealed partial class SettingsPanel : UserControl
         status = new Label { AutoSize = true, MaximumSize = new Size(900, 0), Padding = new Padding(8, 11, 0, 0), Tag = "muted", Text = L("settings.legend") };
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, Padding = new Padding(12, 4, 12, 6) };
         bar.Controls.Add(status);
-        autoApplyTimer.Tick += (_, _) =>
-        {
-            autoApplyTimer.Stop();
-            if (!IsDisposed && !loading && built && hasUnsavedChanges) ApplySettings();
-        };
-        VisibleChanged += (_, _) => FlushPendingChanges();   // leaving the page (Opsis) or hiding the window saves what is pending
+        // The lifetime-owned auto-apply handler is registered once in the constructor.
 
         barPreview = new BarPreview { Dock = DockStyle.Bottom, Visible = false };
         Controls.Add(tabs);
@@ -445,6 +448,15 @@ public sealed partial class SettingsPanel : UserControl
         if (!pageIds.TryGetValue(id, out var index)) return false;
         SelectTab(index);
         return true;
+    }
+
+    internal bool SearchFindsPage(string query, string pageId)
+    {
+        if (!pageIds.TryGetValue(pageId, out var index)) return false;
+        tabs.SearchFor(query);
+        var matches = tabs.SearchMatches(index);
+        tabs.SearchFor("");
+        return matches;
     }
 
     private int CurrentLeaf() => Math.Max(0, tabs.SelectedIndex);
@@ -531,27 +543,6 @@ public sealed partial class SettingsPanel : UserControl
         speed = new FlatNumber();
         speed.Configure(AppConfig.MinScrollSpeed, AppConfig.MaxScrollSpeed, 10);
         flow.Controls.Add(Row(L("lbl.speed"), speed));
-
-        // Each bar, and each half of a split bar, has its own speed; 0 = the same as the speed above.
-        var speedCard = new FlatCard(L("speed.card"));
-        var speedFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        speedFlow.Controls.Add(Note(L("speed.note"), 700));
-        FlatNumber SpeedBox()
-        {
-            var box = new FlatNumber { Width = 120 };
-            box.Configure(0, AppConfig.MaxScrollSpeed, 10);
-            return box;
-        }
-        speedMainB = SpeedBox(); speedSecond = SpeedBox(); speedSecondB = SpeedBox(); speedMini = SpeedBox(); speedMiniB = SpeedBox(); speedMonitor = SpeedBox(); speedMonitorB = SpeedBox();
-        speedFlow.Controls.Add(Row(L("speed.mainB"), speedMainB, 340));
-        speedFlow.Controls.Add(Row(L("speed.second"), speedSecond, 340));
-        speedFlow.Controls.Add(Row(L("speed.secondB"), speedSecondB, 340));
-        speedFlow.Controls.Add(Row(L("speed.mini"), speedMini, 340));
-        speedFlow.Controls.Add(Row(L("speed.miniB"), speedMiniB, 340));
-        speedFlow.Controls.Add(Row(L("speed.monitors"), speedMonitor, 340));
-        speedFlow.Controls.Add(Row(L("speed.monitorsB"), speedMonitorB, 340));
-        speedCard.Controls.Add(speedFlow);
-        flow.Controls.Add(speedCard);
 
         // Performance: Automatic follows the PC (what was detected is shown); the others force a tier.
         var perfCard = new FlatCard(L("card.performance"));
@@ -738,10 +729,36 @@ public sealed partial class SettingsPanel : UserControl
         flow.Controls.Add(second);
 
         secondEnabled.CheckedChanged += (_, _) => UpdateBarsUi();
+        flow.Controls.Add(BuildSpeedCard());
         return page;
     }
 
     /// <summary>The bars of the other monitors (one per screen, each with its own content): the last section of the Bars page.</summary>
+    private Control BuildSpeedCard()
+    {
+        // Each bar, and each half of a split bar, has its own speed; 0 = the same as the main speed.
+        var speedCard = new FlatCard(L("speed.card"));
+        var speedFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+        speedFlow.Controls.Add(Note(L("speed.note"), 700));
+        FlatNumber SpeedBox()
+        {
+            var box = new FlatNumber { Width = 120 };
+            box.Configure(0, AppConfig.MaxScrollSpeed, 10);
+            return box;
+        }
+        speedMainB = SpeedBox(); speedSecond = SpeedBox(); speedSecondB = SpeedBox(); speedMini = SpeedBox(); speedMiniB = SpeedBox(); speedMonitor = SpeedBox(); speedMonitorB = SpeedBox();
+        speedFlow.Controls.Add(Row(L("speed.mainB"), speedMainB, 340));
+        speedFlow.Controls.Add(Row(L("speed.second"), speedSecond, 340));
+        speedFlow.Controls.Add(Row(L("speed.secondB"), speedSecondB, 340));
+        speedFlow.Controls.Add(Row(L("speed.mini"), speedMini, 340));
+        speedFlow.Controls.Add(Row(L("speed.miniB"), speedMiniB, 340));
+        speedFlow.Controls.Add(Row(L("speed.monitors"), speedMonitor, 340));
+        speedFlow.Controls.Add(Row(L("speed.monitorsB"), speedMonitorB, 340));
+        speedCard.Controls.Add(speedFlow);
+        return speedCard;
+
+    }
+
     private Control BuildMonitors()
     {
         var page = NewPage(out var flow);
