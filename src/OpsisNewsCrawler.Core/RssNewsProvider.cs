@@ -31,6 +31,7 @@ public sealed class RssNewsProvider : IDisposable
     private const int MaxSummaryLength = 400;
 
     private readonly HttpClient http;
+    private readonly TimeSpan requestDeadline;
     private readonly object failLock = new();
     private List<string> failedFeeds = new();
 
@@ -89,10 +90,11 @@ public sealed class RssNewsProvider : IDisposable
         lock (failLock) failedFeeds.Add(name);
     }
 
-    public RssNewsProvider(HttpMessageHandler? handler = null)
+    public RssNewsProvider(HttpMessageHandler? handler = null, TimeSpan? requestDeadline = null)
     {
         http = new HttpClient(handler ?? new RedirectGuardHandler());
-        http.Timeout = TimeSpan.FromSeconds(15);
+        this.requestDeadline = requestDeadline ?? TimeSpan.FromSeconds(15);
+        http.Timeout = this.requestDeadline;
         http.MaxResponseContentBufferSize = MaxFeedBytes;
         http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; OpsisNewsCrawler/0.30.0)");
         http.DefaultRequestHeaders.Accept.ParseAdd("application/rss+xml, application/atom+xml, application/xml, text/xml, */*");
@@ -127,8 +129,9 @@ public sealed class RssNewsProvider : IDisposable
 
         var feeds = sources.Where(s => !string.IsNullOrWhiteSpace(s.Url))
             .DistinctBy(s => s.Url, StringComparer.OrdinalIgnoreCase).ToList();
-        var perFeed = await Task.WhenAll(feeds.Select(FetchLimitedAsync)).ConfigureAwait(false);
-        foreach (var gate in domainGates.Values) gate.Dispose();
+        List<NewsItem>[] perFeed;
+        try { perFeed = await Task.WhenAll(feeds.Select(FetchLimitedAsync)).ConfigureAwait(false); }
+        finally { foreach (var gate in domainGates.Values) gate.Dispose(); }
 
         // Round-robin, so every source is visible in the ticker instead of the busiest one winning.
         var result = new List<NewsItem>();
@@ -207,12 +210,14 @@ public sealed class RssNewsProvider : IDisposable
     /// <summary>Downloads one feed and says whether it works: number of stories and the newest one.</summary>
     public async Task<FeedTestResult> TestAsync(string url, CancellationToken ct = default)
     {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(requestDeadline);
         try
         {
-            using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, deadline.Token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentLength is > MaxFeedBytes) return new FeedTestResult(false, 0, null, "feed too large");
-            var bytes = await ReadBoundedAsync(await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false), MaxFeedBytes, ct).ConfigureAwait(false);
+            var bytes = await ReadBoundedAsync(await response.Content.ReadAsStreamAsync(deadline.Token).ConfigureAwait(false), MaxFeedBytes, deadline.Token).ConfigureAwait(false);
             Interlocked.Add(ref downloadedBytes, bytes.LongLength);
             var items = Parse(bytes, "", 50);
             return items.Count == 0
@@ -223,7 +228,7 @@ public sealed class RssNewsProvider : IDisposable
         {
             throw;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or XmlException or IOException or InvalidOperationException or UriFormatException or InvalidDataException)
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or XmlException or IOException or InvalidOperationException or UriFormatException or InvalidDataException or ArgumentException)
         {
             return new FeedTestResult(false, 0, null, ex.Message);
         }
@@ -233,7 +238,15 @@ public sealed class RssNewsProvider : IDisposable
     {
         var state = states.GetOrAdd(source.Url, _ => new FeedState());
         lock (state)
-            if (state.CoolingDown) return state.Items?.Take(maxItems).ToList() ?? new List<NewsItem>();
+        {
+            if (state.CoolingDown)
+            {
+                if (state.ConsecutiveFailures > 0) RecordFailure(source.Name);
+                return state.Items?.Take(maxItems).ToList() ?? new List<NewsItem>();
+            }
+        }
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(requestDeadline);
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, source.Url);
@@ -241,7 +254,7 @@ public sealed class RssNewsProvider : IDisposable
             if (state.ETag is not null) request.Headers.TryAddWithoutValidation("If-None-Match", state.ETag);
             if (state.LastModified is not null) request.Headers.TryAddWithoutValidation("If-Modified-Since", state.LastModified);
             using var response = await http
-                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token)
                 .ConfigureAwait(false);
 
             if (response.StatusCode == HttpStatusCode.NotModified && state.Items is not null)
@@ -262,7 +275,7 @@ public sealed class RssNewsProvider : IDisposable
 
             if (response.Content.Headers.ContentLength is > MaxFeedBytes)
                 throw new InvalidDataException("feed exceeds the 5 MB size limit");
-            var bytes = await ReadBoundedAsync(await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false), MaxFeedBytes, ct).ConfigureAwait(false);
+            var bytes = await ReadBoundedAsync(await response.Content.ReadAsStreamAsync(deadline.Token).ConfigureAwait(false), MaxFeedBytes, deadline.Token).ConfigureAwait(false);
             Interlocked.Add(ref downloadedBytes, bytes.LongLength);
 
             var parsed = Parse(bytes, source.Name, Math.Max(maxItems, CachedItemsPerFeed));
@@ -276,7 +289,7 @@ public sealed class RssNewsProvider : IDisposable
         {
             throw;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or XmlException or IOException or InvalidDataException or UriFormatException or ArgumentException or InvalidOperationException)
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or XmlException or IOException or InvalidDataException or UriFormatException or ArgumentException or InvalidOperationException)
         {
             System.Diagnostics.Debug.WriteLine($"OpsisNewsCrawler: feed '{source.Name}' failed: {ex.Message}");
             RecordFailure(source.Name);

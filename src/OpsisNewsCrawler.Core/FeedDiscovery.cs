@@ -18,23 +18,27 @@ public static class FeedDiscovery
     private static readonly Regex TitleAttr = new(@"title\s*=\s*[""']([^""']*)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex PageTitle = new(@"<title[^>]*>(.*?)</title>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
 
-    public static async Task<IReadOnlyList<FeedSource>> DiscoverAsync(string input, CancellationToken ct = default)
+    public static async Task<IReadOnlyList<FeedSource>> DiscoverAsync(string input, CancellationToken ct = default, HttpMessageHandler? handler = null)
     {
         var result = new List<FeedSource>();
         if (!TryNormalize(input, out var site)) return result;
 
-        using var http = new HttpClient(new RedirectGuardHandler()) { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 4 * 1024 * 1024 };
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budget.CancelAfter(TimeSpan.FromSeconds(30));
+        using var http = new HttpClient(handler ?? new RedirectGuardHandler()) { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 4 * 1024 * 1024 };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; OpsisNewsCrawler)");
 
         try
         {
-            var (body, _) = await GetTextAsync(http, site, ct).ConfigureAwait(false);
+            var (body, effective) = await GetTextAsync(http, site, budget.Token).ConfigureAwait(false);
             if (body is null) return result;
 
+            var baseUri = effective ?? site;
+            if (!IsAllowedDiscoveredUrl(site, baseUri)) return result;
             // The address itself is a feed.
             if (LooksLikeFeed(body))
             {
-                result.Add(new FeedSource(FeedTitle(body) ?? site.Host, site.AbsoluteUri));
+                result.Add(new FeedSource(FeedTitle(body) ?? baseUri.Host, baseUri.AbsoluteUri));
                 return result;
             }
 
@@ -47,7 +51,8 @@ public static class FeedDiscovery
                 if (!type.Success || !href.Success) continue;
                 var mime = type.Groups[1].Value.ToLowerInvariant();
                 if (!mime.Contains("rss") && !mime.Contains("atom")) continue;
-                if (!Uri.TryCreate(site, WebUtility.HtmlDecode(href.Groups[1].Value), out var abs)) continue;
+                if (!Uri.TryCreate(baseUri, WebUtility.HtmlDecode(href.Groups[1].Value), out var abs)) continue;
+                if (!IsAllowedDiscoveredUrl(site, abs) || !IsAllowedDiscoveredUrl(baseUri, abs)) continue;
                 var title = TitleAttr.Match(tag.Value) is { Success: true } ta ? Clean(ta.Groups[1].Value) : siteName;
                 if (result.All(r => r.Url != abs.AbsoluteUri)) result.Add(new FeedSource(title, abs.AbsoluteUri));
             }
@@ -56,16 +61,18 @@ public static class FeedDiscovery
             // Nothing declared: try the usual places.
             foreach (var path in CommonPaths)
             {
-                if (!Uri.TryCreate(new Uri(site.GetLeftPart(UriPartial.Authority)), path, out var probe)) continue;
-                var (text, _) = await GetTextAsync(http, probe, ct).ConfigureAwait(false);
-                if (text is not null && LooksLikeFeed(text))
+                if (!Uri.TryCreate(new Uri(baseUri.GetLeftPart(UriPartial.Authority)), path, out var probe)) continue;
+                budget.Token.ThrowIfCancellationRequested();
+                var (text, final) = await GetTextAsync(http, probe, budget.Token).ConfigureAwait(false);
+                if (text is not null && LooksLikeFeed(text) && IsAllowedDiscoveredUrl(site, final ?? probe) && IsAllowedDiscoveredUrl(baseUri, final ?? probe))
                 {
-                    result.Add(new FeedSource(FeedTitle(text) ?? siteName, probe.AbsoluteUri));
+                    result.Add(new FeedSource(FeedTitle(text) ?? siteName, (final ?? probe).AbsoluteUri));
                     break;
                 }
             }
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or UriFormatException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException or UriFormatException)
         {
         }
         return result;
@@ -82,20 +89,28 @@ public static class FeedDiscovery
         return true;
     }
 
-    private static async Task<(string? Body, string? ContentType)> GetTextAsync(HttpClient http, Uri uri, CancellationToken ct)
+    public static bool IsAllowedDiscoveredUrl(Uri origin, Uri target) =>
+        target.IsAbsoluteUri && target.Scheme is "http" or "https" && string.IsNullOrEmpty(target.UserInfo) &&
+        !(origin.Scheme == "https" && target.Scheme == "http") &&
+        (!NetGuard.IsPublicHost(origin.Host) || NetGuard.IsPublicHost(target.Host));
+
+    private static async Task<(string? Body, Uri? EffectiveUri)> GetTextAsync(HttpClient http, Uri uri, CancellationToken ct)
     {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
         try
         {
-            using var response = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            using var response = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, deadline.Token).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode) return (null, null);
             var bytes = new byte[400_000];
-            await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token).ConfigureAwait(false);
             var read = 0;
             int n;
-            while (read < bytes.Length && (n = await stream.ReadAsync(bytes.AsMemory(read), ct).ConfigureAwait(false)) > 0) read += n;
-            return (System.Text.Encoding.UTF8.GetString(bytes, 0, read), response.Content.Headers.ContentType?.MediaType);
+            while (read < bytes.Length && (n = await stream.ReadAsync(bytes.AsMemory(read), deadline.Token).ConfigureAwait(false)) > 0) read += n;
+            return (System.Text.Encoding.UTF8.GetString(bytes, 0, read), response.RequestMessage?.RequestUri ?? uri);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException)
         {
             return (null, null);
         }

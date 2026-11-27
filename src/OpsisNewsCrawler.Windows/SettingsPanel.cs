@@ -2225,19 +2225,30 @@ public sealed partial class SettingsPanel : UserControl
     }
 
     /// <summary>Downloads the selected feed (or every feed of the category) and reports whether it works and how fresh it is.</summary>
+    private bool testingFeeds;
     private async void TestFeeds(bool selectedOnly)
     {
+        if (testingFeeds) return;
         if (SelectedCategory() is not { } cat) return;
         var feeds = selectedOnly
             ? (feedList.SelectedIndex >= 0 && feedList.SelectedIndex < cat.Feeds.Count ? new List<FeedSource> { cat.Feeds[feedList.SelectedIndex] } : new List<FeedSource>())
             : cat.Feeds.ToList();
         if (feeds.Count == 0) return;
-        discoverStatus.Text = Loc.T("pk.testing");
+        testingFeeds = true;
+        var statusLabel = discoverStatus;
+        statusLabel.Text = Loc.T("pk.testing");
         try
         {
             using var provider = new RssNewsProvider();
-            var results = await Task.WhenAll(feeds.Select(f => provider.TestAsync(f.Url))).ConfigureAwait(true);
-            if (IsDisposed) return;
+            using var limit = new SemaphoreSlim(RssNewsProvider.MaxConcurrentPerHost);
+            async Task<FeedTestResult> TestOne(FeedSource feed)
+            {
+                await limit.WaitAsync();
+                try { return await provider.TestAsync(feed.Url); }
+                finally { limit.Release(); }
+            }
+            var results = await Task.WhenAll(feeds.Select(TestOne)).ConfigureAwait(true);
+            if (IsDisposed || statusLabel.IsDisposed || !ReferenceEquals(statusLabel, discoverStatus)) return;
             if (feeds.Count == 1)
             {
                 var r = results[0];
@@ -2254,8 +2265,9 @@ public sealed partial class SettingsPanel : UserControl
         catch (Exception ex)
         {
             Log.Write($"feed test failed: {ex.GetType().Name}: {ex.Message}");
-            if (!IsDisposed) discoverStatus.Text = ex is OperationCanceledException or InvalidOperationException ? ex.Message : Loc.T("feed.fail", ex.GetType().Name);
+            if (!IsDisposed && !statusLabel.IsDisposed) statusLabel.Text = ex is OperationCanceledException or InvalidOperationException ? ex.Message : Loc.T("feed.fail", ex.GetType().Name);
         }
+        finally { testingFeeds = false; }
     }
 
     private void ImportOpml()
@@ -2306,31 +2318,40 @@ public sealed partial class SettingsPanel : UserControl
     {
         if (SelectedCategory() is not { } cat) return;
         var text = siteBox.Value.Trim();
-        if (text.Length == 0) return;
-        discoverStatus.Text = L("msg.searching");
-        siteBox.Enabled = false;
+        if (text.Length == 0 || !siteBox.Enabled) return;
+        var input = siteBox;
+        var statusLabel = discoverStatus;
+        var categoryId = cat.Id;
+        statusLabel.Text = L("msg.searching");
+        input.Enabled = false;
         try
         {
             var found = await FeedDiscovery.DiscoverAsync(text);
-            if (IsDisposed) return;
+            if (IsDisposed || input.IsDisposed || !ReferenceEquals(input, siteBox)) return;
+            // An auto-save or a category edit may replace the editable list while discovery is running.
+            var target = workCategories.FirstOrDefault(c => c.Id == categoryId);
+            if (target is null) return;
             if (found.Count == 0)
             {
                 discoverStatus.Text = L("msg.noRss");
                 return;
             }
-            foreach (var f in found.Take(3)) AddFeed(cat, f.Name, f.Url);
-            discoverStatus.Text = Loc.T("msg.added", Math.Min(3, found.Count));
+            var before = target.Feeds.Count;
+            foreach (var f in found.Take(3)) AddFeed(target, f.Name, f.Url);
+            var added = target.Feeds.Count - before;
+            statusLabel.Text = added == 0 ? L("msg.exists") : Loc.T("msg.added", added);
+            if (added > 0) MarkDirty();
             siteBox.Value = "";
         }
         catch (Exception ex)
         {
             // an async void handler must never let an exception out: it would end the program
             Log.Write($"add feed from site failed: {ex.GetType().Name}: {ex.Message}");
-            if (!IsDisposed) discoverStatus.Text = L("msg.noRss");
+            if (!IsDisposed && !statusLabel.IsDisposed) statusLabel.Text = L("msg.noRss");
         }
         finally
         {
-            if (!IsDisposed) siteBox.Enabled = true;
+            if (!IsDisposed && !input.IsDisposed) input.Enabled = true;
         }
     }
 
