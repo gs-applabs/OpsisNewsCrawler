@@ -31,7 +31,9 @@ public sealed partial class SettingsPanel
         var barColorRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
         barColorRow.Controls.Add(barColor);
         barColorRow.Controls.Add(barSwatch);
-        flow.Controls.Add(Row(L("lbl.barColor"), barColorRow, 240));
+        var mainAppearance = new FlatCard(L("card.mainBar"));
+        var mainFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+        mainFlow.Controls.Add(Row(L("lbl.barColor"), barColorRow, 205));
 
         taskbarColor = new FlatComboBox { Width = 470 };
         taskbarColor.SetItems(new[] { L("color.taskbar"), L("color.lightblue"), L("color.accent"), L("color.custom") }, 0);
@@ -39,17 +41,24 @@ public sealed partial class SettingsPanel
         var taskbarColorRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
         taskbarColorRow.Controls.Add(taskbarColor);
         taskbarColorRow.Controls.Add(taskbarSwatch);
-        flow.Controls.Add(Row(L("lbl.taskbarBarColor"), taskbarColorRow, 240));
+        var taskbarAppearance = new FlatCard(L("card.taskbar"));
+        var taskbarFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+        taskbarFlow.Controls.Add(Row(L("lbl.taskbarBarColor"), taskbarColorRow, 205));
         var materials = new[] { L("backdrop.acrylic"), L("backdrop.blur"), L("backdrop.gradient") };
         barBackdrop = new FlatComboBox { Width = 470 };
         barBackdrop.SetItems(materials, 0);
-        flow.Controls.Add(Row(L("lbl.barBackdrop"), barBackdrop, 240));
+        mainFlow.Controls.Add(Row(L("lbl.barBackdrop"), barBackdrop, 205));
         taskbarBackdrop = new FlatComboBox { Width = 470 };
         taskbarBackdrop.SetItems(materials, 1);
-        flow.Controls.Add(Row(L("lbl.taskbarBackdrop"), taskbarBackdrop, 240));
+        taskbarFlow.Controls.Add(Row(L("lbl.taskbarBackdrop"), taskbarBackdrop, 205));
+        taskbarFlow.Controls.Add(Note(L("note.taskbarMaterial"), 700));
+        mainAppearance.Controls.Add(mainFlow);
+        taskbarAppearance.Controls.Add(taskbarFlow);
+        flow.Controls.Add(mainAppearance);
+        flow.Controls.Add(taskbarAppearance);
         flow.Controls.Add(Note(L("note.backdrop"), 640));
         barColor.SelectedIndexChanged += (_, _) => barSwatch.Enabled = barColor.SelectedIndex == 3;
-        taskbarColor.SelectedIndexChanged += (_, _) => { taskbarSwatch.Enabled = taskbarColor.SelectedIndex == 3; taskbarBackdrop.Enabled = taskbarColor.SelectedIndex != 0; };
+        taskbarColor.SelectedIndexChanged += (_, _) => taskbarSwatch.Enabled = taskbarColor.SelectedIndex == 3;
 
         windowOpacity = new FlatSlider { Width = 300 };
         windowOpacity.SetRange(60, 100);

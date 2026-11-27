@@ -316,7 +316,8 @@ public sealed partial class SettingsPanel : UserControl
     // ---- preview of the bars ----------------------------------------------------------------
 
     /// <summary>Sub-pages of the Settings tab whose choices change how a bar looks: Bars, Position, Look, Breaking.</summary>
-    private static readonly int[] PreviewSubs = { 1, 2, 3 };
+    private readonly HashSet<int> previewPages = new();
+    private readonly Dictionary<string, int> pageIds = new(StringComparer.Ordinal);
 
     /// <summary>The desktop bar's place and size as fractions of the primary screen (for the preview).</summary>
     private RectangleF DesktopRelative()
@@ -328,7 +329,7 @@ public sealed partial class SettingsPanel : UserControl
     private void UpdatePreview()
     {
         if (!Visible || !built || barPreview is null || barPreview.IsDisposed || tabs is null) return;
-        var show = PreviewSubs.Contains(tabs.SelectedIndex);
+        var show = previewPages.Contains(tabs.SelectedIndex);
         if (barPreview.Visible != show) barPreview.Visible = show;
         if (!show) return;
         var dark = themeMode.SelectedIndex switch { 1 => false, 2 => true, 3 or 4 or 6 => true, 5 => false, _ => Theme.IsDark };
@@ -366,35 +367,38 @@ public sealed partial class SettingsPanel : UserControl
         tabs = new FlatNav { Dock = DockStyle.Fill };
         tabs.Badge = new AnimatedAppIcon(() => !MinimiseAnimation.Simple);   // always moving: the tray option is for the tray icon only
 
-        // One navigation rail: three groups (Settings, Sources, Information), every page under its group.
+        // Stable page IDs keep automation independent of the visible order.
+        pageIds.Clear();
+        previewPages.Clear();
         AddGroup(Loc.T("pk.settings"),
-            (Loc.T("pk.general"), BuildGeneral()),
-            // Every bar setting is on one page: placement, what each bar shows, the desktop bar.
-            (L("tab.bars"), Combine(
-                (Loc.T("pk.placement.and.behaviour.where"), BuildPosition()),
-                (Loc.T("pk.what.each.bar.shows"), BuildBars()),
-                (Loc.T("pk.desktop.bar.a.free"), BuildDesktopBar()),
-                (Loc.T("pk.other.monitors.one.bar"), BuildMonitors()))),
-            (L("tab.look"), BuildLook()),
-            (Loc.IsGreek ? "P1 · Στούντιο widgets" : "P1 · Widget Studio", BuildWidgetStudio()),
-            (L("tab.breaking"), BuildBreaking()));
-        AddGroup(L("tab.sources"),
-            (Loc.T("pk.news.flow"), Combine((null, BuildSources()), (L("tab.readLater"), BuildReadLater()))),
-            (Loc.T("pk.markets.flow"), BuildMarkets()),
-            (Loc.T("pk.weather.flow"), BuildWeather()),
-            (L("hazard.flow"), BuildHazards()),
-            (L("history.flow"), BuildHistory()),
-            (Loc.IsGreek ? "P2 · Έξυπνες ειδήσεις" : "P2 · News intelligence", BuildP2Insights()));
-        var info = new List<(string, Control)>();
+            ("general", Loc.T("pk.general"), BuildGeneral(), false));
+        AddGroup(L("tab.bars"),
+            ("position", L("tab.position"), BuildPosition(), true),
+            ("content", L("nav.barContent"), BuildBars(), true),
+            ("desktop", L("pk.desktop.bar"), BuildDesktopBar(), true),
+            ("monitors", L("card.monitors"), BuildMonitors(), true),
+            ("appearance", L("tab.look"), BuildLook(), true),
+            ("widgets", L("nav.widgetStudio"), BuildWidgetStudio(), false));
+        AddGroup(L("nav.news"),
+            ("sources", Loc.T("pk.news.flow"), BuildSources(), false),
+            ("readLater", L("tab.readLater"), BuildReadLater(), false),
+            ("breaking", L("tab.breaking"), BuildBreaking(), false),
+            ("intelligence", L("nav.intelligence"), BuildP2Insights(), false));
+        AddGroup(L("nav.data"),
+            ("markets", Loc.T("pk.markets.flow"), BuildMarkets(), false),
+            ("weather", Loc.T("pk.weather.flow"), BuildWeather(), false),
+            ("hazards", L("hazard.flow"), BuildHazards(), false),
+            ("historyFeed", L("history.flow"), BuildHistory(), false));
+        var info = new List<(string, string, Control, bool)>();
+        info.Add(("updates", L("tab.updates"), BuildUpdates(), false));
+        info.Add(("dependencies", L("tab.dependencies"), BuildDependencies(), false));
         if (showAboutTabs)
         {
-            info.Add((L("tab.help"), BuildInfoPage(() => AboutTexts.Help, host)));
-            info.Add((L("tab.instructions"), BuildInfoPage(() => AboutTexts.Instructions, host)));
-            info.Add((L("tab.history"), BuildInfoPage(() => AboutTexts.History)));
-            info.Add((L("tab.license"), BuildInfoPage(() => AboutTexts.License)));
+            info.Add(("help", L("tab.help"), BuildInfoPage(() => AboutTexts.Help, host), false));
+            info.Add(("instructions", L("tab.instructions"), BuildInfoPage(() => AboutTexts.Instructions, host), false));
+            info.Add(("history", L("tab.history"), BuildInfoPage(() => AboutTexts.History), false));
+            info.Add(("license", L("tab.license"), BuildInfoPage(() => AboutTexts.License), false));
         }
-        info.Add((L("tab.updates"), BuildUpdates()));
-        info.Add((L("tab.dependencies"), BuildDependencies()));
         AddGroup(Loc.T("pk.information"), info.ToArray());
 
         // Every change is saved by itself a moment after it is made (see AutoApply): there is no Apply button, and the window closes with its own X.
@@ -425,10 +429,22 @@ public sealed partial class SettingsPanel : UserControl
     }
 
     /// <summary>A group heading of the navigation rail with its pages; every page is one of the Build... pages.</summary>
-    private void AddGroup(string title, params (string Title, Control Page)[] pages)
+    private void AddGroup(string title, params (string Id, string Title, Control Page, bool Preview)[] pages)
     {
         tabs.AddGroup(title);
-        foreach (var (pageTitle, page) in pages) tabs.AddPage(pageTitle, page);
+        foreach (var (id, pageTitle, page, preview) in pages)
+        {
+            var index = tabs.AddPage(pageTitle, page);
+            pageIds.Add(id, index);
+            if (preview) previewPages.Add(index);
+        }
+    }
+
+    public bool SelectPage(string id)
+    {
+        if (!pageIds.TryGetValue(id, out var index)) return false;
+        SelectTab(index);
+        return true;
     }
 
     private int CurrentLeaf() => Math.Max(0, tabs.SelectedIndex);
@@ -473,7 +489,8 @@ public sealed partial class SettingsPanel : UserControl
     {
         var row = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 2, 0, 2) };
         // The label grows to a second or third line instead of being cut off (long translations), so the row adapts to its content.
-        var needed = TextRenderer.MeasureText(label, new Font("Segoe UI", 9f), new Size(labelWidth, 0), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height + 10;
+        using var labelFont = new Font("Segoe UI", 9f);
+        var needed = TextRenderer.MeasureText(label, labelFont, new Size(labelWidth, 0), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height + 10;
         row.Controls.Add(new Label { Text = label, AutoSize = false, Width = labelWidth, Height = Math.Max(32, needed), TextAlign = ContentAlignment.MiddleLeft });
         row.Controls.Add(control);
         return row;
@@ -608,16 +625,7 @@ public sealed partial class SettingsPanel : UserControl
         };
         flow.Controls.Add(reset);
         flow.Controls.Add(openLog);
-        var diagnostics = new FlatButton
-        {
-            Text = Loc.T("diag.button")
-        };
-        diagnostics.Click += (_, _) =>
-        {
-            using var dialog = new P0DiagnosticsForm(host);
-            dialog.ShowDialog(this);
-        };
-        flow.Controls.Add(diagnostics);
+        // Diagnostics already lives in the overview card above.
         return page;
     }
 
@@ -1276,7 +1284,7 @@ public sealed partial class SettingsPanel : UserControl
             taskbarColor.SelectSilently(c.TaskbarBarColorMode switch { "lightblue" => 1, "accent" => 2, "custom" => 3, _ => 0 });
             taskbarSwatch.Rgb = c.TaskbarBarCustomColor;
             taskbarSwatch.Enabled = taskbarColor.SelectedIndex == 3;
-            taskbarBackdrop.Enabled = taskbarColor.SelectedIndex != 0;   // completely clear = no material at all
+            taskbarBackdrop.Enabled = true; // material is independent of the selected tint
             barBackdrop.SelectSilently(c.BarBackdrop switch { "blur" => 1, "gradient" => 2, _ => 0 });
             taskbarBackdrop.SelectSilently(c.TaskbarBarBackdrop switch { "acrylic" => 0, "gradient" => 2, _ => 1 });
             breakingEnabled.Checked = c.BreakingEnabled;

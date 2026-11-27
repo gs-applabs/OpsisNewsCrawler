@@ -216,7 +216,7 @@ public static class GeoSnapshot
         form.Show();
         Application.DoEvents();
         panel.LoadFromConfig();
-        panel.SelectTab(6);
+        if (!panel.SelectPage("weather")) throw new InvalidOperationException("Weather page missing");
         Application.DoEvents();
         var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
         var t = typeof(SettingsPanel);

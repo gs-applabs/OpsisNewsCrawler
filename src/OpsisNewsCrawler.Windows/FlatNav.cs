@@ -106,7 +106,29 @@ internal sealed class FlatNav : Control
         return leaf;
     }
 
-    private bool Matches(Entry e) => filter.Length == 0 || e.Title.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
+    private static IEnumerable<string> SearchLabels(Control root)
+    {
+        foreach (Control child in root.Controls)
+        {
+            // Search labels and action captions, not input values or live news.
+            if (child is Label or FlatButton or FlatCheckBox or FlatCard)
+                if (!string.IsNullOrWhiteSpace(child.Text)) yield return child.Text;
+            if (!string.IsNullOrWhiteSpace(child.AccessibleName)) yield return child.AccessibleName;
+            foreach (var text in SearchLabels(child)) yield return text;
+        }
+    }
+
+    private static bool ContainsText(string value, string term) =>
+        System.Globalization.CultureInfo.CurrentCulture.CompareInfo.IndexOf(value, term,
+            System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace) >= 0;
+
+    private bool Matches(Entry e)
+    {
+        if (filter.Length == 0) return true;
+        if (e.Page is null) return false;
+        var haystack = e.Title + " " + string.Join(" ", SearchLabels(e.Page));
+        return filter.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(term => ContainsText(haystack, term));
+    }
 
     private IEnumerable<int> VisibleEntries()
     {
@@ -172,6 +194,7 @@ internal sealed class FlatNav : Control
     {
         base.OnMouseMove(e);
         var h = -1;
+        if (e.Y < ListTop) return;
         foreach (var (rect, entry) in hits) if (entries[entry].Page is not null && rect.Contains(e.Location)) h = entry;
         if (h == hover) return;
         hover = h;
@@ -190,7 +213,7 @@ internal sealed class FlatNav : Control
     protected override void OnMouseUp(MouseEventArgs e)
     {
         base.OnMouseUp(e);
-        if (e.Button != MouseButtons.Left) return;
+        if (e.Button != MouseButtons.Left || e.Y < ListTop) return;
         foreach (var (rect, entry) in hits)
             if (entries[entry].Page is { } && rect.Contains(e.Location)) { SelectedIndex = entries[entry].Leaf; return; }
     }

@@ -57,7 +57,7 @@ public sealed partial class SettingsPanel
         insightFlow.Controls.Add(Note(Loc.IsGreek
             ? "Συγκεντρωμένες υπάρχουσες ειδήσεις, πηγές και γεγονότα της οικογένειας Opsis. Η εξαγωγή HTML λειτουργεί χωρίς δίκτυο."
             : "Current local news, sources and Opsis suite events. HTML digest export works offline.",720));
-        var open=new FlatButton {Text=Loc.IsGreek ? "Άνοιγμα κέντρου ειδήσεων P2" : "Open P2 news center"};
+        var open=new FlatButton {Text=L("nav.openIntelligence")};
         open.SetPrimary(true);
         open.Click += (_,_) => {using var form=new P2InsightsForm(host);form.ShowDialog(this);};
         insightFlow.Controls.Add(open); insights.Controls.Add(insightFlow); flow.Controls.Add(insights);

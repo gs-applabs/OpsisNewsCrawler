@@ -215,7 +215,7 @@ internal sealed class BarPreview : Control
             "accent" => TaskbarStyle.AccentColor(),
             "custom" => Color.FromArgb(255, Color.FromArgb(custom)),
             "theme" => s.Dark ? Color.FromArgb(24, 24, 28) : Color.FromArgb(245, 245, 248),
-            _ => null // "taskbar": completely clear, the taskbar shows through
+            _ => inTaskbar && backdrop == "gradient" ? Color.FromArgb(178, 200, 216) : null // untinted blur/acrylic show the taskbar
         };
         var alpha = (int)Math.Round(255 * Math.Clamp(s.OpacityPercent / 100.0, 0.3, 1.0));
         Color textColor;
@@ -237,7 +237,7 @@ internal sealed class BarPreview : Control
         else
         {
             textColor = style.Text;
-            if (s.Dark != !style.Light) textColor = s.Dark ? Color.White : Color.FromArgb(27, 27, 27);
+            // The integrated bar follows the taskbar text, not the application theme.
         }
 
         // The text.

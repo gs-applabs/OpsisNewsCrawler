@@ -622,12 +622,9 @@ public sealed class TickerWindow : Form
             // On the taskbar: completely clear, only the text and the logos are drawn, in the taskbar's own text colour.
             var st = TaskbarStyle.Read();
             var darkSurface = !st.Light || st.AccentOnTaskbar;
-            // "Like the taskbar": no tint at all, so what is seen is the colour of the taskbar itself. Measured on Windows 11: blur or acrylic with no tint differ from the bare
-            // taskbar by one unit of 255 (38,38,21 -> 39,39,22), while the transparent-gradient material is a light blue (178,200,216) and "disabled" is black: so this mode
-            // always uses blur, whatever material is chosen for the other colour modes.
-            var clear = colorMode is "taskbar" or "theme" or "";
-            var material = clear ? "blur" : backdropStyle;
-            if (!clear && backdropStyle == "gradient")
+            // Follow taskbar means no custom tint; the selected material still applies.
+            var material = backdropStyle;
+            if (material == "gradient")
             {
                 // The transparent-gradient material is the light blue: dark text reads on it.
                 SetDarkTextLook();
