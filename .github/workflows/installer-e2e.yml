@@ -30,6 +30,14 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
+      - name: Validate PowerShell syntax before packaging
+        shell: pwsh
+        run: |
+          foreach ($script in @('tools/e2e-installer.ps1','tools/ci-audit.ps1','tools/release.ps1','tools/installer-theme-shots.ps1')) {
+            $tokens = $null; $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script).Path, [ref]$tokens, [ref]$errors)
+            if ($errors.Count -gt 0) { $errors | Out-String | Write-Host; throw "PowerShell syntax: $script" }
+          }
       - name: Inno Setup (free)
         shell: pwsh
         run: ./tools/ci-install-inno.ps1

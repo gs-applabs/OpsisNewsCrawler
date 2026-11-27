@@ -41,10 +41,10 @@ public sealed class SettingsForm : Form
         };
 
         // The title-bar icon moves like the one in the notification area (only while the window is visible and animation is on).
-        LiveIconState.Changed += () => iconFramesStale = true;
+        LiveIconState.Changed += OnLiveIconChanged;
         iconTimer.Tick += (_, _) =>
         {
-            if (iconFramesStale) { iconFramesStale = false; iconFrames = null; }
+            if (iconFramesStale) { iconFramesStale = false; ReleaseIconFrames(); }
             var animate = Visible && host.Config.BarsEnabled;
             if (!animate)
             {
@@ -55,7 +55,11 @@ public sealed class SettingsForm : Form
             iconFrame = (iconFrame + 1) % iconFrames.Length;
             Icon = iconFrames[iconFrame];
         };
-        iconTimer.Start();
+        VisibleChanged += (_, _) =>
+        {
+            if (Visible) iconTimer.Start();
+            else { iconTimer.Stop(); ReleaseIconFrames(); }
+        };
 
         HandleCreated += (_, _) => Theme.ApplyTitleBar(this);
         Theme.Changed += OnThemeChanged;
@@ -71,6 +75,17 @@ public sealed class SettingsForm : Form
         };
     }
 
+    private void OnLiveIconChanged() => iconFramesStale = true;
+
+    private void ReleaseIconFrames()
+    {
+        if (iconFrames is null) return;
+        Icon = staticIcon;
+        foreach (var frame in iconFrames) frame.Dispose();
+        iconFrames = null;
+        iconFrame = 0;
+    }
+
     private void OnThemeChanged()
     {
         BackColor = Theme.Background;
@@ -83,8 +98,10 @@ public sealed class SettingsForm : Form
         if (disposing)
         {
             Theme.Changed -= OnThemeChanged;
+            LiveIconState.Changed -= OnLiveIconChanged;
+            iconTimer.Stop();
             iconTimer.Dispose();
-            if (iconFrames is not null) foreach (var f in iconFrames) f.Dispose();
+            ReleaseIconFrames();
         }
         base.Dispose(disposing);
     }

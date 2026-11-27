@@ -916,20 +916,12 @@ public sealed partial class TickerHost : IDisposable
         updateTimer.Stop();
         snoozeTimer.Stop();
         snoozed = false;
-        breakingTimer.Stop();
-        CloseLivePreview();
-        weatherMap?.Close();
-        weatherMap = null;
-        hazardDetail?.Close();
-        hazardDetail = null;
-        refreshTimer.Stop();
-        quoteTimer.Stop();
-        weatherTimer.Stop();
-        hazardTimer.Stop();
-        alertTimer.Stop();
-        Window.StopTicker();
-        SecondWindow?.StopTicker();
-        foreach (var extra in ExtraWindows) extra.StopTicker();
+        StopBars(); // includes the Mini Weather window
+        portfolio?.Close();
+        portfolio = null;
+        portfolioOpen = false;
+        analytics?.Close();
+        analytics = null;
     }
 
     /// <summary>True while the bars are paused from the tray menu (the scrolling stands still).</summary>

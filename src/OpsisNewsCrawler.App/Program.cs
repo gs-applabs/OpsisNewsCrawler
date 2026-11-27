@@ -212,7 +212,7 @@ internal static class Program
 
         var configAt = Array.IndexOf(args, "--config");
         using var host = new TickerHost(configAt >= 0 && configAt + 1 < args.Length ? args[configAt + 1] : null);
-        var settings = new SettingsForm(host);
+        using var settings = new SettingsForm(host);
 
         using var tray = new NotifyIcon
         {
@@ -226,12 +226,17 @@ internal static class Program
         var staticIcon = AppIcon.Get();
         var liveDirty = 1;
         LiveIconState.Changed += () => Interlocked.Exchange(ref liveDirty, 1);
-        var trayTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+        Icon? liveTrayIcon = null;
+        using var trayTimer = new System.Windows.Forms.Timer { Interval = 1000 };
         trayTimer.Tick += (_, _) =>
         {
             if (Interlocked.Exchange(ref liveDirty, 0) != 1) return;
-            var frames = AppIconArt.BuildTrayFrames(Math.Max(16, SystemInformation.SmallIconSize.Width));
-            tray.Icon = frames.Length > 0 ? frames[0] : staticIcon;
+            using var bitmap = AppIconArt.Render(Math.Max(16, SystemInformation.SmallIconSize.Width), 0);
+            var next = AppIconArt.ToIcon(bitmap);
+            var previous = liveTrayIcon;
+            tray.Icon = next;
+            liveTrayIcon = next;
+            previous?.Dispose();
             var tip = LiveIconState.Tip;
             tray.Text = tip.Length == 0 ? "Opsis News Crawler" : ("Opsis News Crawler\n" + tip).Substring(0, Math.Min(("Opsis News Crawler\n" + tip).Length, 127));
         };
@@ -375,6 +380,9 @@ internal static class Program
         }
 
         Application.Run(host.Window);
+        trayTimer.Stop();
+        tray.Icon = staticIcon;
+        liveTrayIcon?.Dispose();
         return 0;
     }
 }

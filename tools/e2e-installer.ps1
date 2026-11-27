@@ -310,7 +310,9 @@ foreach ($tier in @('', 'Low', 'High')) {
         $text = if (Test-Path $rep) { Get-Content $rep -Raw } else { '' }
         $clean = if ($kind -eq 'audit-settings') { $text -match '0 change nothing, 0 not shown again' -and $text -match 'keyboard checks failed: 0' -and $text -notmatch '(?m)^ERROR' }
                  elseif ($kind -eq 'audit-layout') { $text -match 'nothing sticks out' }
-                 else { $text -match '(?m)^Scroll audit: [1-9][0-9]* pages that scroll, [1-9][0-9]* checks, 0 moved, 0 errors\s* {
+                 else { $text -match '(?m)^Scroll audit: [1-9][0-9]* pages that scroll, [1-9][0-9]* checks, 0 moved, 0 errors\s*$' -and $text -notmatch '(?m)^(MOVED|ERROR)' }
+        $clean = $clean -and ($p.ExitCode -eq 0)
+        if (-not $clean) {
             Write-Host "::group::DIAGNOSTIC $kind tier=$tier exit=$($p.ExitCode)"
             Write-Host "Report exists: $(Test-Path $rep); characters: $($text.Length)"
             if ($text) { Write-Host ($text.Substring(0, [Math]::Min(6000, $text.Length))) }

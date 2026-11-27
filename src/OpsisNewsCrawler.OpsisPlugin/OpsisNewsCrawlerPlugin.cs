@@ -173,19 +173,26 @@ internal sealed class TickerController
     public bool IsPaused => _host?.Paused ?? false;
 
     private bool hostSafeMode;
+    private bool startRequested;
     private bool shellHold;
     private Func<double, double, Task<string>>? weatherProvider;
 
     public void ConfigureP0Environment(bool safeMode, bool hold, Func<double, double, Task<string>> provider)
     {
+        var wasSafe = hostSafeMode;
         hostSafeMode = safeMode;
         shellHold = hold;
         weatherProvider = provider;
-        if (_host is null) return; // host sets these before Start(), no eager UI
-        _host.HostSafeMode = safeMode;
-        _host.HostWeatherProvider = provider;
-        _host.SetHostShellHold(hold);
-        if (safeMode) _host.Stop();
+        if (_host is not null)
+        {
+            _host.HostSafeMode = safeMode;
+            _host.HostWeatherProvider = provider;
+            // Stop before reconfiguring shell positions so Safe Mode cannot start a refresh.
+            if (safeMode) { _fallbackSettings?.Hide(); _host.Stop(); }
+            _host.SetHostShellHold(hold);
+        }
+        // Temporary host suspension does not change the user's requested state.
+        if (wasSafe && !safeMode && startRequested) StartCore();
     }
 
     public void SetHostTier(string? tier)
@@ -195,7 +202,12 @@ internal sealed class TickerController
     }
 
     /// <summary>The host (Opsis) told us its language: the crawler's own language setting is then ignored.</summary>
-    public bool LanguageFromHost { get; set; }
+    private bool languageFromHost;
+    public bool LanguageFromHost
+    {
+        get => languageFromHost;
+        set { languageFromHost = value; if (_host is not null) _host.LanguageFollowsHost = value; }
+    }
 
     public event Action? SettingsRequested;
 
@@ -237,6 +249,12 @@ internal sealed class TickerController
 
     public void Start()
     {
+        startRequested = true;
+        StartCore();
+    }
+
+    private void StartCore()
+    {
         if (hostSafeMode)
         {
             Log.Write("Crawler disabled by Opsis Safe Mode.");
@@ -250,13 +268,22 @@ internal sealed class TickerController
         }
         StandaloneRunning = false;
         try { Host.Start(); }
-        catch { _guard.Release(); throw; }
+        catch
+        {
+            // If cleanup itself fails, retain ownership rather than allowing a second writer.
+            _host?.Stop();
+            _guard.Release();
+            throw;
+        }
     }
 
     public void Stop()
     {
+        startRequested = false;
+        _fallbackSettings?.Hide();
         _host?.Stop();
         _guard.Release();
+        StandaloneRunning = false;
     }
     public void Pause() => _host?.Pause();
     public void Resume() => _host?.Resume();
