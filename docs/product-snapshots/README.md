@@ -1,8 +1,88 @@
 # Application screenshots / Στιγμιότυπα εφαρμογής
 
-Source commit: ae094930c6eb0d7854d9929d91352c9b86a7c75e
+Source commit: a940a55af0377b3cc05c7dd6879b7469ad08976d
 
-Rendered by the actual application on Windows CI. Analytics use sample data. These are visual previews, not end-to-end acceptance tests.
+Rendered by the actual application on Windows CI. Analytics and hazard illustrations use sample data; full-height settings reveal lower cards. These are visual previews, not end-to-end acceptance tests.
+
+### hazards/snapshot-hazard-bar.png
+
+![hazards/snapshot-hazard-bar.png](hazards/snapshot-hazard-bar.png)
+
+### hazards/snapshot-hazard-icons.png
+
+![hazards/snapshot-hazard-icons.png](hazards/snapshot-hazard-icons.png)
+
+### hazards/snapshot-live-icon.png
+
+![hazards/snapshot-live-icon.png](hazards/snapshot-live-icon.png)
+
+### settings-full-height/tab-00.png
+
+![settings-full-height/tab-00.png](settings-full-height/tab-00.png)
+
+### settings-full-height/tab-01.png
+
+![settings-full-height/tab-01.png](settings-full-height/tab-01.png)
+
+### settings-full-height/tab-02.png
+
+![settings-full-height/tab-02.png](settings-full-height/tab-02.png)
+
+### settings-full-height/tab-03.png
+
+![settings-full-height/tab-03.png](settings-full-height/tab-03.png)
+
+### settings-full-height/tab-04.png
+
+![settings-full-height/tab-04.png](settings-full-height/tab-04.png)
+
+### settings-full-height/tab-05.png
+
+![settings-full-height/tab-05.png](settings-full-height/tab-05.png)
+
+### settings-full-height/tab-06.png
+
+![settings-full-height/tab-06.png](settings-full-height/tab-06.png)
+
+### settings-full-height/tab-07.png
+
+![settings-full-height/tab-07.png](settings-full-height/tab-07.png)
+
+### settings-full-height/tab-08.png
+
+![settings-full-height/tab-08.png](settings-full-height/tab-08.png)
+
+### settings-full-height/tab-09.png
+
+![settings-full-height/tab-09.png](settings-full-height/tab-09.png)
+
+### settings-full-height/tab-10.png
+
+![settings-full-height/tab-10.png](settings-full-height/tab-10.png)
+
+### settings-full-height/tab-11.png
+
+![settings-full-height/tab-11.png](settings-full-height/tab-11.png)
+
+### settings-full-height/tab-12.png
+
+![settings-full-height/tab-12.png](settings-full-height/tab-12.png)
+
+### settings-full-height/tab-13.png
+
+![settings-full-height/tab-13.png](settings-full-height/tab-13.png)
+
+### settings-full-height/tab-14.png
+
+![settings-full-height/tab-14.png](settings-full-height/tab-14.png)
+
+### settings-full-height/tab-15.png
+
+![settings-full-height/tab-15.png](settings-full-height/tab-15.png)
+
+### settings-full-height/tab-16.png
+
+![settings-full-height/tab-16.png](settings-full-height/tab-16.png)
 
 ### snapshot-analytics/analytics-00.png
 
