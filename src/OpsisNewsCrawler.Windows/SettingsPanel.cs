@@ -17,6 +17,7 @@ public sealed partial class SettingsPanel : UserControl
     private bool loading;
     private bool hasUnsavedChanges;
     private bool dirtyTrackingAttached;
+    private readonly HashSet<Control> transientControls = new();
     private Action? performanceInfoHandler;
 
     private FlatNav tabs = null!;
@@ -316,7 +317,7 @@ public sealed partial class SettingsPanel : UserControl
 
     private void OnLanguageChanged()
     {
-        if (IsDisposed) return;
+        if (IsDisposed || Disposing) return;
         if (InvokeRequired) BeginInvoke(new Action(Rebuild));
         else Rebuild();
     }
@@ -374,6 +375,7 @@ public sealed partial class SettingsPanel : UserControl
     {
         loading = true;
         watchLists.Clear();
+        transientControls.Clear();
         tabs = new FlatNav { Dock = DockStyle.Fill };
         tabs.Badge = new AnimatedAppIcon(() => !MinimiseAnimation.Simple);   // always moving: the tray option is for the tray icon only
 
@@ -1223,8 +1225,7 @@ public sealed partial class SettingsPanel : UserControl
         try
         {
             var c = host.Config;
-            workTopics = (c.TopicWatches ?? new()).Select(t=>new TopicWatch {
-                Name=t.Name, Terms=t.Terms.ToList(), Region=t.Region, Enabled=t.Enabled }).ToList();
+            workTopics = (c.TopicWatches ?? new()).Select(t => t.Clone()).ToList();
             RebuildTopics();
             LoadWidgetStudio();
             var langs = Loc.Available();
@@ -1367,6 +1368,7 @@ public sealed partial class SettingsPanel : UserControl
         dirtyTrackingAttached = true;
         foreach (var control in Descendants(tabs))
         {
+            if (transientControls.Contains(control)) continue;
             switch (control)
             {
                 case FlatCheckBox check:
@@ -1686,8 +1688,8 @@ public sealed partial class SettingsPanel : UserControl
     {
         var c = host.Config;
         c.WidgetProfiles = ReadWidgetStudio();
-        c.TopicWatches = workTopics.Select(t => new TopicWatch { Name=t.Name, Terms=t.Terms.ToList(),
-            Region=t.Region, Enabled=t.Enabled }).ToList();
+        c.TopicWatches = workTopics.Select(t => t.Clone()).ToList();
+        TopicWatch.EnsureStableIds(c.TopicWatches);
         var mutedKeywords = mutedNewsKeywords.Value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).Take(100).ToList();
         var newsSettingsChanged = c.NewsMaxAgeHours != newsMaxAge.Value || c.NewsSortNewestFirst != newsNewestFirst.Checked || c.StockNewsOnly != stockNewsOnly.Checked || !c.MutedNewsKeywords.SequenceEqual(mutedKeywords, StringComparer.OrdinalIgnoreCase);
         c.Language = Loc.Available().ElementAtOrDefault(Math.Max(0, language.SelectedIndex)).Code ?? c.Language;

@@ -609,7 +609,7 @@ public sealed class AppConfig
                 (x.Metric == "changePercent" ? x.Threshold is >= -100 and <= 100 : x.Threshold > 0))
             .Select(x => { x.Metric = x.Metric == "changePercent" ? "changePercent" : "price"; x.RearmMargin = Math.Clamp(x.RearmMargin, 0m, 1_000_000m); x.MaxAgeMinutes = Math.Clamp(x.MaxAgeMinutes, 0, 10080); return x; }).Take(200).ToList();
         TopicWatches = (TopicWatches ?? new()).Where(x => x is not null && !string.IsNullOrWhiteSpace(x.Name))
-            .Select(x => { x.Name=x.Name.Trim()[..Math.Min(80,x.Name.Trim().Length)]; x.Terms=(x.Terms ?? new()).Where(t=>t.Trim().Length>=3).Select(t=>t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList(); x.Region=(x.Region??"").Trim(); return x; })
+            .Select(x => { x.Name=x.Name.Trim()[..Math.Min(80,x.Name.Trim().Length)]; x.Terms=(x.Terms ?? new()).Where(t=>t is not null && t.Trim().Length>=3).Select(t=>t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList(); x.Region=(x.Region??"").Trim(); return x; })
             .Take(50).ToList();
         TopicWatch.EnsureStableIds(TopicWatches);
         EconomicEvents = (EconomicEvents ?? new()).Where(x => x is not null &&

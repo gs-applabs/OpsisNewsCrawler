@@ -36,9 +36,11 @@ internal sealed class FlatNav : Control
     private Control? badge;
     private Control? footer;
     private bool footerShown;
+    private int preferredFooterHeight;
     public void SetFooter(Control value)
     {
         footer = value;
+        preferredFooterHeight = value.Height;
         Controls.Add(value);
         LayoutPages();
     }
@@ -196,7 +198,7 @@ internal sealed class FlatNav : Control
     private void LayoutPages()
     {
         search.Location = new Point(RailLeft + 14, SearchTop);
-        var footerHeight = footerShown && footer is not null ? Math.Min(footer.Height, Math.Max(0, Height - TitleHeight - 100)) : 0;
+        var footerHeight = footerShown && footer is not null ? Math.Min(preferredFooterHeight, Math.Max(0, Height - TitleHeight - 100)) : 0;
         foreach (var p in pages) p.SetBounds(ContentLeft, TitleHeight, ContentWidth, Math.Max(0, Height - TitleHeight - footerHeight));
         if (footer is not null)
         {

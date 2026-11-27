@@ -59,6 +59,8 @@ public static class SettingsAudit
         material.SelectedIndex = originalMaterial;
         panel.LoadFromConfig();
         panel.SelectTab(0);
+        try { errors += AuditTopicButtons(panel, host, report); }
+        catch (Exception ex) { errors++; report.AppendLine($"ERROR     topic button audit: {ex.GetType().Name}: {ex.Message}"); }
         foreach (var field in fields)
         {
             var control = field.GetValue(panel);
@@ -129,6 +131,63 @@ public static class SettingsAudit
         File.WriteAllText(reportPath, report.ToString());
         form.Close();
         return noEffect == 0 && notShown == 0 && errors == 0 && kbdFailed == 0;
+    }
+
+    // Real Click event handlers, isolated configuration, no network or destructive external action.
+    private static int AuditTopicButtons(SettingsPanel panel, TickerHost host, StringBuilder report)
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        T Field<T>(string name) => (T)typeof(SettingsPanel).GetField(name, flags)!.GetValue(panel)!;
+        var saved = host.Config.TopicWatches.Select(t => t.Clone()).ToList();
+        var failed = 0;
+        void Check(string name, bool ok)
+        {
+            if (!ok) failed++;
+            report.AppendLine($"{(ok ? "OK       " : "ERROR    ")} {name}");
+        }
+        void Click(string name)
+        {
+            var control = panel.Controls.Find(name, true).Single();
+            typeof(Control).GetMethod("OnClick", flags)!.Invoke(control, new object[] { EventArgs.Empty });
+        }
+        try
+        {
+            host.Config.TopicWatches = new();
+            panel.LoadFromConfig();
+            if (!panel.SelectPage("intelligence")) throw new InvalidOperationException("Intelligence page missing");
+            var name = Field<FlatText>("topicName");
+            var terms = Field<FlatText>("topicTerms");
+            Click("addTopic");
+            Check("topic: rejects empty input", Field<List<TopicWatch>>("workTopics").Count == 0);
+            name.Value = "CI topic"; terms.Value = "energy, energy, market";
+            Click("addTopic");
+            panel.FlushPendingChanges();
+            var topic = host.Config.TopicWatches.Single();
+            var id = topic.Id;
+            Check("topic: Add button persists distinct terms and stable identity", topic.Terms.Count == 2 && id.Length >= 4);
+            panel.LoadFromConfig();
+            Check("topic: ID survives reload", Field<List<TopicWatch>>("workTopics").Single().Id == id);
+            // Save an unrelated setting via its actual change event.
+            var opacity = Field<FlatSlider>("opacity");
+            var old = opacity.Value;
+            opacity.Value = old == 100 ? 95 : 100;
+            panel.FlushPendingChanges();
+            Check("topic: unrelated settings save preserves ID", host.Config.TopicWatches.Single().Id == id);
+            opacity.Value = old;
+            panel.FlushPendingChanges();
+            Field<FlatList>("topicList").SelectedIndex = 0;
+            Click("removeTopic");
+            panel.FlushPendingChanges();
+            Check("topic: Remove button persists deletion", host.Config.TopicWatches.Count == 0);
+        }
+        finally
+        {
+            host.Config.TopicWatches = saved;
+            host.SaveConfig();
+            panel.LoadFromConfig();
+            panel.SelectTab(0);
+        }
+        return failed;
     }
 
     private static (Func<string> Describe, Action? Change, Action Back) Prepare(object control, string name)

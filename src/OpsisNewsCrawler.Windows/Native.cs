@@ -227,20 +227,23 @@ internal static class Native
 
     internal static bool IsTaskbarCovering(IntPtr hwnd)
     {
-        var taskbar = GetTaskbarHandle();
-        return taskbar != IntPtr.Zero && CoveringTopmostAbove(hwnd, taskbar) != IntPtr.Zero;
+        return IsWindowCovering(hwnd, GetTaskbarHandle());
     }
 
-    // Raise just above Explorer's taskbar, not above unrelated always-on-top windows.
-    internal static void RestoreAboveTaskbar(IntPtr hwnd)
+    internal static bool IsWindowCovering(IntPtr hwnd, IntPtr covering) =>
+        covering != IntPtr.Zero && CoveringTopmostAbove(hwnd, covering) != IntPtr.Zero;
+
+    // The same native operation is used for Explorer and for isolated Win32 regression fixtures.
+    internal static void RestoreAboveTaskbar(IntPtr hwnd) => RestoreAboveWindow(hwnd, GetTaskbarHandle());
+
+    internal static bool RestoreAboveWindow(IntPtr hwnd, IntPtr covering)
     {
-        var taskbar = GetTaskbarHandle();
-        if (taskbar == IntPtr.Zero || !IsTaskbarCovering(hwnd)) return;
-        var previous = GetWindow(taskbar, 3 /* GW_HWNDPREV */);
+        if (!IsWindowCovering(hwnd, covering)) return false;
+        var previous = GetWindow(covering, 3 /* GW_HWNDPREV */);
         // Insert after the nearest topmost predecessor; never demote our own topmost flag.
         while (previous != IntPtr.Zero && (GetWindowLongEx(previous, -20) & 0x8) == 0)
             previous = GetWindow(previous, 3);
-        SetWindowPos(hwnd, previous == IntPtr.Zero ? new IntPtr(-1) : previous, 0, 0, 0, 0, 1 | 2 | 0x10);
+        return SetWindowPos(hwnd, previous == IntPtr.Zero ? new IntPtr(-1) : previous, 0, 0, 0, 0, 1 | 2 | 0x10);
     }
 
     internal static bool IsShellFlyoutActive()
