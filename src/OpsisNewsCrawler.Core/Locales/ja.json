@@ -296,7 +296,7 @@
   "lbl.barColor": "メインバーの色",
   "lbl.taskbarBarColor": "タスクバー内のバーの色",
   "color.theme": "テーマに合わせる (ダーク/ライト、Opsis、Windows)",
-  "color.taskbar": "タスクバーと同じ (完全に透明)",
+  "color.taskbar": "タスクバーに合わせる（独自の色合いなし）",
   "color.lightblue": "ライトブルー",
   "color.accent": "Windows の色 (アクセント)",
   "color.custom": "好きな色…",
@@ -736,5 +736,12 @@
   "energy.metered": "従量制接続 (データ節約)",
   "energy.label": "接続料金",
   "dash.title": "設定の概要",
-  "dash.metrics": "ニュース: {0} · 正常RSS: {1}/{2} · プロファイル: {3} · 処理数: {4} · 書込み: {5} (回避 {6}) · 電力: ×{7:N2}"
+  "dash.metrics": "ニュース: {0} · 正常RSS: {1}/{2} · プロファイル: {3} · 処理数: {4} · 書込み: {5} (回避 {6}) · 電力: ×{7:N2}",
+  "nav.barContent": "バーの内容",
+  "nav.widgetStudio": "ウィジェットスタジオ",
+  "nav.intelligence": "スマートニュース",
+  "nav.news": "ニュース",
+  "nav.data": "データとサービス",
+  "nav.openIntelligence": "ニュースセンターを開く",
+  "note.taskbarMaterial": "背景の素材は色とは独立しています。ぼかしとアクリルは独自の色合いを加えずにタスクバーに合わせます。グラデーションは水色に見える場合があります。"
 }

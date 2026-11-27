@@ -296,7 +296,7 @@
   "lbl.barColor": "Farbe der Hauptleiste",
   "lbl.taskbarBarColor": "Farbe der Leiste in der Taskleiste",
   "color.theme": "Dem Design folgen (dunkel/hell, Opsis und Windows)",
-  "color.taskbar": "Wie die Taskleiste (völlig transparent)",
+  "color.taskbar": "Wie die Taskleiste (ohne eigene Tönung)",
   "color.lightblue": "Hellblau",
   "color.accent": "Windows-Farbe (Akzent)",
   "color.custom": "Eigene Farbe…",
@@ -736,5 +736,12 @@
   "energy.metered": "Getaktete Verbindung (Daten sparen)",
   "energy.label": "Verbindungskosten",
   "dash.title": "Einstellungsübersicht",
-  "dash.metrics": "Nachrichten: {0} · RSS OK: {1}/{2} · Profil: {3} · Aufträge: {4} · Cache-Schreibvorgänge: {5} (gespart {6}) · Energiefaktor: ×{7:N2}"
+  "dash.metrics": "Nachrichten: {0} · RSS OK: {1}/{2} · Profil: {3} · Aufträge: {4} · Cache-Schreibvorgänge: {5} (gespart {6}) · Energiefaktor: ×{7:N2}",
+  "nav.barContent": "Leisteninhalt",
+  "nav.widgetStudio": "Widget-Studio",
+  "nav.intelligence": "Intelligente Nachrichten",
+  "nav.news": "Nachrichten",
+  "nav.data": "Daten und Dienste",
+  "nav.openIntelligence": "Nachrichtenzentrale öffnen",
+  "note.taskbarMaterial": "Das Hintergrundmaterial ist unabhängig von der Farbe. Unschärfe und Acryl folgen der Taskleiste ohne eigene Tönung; der Verlauf kann hellblau erscheinen."
 }

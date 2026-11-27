@@ -296,7 +296,7 @@
   "lbl.barColor": "메인 바 색",
   "lbl.taskbarBarColor": "작업 표시줄 안 바의 색",
   "color.theme": "테마 따르기 (어두움/밝음, Opsis 및 Windows)",
-  "color.taskbar": "작업 표시줄과 동일 (완전 투명)",
+  "color.taskbar": "작업 표시줄과 동일 (사용자 지정 색조 없음)",
   "color.lightblue": "하늘색",
   "color.accent": "Windows 색 (강조색)",
   "color.custom": "내가 고른 색…",
@@ -736,5 +736,12 @@
   "energy.metered": "데이터 요금제 연결 (절약)",
   "energy.label": "연결 비용",
   "dash.title": "설정 개요",
-  "dash.metrics": "뉴스: {0} · 정상 RSS: {1}/{2} · 프로필: {3} · 작업: {4} · 캐시 쓰기: {5} (생략 {6}) · 에너지: ×{7:N2}"
+  "dash.metrics": "뉴스: {0} · 정상 RSS: {1}/{2} · 프로필: {3} · 작업: {4} · 캐시 쓰기: {5} (생략 {6}) · 에너지: ×{7:N2}",
+  "nav.barContent": "바 콘텐츠",
+  "nav.widgetStudio": "위젯 스튜디오",
+  "nav.intelligence": "스마트 뉴스",
+  "nav.news": "뉴스",
+  "nav.data": "데이터 및 서비스",
+  "nav.openIntelligence": "뉴스 센터 열기",
+  "note.taskbarMaterial": "배경 소재는 색상과 별개입니다. 흐림과 아크릴은 사용자 지정 색조 없이 작업 표시줄을 따르며 그라데이션은 연한 파란색으로 보일 수 있습니다."
 }

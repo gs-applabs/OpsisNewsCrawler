@@ -296,7 +296,7 @@
   "lbl.barColor": "Cor da barra principal",
   "lbl.taskbarBarColor": "Cor da barra dentro da barra de tarefas",
   "color.theme": "Seguir o tema (escuro/claro, Opsis e Windows)",
-  "color.taskbar": "Como a barra de tarefas (totalmente transparente)",
+  "color.taskbar": "Como a barra de tarefas (sem tonalidade personalizada)",
   "color.lightblue": "Azul-claro",
   "color.accent": "Cor do Windows (destaque)",
   "color.custom": "A minha própria cor…",
@@ -736,5 +736,12 @@
   "energy.metered": "Ligação com consumo medido",
   "energy.label": "Custo da ligação",
   "dash.title": "Resumo das definições",
-  "dash.metrics": "Notícias: {0} · RSS OK: {1}/{2} · Perfil: {3} · Tarefas: {4} · Escritas cache: {5} (evitadas {6}) · Energia: ×{7:N2}"
+  "dash.metrics": "Notícias: {0} · RSS OK: {1}/{2} · Perfil: {3} · Tarefas: {4} · Escritas cache: {5} (evitadas {6}) · Energia: ×{7:N2}",
+  "nav.barContent": "Conteúdo da barra",
+  "nav.widgetStudio": "Estúdio de widgets",
+  "nav.intelligence": "Notícias inteligentes",
+  "nav.news": "Notícias",
+  "nav.data": "Dados e serviços",
+  "nav.openIntelligence": "Abrir centro de notícias",
+  "note.taskbarMaterial": "O material do fundo é independente da cor. O desfoque e o acrílico seguem a barra de tarefas sem tonalidade personalizada; o gradiente pode parecer azul-claro."
 }

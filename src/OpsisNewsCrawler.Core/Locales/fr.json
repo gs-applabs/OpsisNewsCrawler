@@ -296,7 +296,7 @@
   "lbl.barColor": "Couleur de la barre principale",
   "lbl.taskbarBarColor": "Couleur de la barre dans la barre des tâches",
   "color.theme": "Suivre le thème (sombre/clair, Opsis et Windows)",
-  "color.taskbar": "Comme la barre des tâches (totalement transparente)",
+  "color.taskbar": "Comme la barre des tâches (sans teinte personnalisée)",
   "color.lightblue": "Bleu clair",
   "color.accent": "Couleur Windows (accent)",
   "color.custom": "Ma propre couleur…",
@@ -736,5 +736,12 @@
   "energy.metered": "Connexion limitée (économiser les données)",
   "energy.label": "Coût de connexion",
   "dash.title": "Vue d'ensemble des paramètres",
-  "dash.metrics": "Actualités : {0} · RSS OK : {1}/{2} · Profil : {3} · Tâches : {4} · Écritures cache : {5} (évitée : {6}) · Énergie : ×{7:N2}"
+  "dash.metrics": "Actualités : {0} · RSS OK : {1}/{2} · Profil : {3} · Tâches : {4} · Écritures cache : {5} (évitée : {6}) · Énergie : ×{7:N2}",
+  "nav.barContent": "Contenu de la barre",
+  "nav.widgetStudio": "Studio de widgets",
+  "nav.intelligence": "Actualités intelligentes",
+  "nav.news": "Actualités",
+  "nav.data": "Données et services",
+  "nav.openIntelligence": "Ouvrir le centre d’actualités",
+  "note.taskbarMaterial": "Le matériau de fond est indépendant de la couleur. Le flou et l’acrylique suivent la barre des tâches sans teinte personnalisée ; le dégradé peut paraître bleu clair."
 }

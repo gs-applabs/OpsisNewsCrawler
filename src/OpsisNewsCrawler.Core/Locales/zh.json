@@ -296,7 +296,7 @@
   "lbl.barColor": "主栏颜色",
   "lbl.taskbarBarColor": "任务栏内栏的颜色",
   "color.theme": "跟随主题（深色/浅色、Opsis 和 Windows）",
-  "color.taskbar": "与任务栏相同（完全透明）",
+  "color.taskbar": "与任务栏一致（无自定义色调）",
   "color.lightblue": "浅蓝色",
   "color.accent": "Windows 颜色（强调色）",
   "color.custom": "我自己的颜色…",
@@ -736,5 +736,12 @@
   "energy.metered": "按流量计费连接 (节省数据)",
   "energy.label": "连接费用",
   "dash.title": "设置概览",
-  "dash.metrics": "新闻: {0} · 正常 RSS: {1}/{2} · 模式: {3} · 任务: {4} · 缓存写入: {5} (避免 {6}) · 节能系数: ×{7:N2}"
+  "dash.metrics": "新闻: {0} · 正常 RSS: {1}/{2} · 模式: {3} · 任务: {4} · 缓存写入: {5} (避免 {6}) · 节能系数: ×{7:N2}",
+  "nav.barContent": "栏内容",
+  "nav.widgetStudio": "小组件工作室",
+  "nav.intelligence": "智能新闻",
+  "nav.news": "新闻",
+  "nav.data": "数据与服务",
+  "nav.openIntelligence": "打开新闻中心",
+  "note.taskbarMaterial": "背景材质独立于颜色。模糊和亚克力跟随任务栏，不添加自定义色调；渐变可能呈浅蓝色。"
 }

@@ -296,7 +296,7 @@
   "lbl.barColor": "Colore della barra principale",
   "lbl.taskbarBarColor": "Colore della barra nella barra delle applicazioni",
   "color.theme": "Segui il tema (scuro/chiaro, Opsis e Windows)",
-  "color.taskbar": "Come la barra delle applicazioni (completamente trasparente)",
+  "color.taskbar": "Come la barra delle applicazioni (senza tinta personalizzata)",
   "color.lightblue": "Azzurro",
   "color.accent": "Colore di Windows (accento)",
   "color.custom": "Un mio colore…",
@@ -736,5 +736,12 @@
   "energy.metered": "Connessione a consumo",
   "energy.label": "Costo della connessione",
   "dash.title": "Panoramica impostazioni",
-  "dash.metrics": "Notizie: {0} · RSS attivi: {1}/{2} · Profilo: {3} · Attività: {4} · Scritture cache: {5} (evitate {6}) · Energia: ×{7:N2}"
+  "dash.metrics": "Notizie: {0} · RSS attivi: {1}/{2} · Profilo: {3} · Attività: {4} · Scritture cache: {5} (evitate {6}) · Energia: ×{7:N2}",
+  "nav.barContent": "Contenuto della barra",
+  "nav.widgetStudio": "Studio widget",
+  "nav.intelligence": "Notizie intelligenti",
+  "nav.news": "Notizie",
+  "nav.data": "Dati e servizi",
+  "nav.openIntelligence": "Apri il centro notizie",
+  "note.taskbarMaterial": "Il materiale dello sfondo è indipendente dal colore. Sfocatura e acrilico seguono la barra delle applicazioni senza tinta personalizzata; il gradiente può apparire azzurro."
 }

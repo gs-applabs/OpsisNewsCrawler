@@ -365,7 +365,7 @@
   "lbl.barColor": "Colour of the main bar",
   "lbl.taskbarBarColor": "Colour of the bar inside the taskbar",
   "color.theme": "Follow the theme (dark/light, Opsis and Windows)",
-  "color.taskbar": "Like the taskbar (completely clear)",
+  "color.taskbar": "Like the taskbar (no custom tint)",
   "color.lightblue": "Light blue",
   "color.accent": "Windows colour (accent)",
   "color.custom": "My own colour…",
@@ -736,5 +736,12 @@
   "energy.metered": "Metered connection (save data)",
   "energy.label": "Connection cost",
   "dash.title": "Settings overview",
-  "dash.metrics": "News: {0}  ·  RSS healthy: {1}/{2}  ·  Profile: {3}  ·  Jobs: {4}  ·  Cache writes: {5} (saved {6})  ·  Energy factor: ×{7:N2}"
+  "dash.metrics": "News: {0}  ·  RSS healthy: {1}/{2}  ·  Profile: {3}  ·  Jobs: {4}  ·  Cache writes: {5} (saved {6})  ·  Energy factor: ×{7:N2}",
+  "nav.barContent": "Bar content",
+  "nav.widgetStudio": "Widget Studio",
+  "nav.intelligence": "Smart news",
+  "nav.news": "News",
+  "nav.data": "Data and services",
+  "nav.openIntelligence": "Open news center",
+  "note.taskbarMaterial": "The background material is independent of the color. Blur and Acrylic follow the taskbar without a custom tint; Gradient may appear light blue."
 }

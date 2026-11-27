@@ -296,7 +296,7 @@
   "lbl.barColor": "Ana çubuğun rengi",
   "lbl.taskbarBarColor": "Görev çubuğundaki çubuğun rengi",
   "color.theme": "Temayı izle (koyu/açık, Opsis ve Windows)",
-  "color.taskbar": "Görev çubuğu gibi (tamamen saydam)",
+  "color.taskbar": "Görev çubuğu gibi (özel renk tonu yok)",
   "color.lightblue": "Açık mavi",
   "color.accent": "Windows rengi (vurgu)",
   "color.custom": "Kendi rengim…",
@@ -736,5 +736,12 @@
   "energy.metered": "Kotalı bağlantı (veri tasarrufu)",
   "energy.label": "Bağlantı maliyeti",
   "dash.title": "Ayarlar özeti",
-  "dash.metrics": "Haberler: {0} · RSS sağlıklı: {1}/{2} · Profil: {3} · İşler: {4} · Önbellek yazma: {5} (atlanan {6}) · Enerji: ×{7:N2}"
+  "dash.metrics": "Haberler: {0} · RSS sağlıklı: {1}/{2} · Profil: {3} · İşler: {4} · Önbellek yazma: {5} (atlanan {6}) · Enerji: ×{7:N2}",
+  "nav.barContent": "Çubuk içeriği",
+  "nav.widgetStudio": "Widget stüdyosu",
+  "nav.intelligence": "Akıllı haberler",
+  "nav.news": "Haberler",
+  "nav.data": "Veriler ve hizmetler",
+  "nav.openIntelligence": "Haber merkezini aç",
+  "note.taskbarMaterial": "Arka plan malzemesi renkten bağımsızdır. Bulanıklık ve akrilik özel renk tonu olmadan görev çubuğunu izler; gradyan açık mavi görünebilir."
 }
