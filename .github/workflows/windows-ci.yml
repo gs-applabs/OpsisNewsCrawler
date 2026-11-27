@@ -103,6 +103,31 @@ jobs:
       - name: Settings and layout audit (en, el, de, ar)
         shell: pwsh
         run: ./tools/ci-audit.ps1 -Out "$env:RUNNER_TEMP/opsis-ci-audit"
+      - name: Capture actual settings pages for review (Greek and English)
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem src/OpsisNewsCrawler.App/bin/Release -Filter OpsisNewsCrawler.exe -Recurse | Select-Object -First 1
+          if (!$exe) { Write-Host "No compiled executable; screenshots unavailable"; exit 0 }
+          $root = Join-Path $env:RUNNER_TEMP 'crawler-settings-review'
+          foreach ($lang in @('el', 'en')) {
+            $out = Join-Path $root $lang
+            New-Item -ItemType Directory -Force $out | Out-Null
+            $cfg = Join-Path $root "$lang.json"
+            Set-Content -LiteralPath $cfg -Value ('{"Language":"' + $lang + '","Position":"Top"}') -Encoding utf8
+            $p = Start-Process -FilePath $exe.FullName -ArgumentList '--snapshot', "`"$out`"", '--config', "`"$cfg`"" -PassThru
+            if (!$p.WaitForExit(180000)) { $p.Kill(); throw "Snapshot timeout: $lang" }
+            if ($p.ExitCode -ne 0) { throw "Snapshot failed: $lang ($($p.ExitCode))" }
+            $shots = @(Get-ChildItem -LiteralPath $out -Filter 'tab*.png' -File)
+            if ($shots.Count -lt 21) { throw "Missing settings pages: $lang ($($shots.Count))" }
+          }
+      - name: Upload settings screenshots
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: settings-review
+          path: ${{ runner.temp }}/crawler-settings-review/**/*.png
+          if-no-files-found: warn
       - name: Upload audit reports
         if: always()
         uses: actions/upload-artifact@v4

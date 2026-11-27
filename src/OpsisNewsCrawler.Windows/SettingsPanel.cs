@@ -241,6 +241,8 @@ public sealed partial class SettingsPanel : UserControl
         Theme.Changed += OnThemeChanged;
         Loc.Changed += OnLanguageChanged;
         previewTimer.Tick += (_, _) => UpdatePreview();
+        historyRetry.Tick += OnHistoryRetry;
+        OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.Changed += OnPluginFeedsChanged;
         autoApplyTimer.Tick += (_, _) =>
         {
             autoApplyTimer.Stop();
@@ -540,9 +542,6 @@ public sealed partial class SettingsPanel : UserControl
         refresh = new FlatNumber();
         refresh.Configure(AppConfig.MinRefreshSeconds, AppConfig.MaxRefreshSeconds, 30);
         flow.Controls.Add(Row(L("lbl.refresh"), refresh));
-        speed = new FlatNumber();
-        speed.Configure(AppConfig.MinScrollSpeed, AppConfig.MaxScrollSpeed, 10);
-        flow.Controls.Add(Row(L("lbl.speed"), speed));
 
         // Performance: Automatic follows the PC (what was detected is shown); the others force a tier.
         var perfCard = new FlatCard(L("card.performance"));
@@ -733,12 +732,15 @@ public sealed partial class SettingsPanel : UserControl
         return page;
     }
 
-    /// <summary>The bars of the other monitors (one per screen, each with its own content): the last section of the Bars page.</summary>
+    /// <summary>All bar scroll speeds in one place.</summary>
     private Control BuildSpeedCard()
     {
         // Each bar, and each half of a split bar, has its own speed; 0 = the same as the main speed.
         var speedCard = new FlatCard(L("speed.card"));
         var speedFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+        speed = new FlatNumber();
+        speed.Configure(AppConfig.MinScrollSpeed, AppConfig.MaxScrollSpeed, 10);
+        speedFlow.Controls.Add(Row(L("lbl.speed"), speed, 340));
         speedFlow.Controls.Add(Note(L("speed.note"), 700));
         FlatNumber SpeedBox()
         {

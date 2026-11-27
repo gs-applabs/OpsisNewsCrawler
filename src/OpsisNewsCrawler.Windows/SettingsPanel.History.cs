@@ -62,15 +62,14 @@ public sealed partial class SettingsPanel
         optionsCard.Controls.Add(optionsFlow);
         flow.Controls.Add(optionsCard);
 
-        historyRetry.Tick += (_, _) =>
-        {
-            // a plugin fills its feed in the background a few seconds after it started: ask again (at most 10 times) until there is something to show
-            historyRetry.Stop();
-            if (IsDisposed || ++historyRetries > 10) return;
-            RefreshHistoryPreview();
-        };
-        OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.Changed += OnPluginFeedsChanged;
         return page;
+    }
+
+    private void OnHistoryRetry(object? sender, EventArgs e)
+    {
+        historyRetry.Stop();
+        if (IsDisposed || Disposing || ++historyRetries > 10) return;
+        RefreshHistoryPreview();
     }
 
     private void OnPluginFeedsChanged()
