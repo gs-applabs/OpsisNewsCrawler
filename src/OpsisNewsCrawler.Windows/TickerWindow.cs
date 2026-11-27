@@ -471,6 +471,17 @@ public sealed class TickerWindow : Form
         ApplyLook();
     }
 
+    // Change the position, color and material as one operation; avoid intermediate DWM states.
+    internal void ConfigureAppearance(TickerPosition target, string style, string mode, int rgb)
+    {
+        backdropStyle = style;
+        colorMode = mode;
+        customColor = Color.FromArgb(255, Color.FromArgb(rgb));
+        SetPosition(target);
+    }
+
+    internal (string Material, string ColorMode) ConfiguredAppearance => (backdropStyle, colorMode);
+
     /// <summary>The tint chosen by the user for this bar, or null for the default look of the position.</summary>
     private Color? ResolveTint() => colorMode switch
     {

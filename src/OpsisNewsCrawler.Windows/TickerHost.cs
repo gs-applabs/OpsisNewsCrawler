@@ -527,19 +527,22 @@ public sealed partial class TickerHost : IDisposable
         Theme.SetMode(Config.ThemeMode, Config.OpacityPercent / 100.0, Config.ThemeFollowAccent);
         UpdateHotkey();
 
-        ConfigureWindow(Window, EffectiveMainPosition, main: true);
-        Window.SetBackdropStyle(Config.BarBackdrop);
-        Window.SetBarColor(Config.BarColorMode, Config.BarCustomColor);
+        var mainPosition = EffectiveMainPosition;
+        ConfigureWindow(Window, mainPosition, main: true);
         Window.ReserveSpace = EffectiveReserveSpace && !HostShellHold;
         Window.SetCustomBounds(GetCustomBounds());
-        Window.SetPosition(EffectiveMainPosition);
+        var integrated = mainPosition == TickerPosition.TaskbarIntegrated;
+        Window.ConfigureAppearance(mainPosition,
+            integrated ? Config.TaskbarBarBackdrop : Config.BarBackdrop,
+            integrated ? Config.TaskbarBarColorMode : Config.BarColorMode,
+            integrated ? Config.TaskbarBarCustomColor : Config.BarCustomColor);
 
         var wantSecond = !HostShellHold && Config.SecondBarEnabled && Config.Position != TickerPosition.TaskbarIntegrated;
-        if (wantSecond && SecondWindow is null)
+        var newSecond = wantSecond && SecondWindow is null;
+        if (newSecond)
         {
             SecondWindow = new TickerWindow(State2, hostWindowDetector);
             WireWindow(SecondWindow);
-            if (BarsOn) SecondWindow.StartTicker();
         }
         else if (!wantSecond && SecondWindow is not null)
         {
@@ -550,10 +553,9 @@ public sealed partial class TickerHost : IDisposable
         if (SecondWindow is not null)
         {
             ConfigureWindow(SecondWindow, TickerPosition.TaskbarIntegrated, main: false);
-            SecondWindow.SetBackdropStyle(Config.TaskbarBarBackdrop);
-            SecondWindow.SetBarColor(Config.TaskbarBarColorMode, Config.TaskbarBarCustomColor);
             SecondWindow.ReserveSpace = false;
-            SecondWindow.SetPosition(TickerPosition.TaskbarIntegrated);
+            SecondWindow.ConfigureAppearance(TickerPosition.TaskbarIntegrated, Config.TaskbarBarBackdrop, Config.TaskbarBarColorMode, Config.TaskbarBarCustomColor);
+            if (newSecond && BarsOn) SecondWindow.StartTicker();
         }
 
         SyncMonitorWindows();
@@ -988,7 +990,6 @@ public sealed partial class TickerHost : IDisposable
     {
         Config.Position = position;
         if (position == TickerPosition.TaskbarIntegrated) Config.SecondBarEnabled = false;
-        Window.SetPosition(EffectiveMainPosition);
         ApplyConfig();
         SaveConfig();
     }

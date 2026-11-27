@@ -15,6 +15,8 @@ public sealed partial class SettingsPanel : UserControl
     private readonly bool showCloseButton;
     private readonly bool showAboutTabs;
     private bool loading;
+    private bool applying;
+    private bool applyingTheme;
     private bool hasUnsavedChanges;
     private bool dirtyTrackingAttached;
     private readonly HashSet<Control> transientControls = new();
@@ -310,9 +312,15 @@ public sealed partial class SettingsPanel : UserControl
 
     private void OnThemeChanged()
     {
-        if (IsDisposed) return;
-        Theme.Apply(this);
-        Invalidate(true);
+        if (IsDisposed || Disposing || loading || applyingTheme) return;
+        if (IsHandleCreated && InvokeRequired)
+        {
+            BeginInvoke(new Action(OnThemeChanged));
+            return;
+        }
+        applyingTheme = true;
+        try { Theme.Apply(this); Invalidate(true); }
+        finally { applyingTheme = false; }
     }
 
     private void OnLanguageChanged()
@@ -1538,8 +1546,9 @@ public sealed partial class SettingsPanel : UserControl
 
     private static IEnumerable<Control> Descendants(Control root)
     {
-        foreach (Control child in root.Controls)
+        foreach (var child in root.Controls.Cast<Control>().ToArray())
         {
+            if (child.IsDisposed || child.Parent != root) continue;
             yield return child;
             foreach (var nested in Descendants(child)) yield return nested;
         }
@@ -1560,7 +1569,7 @@ public sealed partial class SettingsPanel : UserControl
     public void FlushPendingChanges()
     {
         autoApplyTimer.Stop();
-        if (hasUnsavedChanges && built && !loading && !IsDisposed) ApplySettings();
+        if (hasUnsavedChanges && built && !loading && !applying && !IsDisposed && !Disposing) ApplySettings();
     }
 
     /// <summary>Called before the window is hidden: a pending change is saved (there is no "unsaved changes" question any more); always true.</summary>
@@ -1685,6 +1694,14 @@ public sealed partial class SettingsPanel : UserControl
     }
 
     private void ApplySettings()
+    {
+        if (applying || loading || IsDisposed || Disposing) return;
+        applying = true;
+        try { ApplySettingsCore(); }
+        finally { applying = false; }
+    }
+
+    private void ApplySettingsCore()
     {
         var c = host.Config;
         c.WidgetProfiles = ReadWidgetStudio();

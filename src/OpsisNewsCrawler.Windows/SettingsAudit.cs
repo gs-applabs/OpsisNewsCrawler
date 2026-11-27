@@ -59,6 +59,38 @@ public static class SettingsAudit
         material.SelectedIndex = originalMaterial;
         panel.LoadFromConfig();
         panel.SelectTab(0);
+        // Check the actual host-to-window route, not just selected indices in the settings UI.
+        var cfg = host.Config;
+        var oldPosition = cfg.Position;
+        var oldBar = cfg.BarBackdrop;
+        var oldTaskbar = cfg.TaskbarBarBackdrop;
+        var oldColor = cfg.BarColorMode;
+        var oldTaskbarColor = cfg.TaskbarBarColorMode;
+        var oldSecond = cfg.SecondBarEnabled;
+        try
+        {
+            cfg.Position = TickerPosition.TaskbarIntegrated;
+            cfg.BarBackdrop = "gradient"; cfg.BarColorMode = "custom";
+            cfg.TaskbarBarBackdrop = "acrylic"; cfg.TaskbarBarColorMode = "taskbar";
+            host.ApplyConfig();
+            if (host.Window.ConfiguredAppearance != ("acrylic", "taskbar"))
+            { errors++; report.AppendLine("ERROR     integrated primary bar uses wrong appearance"); }
+            else report.AppendLine("OK        integrated primary bar uses taskbar appearance");
+            cfg.Position = TickerPosition.Top;
+            cfg.SecondBarEnabled = true;
+            host.ApplyConfig();
+            if (host.Window.ConfiguredAppearance != ("gradient", "custom") ||
+                host.SecondWindow?.ConfiguredAppearance != ("acrylic", "taskbar"))
+            { errors++; report.AppendLine("ERROR     separate primary/secondary appearance routing"); }
+            else report.AppendLine("OK        independent primary and integrated secondary appearance");
+        }
+        finally
+        {
+            cfg.Position = oldPosition; cfg.BarBackdrop = oldBar; cfg.TaskbarBarBackdrop = oldTaskbar;
+            cfg.BarColorMode = oldColor; cfg.TaskbarBarColorMode = oldTaskbarColor; cfg.SecondBarEnabled = oldSecond;
+            host.ApplyConfig();
+            panel.LoadFromConfig();
+        }
         try { errors += AuditTopicButtons(panel, host, report); }
         catch (Exception ex) { errors++; report.AppendLine($"ERROR     topic button audit: {ex.GetType().Name}: {ex.Message}"); }
         foreach (var field in fields)
@@ -121,6 +153,7 @@ public static class SettingsAudit
                 var inner = ex is TargetInvocationException { InnerException: { } i } ? i : ex;
                 errors++;
                 report.AppendLine($"ERROR     {field.Name}: {inner.GetType().Name}: {inner.Message}");
+                report.AppendLine(inner.StackTrace ?? "(stack unavailable)");
             }
         }
 

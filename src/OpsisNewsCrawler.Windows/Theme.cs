@@ -25,10 +25,16 @@ public static class Theme
         if (!UsesHostSharedTheme) OpsisTheme.Use(new SharedTokens());
     }
 
+    private static (Palette Palette, double Opacity)? lastAnnounced;
+
     private static void AnnouncePaletteChanged()
     {
+        var next = (new Palette(IsDark, Background, Surface, Border, Text, TextMuted, Accent), Opacity);
+        if (lastAnnounced == next) return;
+        var paletteChanged = lastAnnounced is null || lastAnnounced.Value.Palette != next.Item1;
+        lastAnnounced = next;
         Changed?.Invoke();
-        if (!UsesHostSharedTheme) OpsisTheme.NotifyChanged();
+        if (paletteChanged && !UsesHostSharedTheme) OpsisTheme.NotifyChanged();
     }
 
     /// <summary>What the shared controls of Opsis.UI read: always the current values of this class (no copy).</summary>
@@ -165,12 +171,14 @@ public static class Theme
 
     private static void ApplyCore(Control c, Color back)
     {
+        if (c.IsDisposed || c.Disposing) return;
         switch (c)
         {
             case FlatCard card:
                 card.BackColor = back;
                 card.ForeColor = Text;
-                foreach (Control child in card.Controls) ApplyCore(child, Surface);
+                foreach (var child in card.Controls.Cast<Control>().ToArray())
+                    if (child.Parent == card) ApplyCore(child, Surface);
                 return;
             case FlatNumber or FlatText or FlatButton or FlatCheckBox or FlatComboBox or FlatSlider or FlatSwatch:
                 c.BackColor = back; // drawn by themselves; they use the parent's colour for their corners
@@ -193,7 +201,9 @@ public static class Theme
         c.BackColor = surface ? Surface : back;
         c.ForeColor = Equals(c.Tag, "muted") ? TextMuted : Text;
         var childBack = surface ? Surface : back;
-        foreach (Control child in c.Controls) ApplyCore(child, childBack);
+        // BackColor/ForeColor and layout callbacks can replace a control during the walk.
+        foreach (var child in c.Controls.Cast<Control>().ToArray())
+            if (child.Parent == c) ApplyCore(child, childBack);
         c.Invalidate();
     }
 
