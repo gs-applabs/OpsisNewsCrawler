@@ -16,6 +16,9 @@ internal static class FaviconCache
     private static readonly HttpClient Http = CreateClient();
     private static readonly ConcurrentDictionary<string, Bitmap?> Cache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentDictionary<string, byte> Pending = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object Gate = new();
+    internal const int MaxConcurrentDownloads = 4;
+    internal static int PendingCount => Pending.Count;
 
     private static HttpClient CreateClient()
     {
@@ -33,31 +36,43 @@ internal static class FaviconCache
     internal const int MaxIcons = 200;
     private static readonly ConcurrentQueue<string> Order = new();
 
+    private static void RemoveIcon(string host)
+    {
+        Cache.TryRemove(host, out var raw);
+        Styled.TryRemove((host, true), out var dark);
+        Styled.TryRemove((host, false), out var light);
+        if (dark is not null && !ReferenceEquals(dark, raw)) dark.Dispose();
+        if (light is not null && !ReferenceEquals(light, raw) && !ReferenceEquals(light, dark)) light.Dispose();
+        raw?.Dispose();
+    }
+
     private static void Remember(string host, Bitmap? bmp)
     {
-        if (Cache.TryAdd(host, bmp)) Order.Enqueue(host);
-        else Cache[host] = bmp;
-        while (Cache.Count > MaxIcons && Order.TryDequeue(out var oldest))
+        lock (Gate)
         {
-            Cache.TryRemove(oldest, out _);
-            Styled.TryRemove((oldest, true), out _);
-            Styled.TryRemove((oldest, false), out _);
+            if (Cache.ContainsKey(host)) RemoveIcon(host);
+            else Order.Enqueue(host);
+            Cache[host] = bmp;
+            while (Cache.Count > MaxIcons && Order.TryDequeue(out var oldest)) RemoveIcon(oldest);
         }
     }
 
     internal static int Count => Cache.Count;
+    internal static int StyledCount => Styled.Count;
+    internal static Bitmap? TryGet(string host) => Cache.TryGetValue(host, out var bmp) ? bmp : null;
 
-    public static Bitmap? TryGet(string host) => Cache.TryGetValue(host, out var bmp) ? bmp : null;
-
-    /// <summary>
-    /// The icon prepared for the surface it is drawn on. Dark or single-colour icons that would disappear on the strip are
-    /// inverted (monochrome) or placed on a contrasting round plate (coloured).
-    /// </summary>
-    public static Bitmap? TryGetFor(string host, bool darkSurface)
+    // The paint holds the same lock as eviction so a native bitmap cannot be
+    // disposed while a canvas is using it. No copy or allocation per frame.
+    public static bool TryDraw(Graphics graphics, string host, bool darkSurface, Rectangle target)
     {
-        var raw = TryGet(host);
-        if (raw is null) return null;
-        return Styled.GetOrAdd((host, darkSurface), _ => MakeVisible(raw, darkSurface));
+        lock (Gate)
+        {
+            if (!Cache.TryGetValue(host, out var raw) || raw is null) return false;
+            var icon = Styled.GetOrAdd((host, darkSurface), _ => MakeVisible(raw, darkSurface));
+            if (icon is null) return false;
+            graphics.DrawImage(icon, target);
+            return true;
+        }
     }
 
     private static Bitmap MakeVisible(Bitmap src, bool darkSurface)
@@ -117,54 +132,69 @@ internal static class FaviconCache
     /// <summary>Starts a background download if the host is unknown. <paramref name="onLoaded"/> runs on a thread-pool thread.</summary>
     public static void Request(string host, Action onLoaded)
     {
-        if (!OpsisNewsCrawler.Core.NetGuard.IsPublicHost(host) || Cache.ContainsKey(host) || !Pending.TryAdd(host, 0)) return;
-
+        if (!OpsisNewsCrawler.Core.NetGuard.IsPublicHost(host)) return;
+        lock (Gate)
+        {
+            // No unbounded queue of blocked tasks or captured controls. A later
+            // refresh can try the skipped host again; letter badges remain usable.
+            if (Cache.ContainsKey(host) || Pending.Count >= MaxConcurrentDownloads || !Pending.TryAdd(host, 0)) return;
+        }
         _ = Task.Run(async () =>
         {
             Bitmap? bmp = null;
             try
             {
-                bmp = await DownloadAsync(host).ConfigureAwait(false);
+                using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+                bmp = await DownloadAsync(host, deadline.Token).ConfigureAwait(false);
+                Remember(host, bmp);
+                if (bmp is not null) onLoaded();
             }
-            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
+            catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException or ArgumentException or ExternalException or InvalidOperationException)
             {
-                // No icon: the badge is used instead.
+                // A failed icon is optional; keep the letter badge.
             }
-
-            Remember(host, bmp);
-            Pending.TryRemove(host, out _);
-            if (bmp is not null) onLoaded();
+            finally { Pending.TryRemove(host, out _); }
         });
     }
 
-    private static async Task<Bitmap?> DownloadAsync(string host)
+    private static async Task<Bitmap?> DownloadAsync(string host, CancellationToken ct)
     {
-        var direct = await FetchIconAsync($"https://{host}/favicon.ico").ConfigureAwait(false);
+        var direct = await FetchIconAsync($"https://{host}/favicon.ico", ct).ConfigureAwait(false);
         if (direct is not null) return direct;
-
-        // No /favicon.ico: use the icon the home page declares (<link rel="icon"> / apple-touch-icon).
-        foreach (var url in await FindDeclaredIconsAsync(host).ConfigureAwait(false))
+        foreach (var url in await FindDeclaredIconsAsync(host, ct).ConfigureAwait(false))
         {
-            var bmp = await FetchIconAsync(url).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            var bmp = await FetchIconAsync(url, ct).ConfigureAwait(false);
             if (bmp is not null) return bmp;
         }
         return null;
     }
 
-    private static async Task<Bitmap?> FetchIconAsync(string url)
+    internal static async Task<byte[]?> ReadBoundedAsync(HttpContent content, int maxBytes, CancellationToken ct)
+    {
+        if (content.Headers.ContentLength > maxBytes) return null;
+        using var stream = await content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var output = new MemoryStream();
+        var buffer = new byte[8192];
+        while (true)
+        {
+            var n = await stream.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, maxBytes + 1 - (int)output.Length)), ct).ConfigureAwait(false);
+            if (n == 0) return output.ToArray();
+            if (output.Length + n > maxBytes) return null;
+            output.Write(buffer, 0, n);
+        }
+    }
+
+    private static async Task<Bitmap?> FetchIconAsync(string url, CancellationToken ct)
     {
         try
         {
-            using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+            using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode) return null;
-            if (response.Content.Headers.ContentLength is > MaxIconBytes) return null;
-            var data = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-            return data.Length is > 0 and <= MaxIconBytes ? Decode(data) : null;
+            var data = await ReadBoundedAsync(response.Content, MaxIconBytes, ct).ConfigureAwait(false);
+            return data is { Length: > 0 } ? Decode(data) : null;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or UriFormatException)
-        {
-            return null;
-        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or UriFormatException) { return null; }
     }
 
     private static readonly System.Text.RegularExpressions.Regex LinkTag =
@@ -174,14 +204,17 @@ internal static class FaviconCache
     private static readonly System.Text.RegularExpressions.Regex HrefAttr =
         new(@"href\s*=\s*[""']([^""']*)[""']", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
-    private static async Task<List<string>> FindDeclaredIconsAsync(string host)
+    private static async Task<List<string>> FindDeclaredIconsAsync(string host, CancellationToken ct)
     {
         var found = new List<string>();
         try
         {
             var baseUri = new Uri($"https://{host}/");
-            var html = await Http.GetStringAsync(baseUri).ConfigureAwait(false);
-            if (html.Length > 200_000) html = html[..200_000];
+            using var response = await Http.GetAsync(baseUri, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) return found;
+            var bytes = await ReadBoundedAsync(response.Content, 200_000, ct).ConfigureAwait(false);
+            if (bytes is null) return found;
+            var html = System.Text.Encoding.UTF8.GetString(bytes);
             foreach (System.Text.RegularExpressions.Match tag in LinkTag.Matches(html))
             {
                 var rel = RelAttr.Match(tag.Value);

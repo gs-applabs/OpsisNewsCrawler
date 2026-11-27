@@ -9,21 +9,24 @@ public sealed partial class TickerHost
 {
     private async Task RefreshExtraNewsAsync()
     {
-        if (disposed || refreshingExtra) return;
+        if (disposed || !started || refreshingExtra) return;
+        PruneExtraCategories();
         var wanted = ExtraNewsCategories();
         if (wanted.Count == 0) return;
         refreshingExtra = true;
+        var epoch = startEpoch;
+        var token = sessionCts?.Token ?? lifetimeToken;
         try
         {
             foreach (var id in wanted)
             {
-                if (disposed || cts.IsCancellationRequested) return;
-                var items = await extraNewsProvider.FetchAsync(Config.GetFeeds(id), Config.MaxItemsPerFeed, lifetimeToken, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst);
+                if (disposed || !started || epoch != startEpoch || token.IsCancellationRequested) return;
+                var items = await extraNewsProvider.FetchAsync(Config.GetFeeds(id), Config.MaxItemsPerFeed, token, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst);
                 var failedFeeds = extraNewsProvider.LastFailedFeeds.ToList();
                 var category = id;
                 void Apply()
                 {
-                    if (disposed) return;
+                    if (disposed || !started || epoch != startEpoch || !ExtraNewsCategories().Contains(category, StringComparer.OrdinalIgnoreCase)) return;
                     if (items.Count > 0)
                     {
                         extraNews[category] = items.ToList();

@@ -812,6 +812,7 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>The one slow tick the host already has (60 s): performance tier and the family feed file (a stat and, only when it changed, a small read).</summary>
     private void OnMinuteTick()
     {
+        PruneExtraCategories();
         EvaluatePerformance();
         FamilyFeedBridge.Sync();   // returns at once when a plugin of this process provides the flow
     }
@@ -1137,6 +1138,16 @@ public sealed partial class TickerHost : IDisposable
     private readonly Dictionary<string, List<string>> extraNewsFailed = new(StringComparer.OrdinalIgnoreCase);
     private readonly RssNewsProvider extraNewsProvider = new();
     private bool refreshingExtra;
+
+    private void PruneExtraCategories()
+    {
+        var keep = ExtraNewsCategories().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var key in extraNews.Keys.Concat(extraNewsAt.Keys).Concat(extraNewsFailed.Keys).Concat(newsWidgetFetchAttempt.Keys)
+                     .Distinct(StringComparer.OrdinalIgnoreCase).Where(k => !keep.Contains(k)).ToArray())
+        {
+            extraNews.Remove(key); extraNewsAt.Remove(key); extraNewsFailed.Remove(key); newsWidgetFetchAttempt.Remove(key);
+        }
+    }
 
     private IReadOnlyList<NewsItem> CategoryNewsForDisplay(string id)
     {
@@ -1520,6 +1531,7 @@ public sealed partial class TickerHost : IDisposable
         analytics = null;
         newsArchive?.Flush(DateTimeOffset.UtcNow);
         news.Dispose();
+        extraNewsProvider.Dispose();
         SecondWindow?.Dispose();
         foreach (var extra in ExtraWindows) extra.Dispose();
         monitorWindows.Clear();

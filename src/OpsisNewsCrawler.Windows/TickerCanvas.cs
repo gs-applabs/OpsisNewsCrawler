@@ -942,12 +942,7 @@ internal sealed class TickerCanvas : Control
             HazardIcons.Draw(g, rect, kind, level);
             return;
         }
-        var icon = entry.Host.Length > 0 ? FaviconCache.TryGetFor(entry.Host, darkSurface) : null;
-        if (icon is not null)
-        {
-            g.DrawImage(icon, rect);
-            return;
-        }
+        if (entry.Host.Length > 0 && FaviconCache.TryDraw(g, entry.Host, darkSurface, rect)) return;
 
         var name = entry.Item.Source;
         var hash = 0;
@@ -982,6 +977,7 @@ internal sealed class TickerCanvas : Control
         lock (FadeRamps)
         {
             if (FadeRamps.TryGetValue(width, out var ramp)) return ramp;
+            if (FadeRamps.Count >= 64) FadeRamps.Clear();
             ramp = new float[width];
             for (var x = 0; x < width; x++) { var t = (x + 0.5f) / width; ramp[x] = t * t; }
             return FadeRamps[width] = ramp;
@@ -1035,6 +1031,8 @@ internal sealed class TickerCanvas : Control
     {
         if (disposing)
         {
+            lookTimer.Stop();
+            lookTimer.Dispose();
             titleFont.Dispose();
             sourceFont.Dispose();
             badgeFont.Dispose();

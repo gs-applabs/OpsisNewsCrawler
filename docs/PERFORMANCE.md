@@ -35,3 +35,7 @@ The scroll speed the user sees never changes (the scroll is time based); the use
 
 ## Not covered
 Real graphics cards, several monitors, per-monitor DPI and measurements of CPU / RAM at idle per tier were not measured on a real PC (NOT VERIFIED).
+
+## 0.30.0 long-running resource guards
+
+Favicon cache: maximum 200 source icons, up to 400 derived variants, immediate disposal during eviction under the same lock as painting; at most 4 downloads, no waiting queue, 12-second entire operation deadline and bounded streamed bodies. Ticker canvas owns/disposes animation timer; fade ramps limited to 64 widths. Generated cache JSON retention: 128 files / 64 MiB after pruning, maximum 16 MiB per entry; excludes user files, backups and archives. Cache hashes bounded, no second payload serialization. Active extra categories only, stale category results rejected after stop/restart; secondary RSS provider disposed. Archive headline changes pruned independently of story count. Disk cleanup is best effort; existing files are trimmed on new entries or ten-minute maintenance on saves, not a hard filesystem quota. Actual memory, CPU and write rates must be measured, not inferred from these limits.
