@@ -378,6 +378,7 @@ internal sealed class TickerCanvas : Control
         if (showIcons == value) return;
         showIcons = value;
         BuildLayout();
+        if (showIcons) RequestIcons();
         Invalidate();
     }
 
@@ -388,7 +389,12 @@ internal sealed class TickerCanvas : Control
         keyboardIndex = -1;
         AccessibleDescription = string.Join(". ", items.Take(8).Select(x => x.Title));
         BuildLayout();
+        if (showIcons) RequestIcons();
+        Invalidate();
+    }
 
+    private void RequestIcons()
+    {
         foreach (var host in entries.Where(e => e.Item.Kind == NewsItemKind.News).Select(e => e.Host).Where(h => h.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             FaviconCache.Request(host, () =>
@@ -396,7 +402,6 @@ internal sealed class TickerCanvas : Control
                 if (IsHandleCreated && !IsDisposed) BeginInvoke(new Action(() => Invalidate()));
             });
         }
-        Invalidate();
     }
 
     private int keyboardIndex = -1;

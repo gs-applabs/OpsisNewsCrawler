@@ -52,6 +52,11 @@ public static class DataCache
                 if (WrittenHashes.TryGetValue(path, out var previous) && previous == hash && File.Exists(path))
                 {
                     Interlocked.Increment(ref skippedWrites);
+                    if (DateTimeOffset.UtcNow - lastTrim >= TimeSpan.FromMinutes(10))
+                    {
+                        TrimGeneratedCache(Folder, path);
+                        lastTrim = DateTimeOffset.UtcNow;
+                    }
                     return;
                 }
                 Directory.CreateDirectory(Folder);

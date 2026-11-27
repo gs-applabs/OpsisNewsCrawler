@@ -63,7 +63,7 @@ public sealed partial class TickerHost
 
     private async Task RefreshAsync(bool force)
     {
-        if (disposed) return;
+        if (disposed || !started) return;
         if (!NeedsNews) return;
         if (refreshing)
         {
@@ -74,16 +74,18 @@ public sealed partial class TickerHost
         if (!force && State.LastNewsRefresh is { } last && DateTimeOffset.UtcNow - last < MinRefreshGap) return;
 
         refreshing = true;
+        var epoch = startEpoch;
+        var token = SessionToken;
         try
         {
             var category = Config.ActiveCategory;
-            var items = await news.FetchAsync(Config.GetFeeds(category), Config.MaxItemsPerFeed, lifetimeToken, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst);
+            var items = await news.FetchAsync(Config.GetFeeds(category), Config.MaxItemsPerFeed, token, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst);
             var failedFeeds = news.LastFailedFeeds.ToList();
-            if (disposed || !string.Equals(category, Config.ActiveCategory, StringComparison.OrdinalIgnoreCase)) return; // the category changed meanwhile; a new refresh is running
+            if (disposed || !started || epoch != startEpoch || !string.Equals(category, Config.ActiveCategory, StringComparison.OrdinalIgnoreCase)) return; // the category changed meanwhile; a new refresh is running
 
             void Apply()
             {
-                if (disposed) return;
+                if (disposed || !started || epoch != startEpoch) return;
                 State.MarkNewsRefresh();
                 if (items.Count > 0)
                 {
@@ -120,7 +122,7 @@ public sealed partial class TickerHost
         finally
         {
             refreshing = false;
-            if (pendingForced && !disposed)
+            if (pendingForced && !disposed && started)
             {
                 pendingForced = false;
                 _ = RefreshAsync(force: true);

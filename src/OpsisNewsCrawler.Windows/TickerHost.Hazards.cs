@@ -49,16 +49,18 @@ public sealed partial class TickerHost
 
     private async Task RefreshHazardsAsync()
     {
-        if (disposed || !NeedsHazards || refreshingHazards) return;
+        if (disposed || !started || !NeedsHazards || refreshingHazards) return;
         refreshingHazards = true;
+        var epoch = startEpoch;
+        var token = SessionToken;
         try
         {
-            var events = await hazardService.FetchAsync((HazardSources)Config.HazardSources, lifetimeToken);
+            var events = await hazardService.FetchAsync((HazardSources)Config.HazardSources, token);
             var failed = hazardService.LastFailed;
             var skipped = hazardService.LastSkipped;
             void Apply()
             {
-                if (disposed) return;
+                if (disposed || !started || epoch != startEpoch) return;
                 hasHazards = true;
                 hazardFailed = failed;
                 hazardSkipped = skipped;

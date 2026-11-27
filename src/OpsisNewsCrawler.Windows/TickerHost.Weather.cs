@@ -18,16 +18,18 @@ public sealed partial class TickerHost
     /// </summary>
     private async Task CheckWeatherAlertsAsync()
     {
-        if (disposed || checkingAlerts || !Config.WeatherAlertsEnabled || !Config.BreakingEnabled) return;
+        if (disposed || !started || checkingAlerts || !Config.WeatherAlertsEnabled || !Config.BreakingEnabled) return;
         checkingAlerts = true;
+        var epoch = startEpoch;
+        var token = SessionToken;
         try
         {
             var city = Config.ResolveAlertCity();
-            var found = await alertService.FetchAsync(city, lifetimeToken);
-            if (found is null || disposed) return;
+            var found = await alertService.FetchAsync(city, token);
+            if (found is null || disposed || !started || epoch != startEpoch) return;
             void Apply()
             {
-                if (disposed) return;
+                if (disposed || !started || epoch != startEpoch) return;
                 var keys = found.Select(a => city.Id + ":" + a.Kind).ToHashSet();
                 var fresh = found.Where(a => !weatherAlertKeys.Contains(city.Id + ":" + a.Kind)).ToList();
                 weatherAlertKeys = keys;

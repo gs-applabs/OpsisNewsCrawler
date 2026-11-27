@@ -15,14 +15,16 @@ public sealed partial class TickerHost
     /// </summary>
     public async void StartHistoryBackfill()
     {
-        if (!Config.HistoryFromYahoo || backfilling || disposed) return;
+        if (!Config.HistoryFromYahoo || backfilling || disposed || !started) return;
         backfilling = true;
+        var epoch = startEpoch;
+        var token = SessionToken;
         try
         {
             var list = Config.Watchlist.Where(w => w.Enabled).Concat(PortfolioInstruments()).ToList();
             var ui = SynchronizationContext.Current;
-            var n = await YahooHistory.BackfillAsync(quotes.Store, list, 40, lifetimeToken, () => ui?.Post(_ => { if (!disposed) QuotesUpdated?.Invoke(); }, null));
-            if (n > 0 && !disposed)
+            var n = await YahooHistory.BackfillAsync(quotes.Store, list, 40, token, () => ui?.Post(_ => { if (!disposed && started && epoch == startEpoch) QuotesUpdated?.Invoke(); }, null));
+            if (n > 0 && !disposed && started && epoch == startEpoch)
             {
                 Log.Write($"Yahoo history added for {n} instruments.");
                 QuotesUpdated?.Invoke();
@@ -45,15 +47,17 @@ public sealed partial class TickerHost
 
     private async Task RefreshQuotesAsync(bool force = false)
     {
-        if (disposed || !(NeedsStocks || portfolioOpen && Config.Portfolio.Count > 0) || refreshingQuotes) return;
+        if (disposed || !started || !(NeedsStocks || portfolioOpen && Config.Portfolio.Count > 0) || refreshingQuotes) return;
         refreshingQuotes = true;
+        var epoch = startEpoch;
+        var token = SessionToken;
         try
         {
             void Show(IReadOnlyList<NewsItem> list)
             {
                 void Apply()
                 {
-                    if (disposed) return;
+                    if (disposed || !started || epoch != startEpoch) return;
                     hasQuotes = true;
                     if (list.Count > 0 || stockItems.Count == 0) stockItems = list; // nothing came back: keep what is shown
                     foreach (var item in stockItems.Where(x => x.Kind == NewsItemKind.Quote).Take(40))
@@ -68,7 +72,8 @@ public sealed partial class TickerHost
             }
 
             // Each source shows up as soon as it has answered; a slow one cannot keep the others waiting.
-            var items = await quotes.FetchItemsAsync(Config.Watchlist, Loc.IsGreek, lifetimeToken, Show, PortfolioInstruments());
+            var items = await quotes.FetchItemsAsync(Config.Watchlist, Loc.IsGreek, token, Show, PortfolioInstruments());
+            if (disposed || !started || epoch != startEpoch) return;
             quotesFailed = quotes.LastFailed.Count > 0 || items.Count == 0 && Config.Watchlist.Any(w => w.Enabled);
             Show(items);
             QuotesUpdated?.Invoke();
@@ -83,6 +88,7 @@ public sealed partial class TickerHost
         {
             Debug.WriteLine($"Opsis News Crawler: quotes failed: {ex}");
             Log.Write($"quotes failed: {ex.GetType().Name}: {ex.Message}");
+            if (disposed || !started || epoch != startEpoch) return;
             hasQuotes = true; // the bar says "unavailable" instead of "loading" for ever
             quotesFailed = true;
             ScheduleQuoteRetry();

@@ -30,7 +30,7 @@ internal static class FaviconCache
     private static readonly ConcurrentDictionary<(string Host, bool DarkSurface), Bitmap?> Styled = new();
 
     /// <summary>Puts a picture in the cache without a download (snapshots and tests).</summary>
-    internal static void Seed(string host, Bitmap icon) => Remember(host, FitSquare(icon));
+    internal static void Seed(string host, Bitmap icon) => Remember(host.ToLowerInvariant(), FitSquare(icon));
 
     /// <summary>The most sources whose icon is kept in memory: a long session with many feeds does not grow without limit (the oldest icon goes first and is fetched again when needed).</summary>
     internal const int MaxIcons = 200;
@@ -65,6 +65,7 @@ internal static class FaviconCache
     // disposed while a canvas is using it. No copy or allocation per frame.
     public static bool TryDraw(Graphics graphics, string host, bool darkSurface, Rectangle target)
     {
+        host = host.ToLowerInvariant();
         lock (Gate)
         {
             if (!Cache.TryGetValue(host, out var raw) || raw is null) return false;
@@ -133,6 +134,7 @@ internal static class FaviconCache
     public static void Request(string host, Action onLoaded)
     {
         if (!OpsisNewsCrawler.Core.NetGuard.IsPublicHost(host)) return;
+        host = host.ToLowerInvariant();
         lock (Gate)
         {
             // No unbounded queue of blocked tasks or captured controls. A later

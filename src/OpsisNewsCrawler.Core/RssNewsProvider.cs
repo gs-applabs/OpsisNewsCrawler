@@ -85,6 +85,14 @@ public sealed class RssNewsProvider : IDisposable
             s.Items is { Count: > 0 } items ? items.Max(i => i.PublishedAt) : null);
     }).OrderBy(x => x.Url, StringComparer.OrdinalIgnoreCase).ToList();
 
+    /// <summary>Release cached stories and retry state for feeds removed from the configuration.</summary>
+    public void RetainSources(IEnumerable<string> configuredUrls)
+    {
+        var keep = configuredUrls.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var key in states.Keys)
+            if (!keep.Contains(key)) states.TryRemove(key, out _);
+    }
+
     private void RecordFailure(string name)
     {
         lock (failLock) failedFeeds.Add(name);

@@ -813,6 +813,9 @@ public sealed partial class TickerHost : IDisposable
     private void OnMinuteTick()
     {
         PruneExtraCategories();
+        var urls = Config.Categories.SelectMany(c => c.Feeds).Select(f => f.Url).ToArray();
+        news.RetainSources(urls);
+        extraNewsProvider.RetainSources(urls);
         EvaluatePerformance();
         FamilyFeedBridge.Sync();   // returns at once when a plugin of this process provides the flow
     }
@@ -907,6 +910,7 @@ public sealed partial class TickerHost : IDisposable
     {
         if (disposed || !started) return;
         started = false;
+        pendingForced = false;
         unchecked { startEpoch++; }
         var oldSession = sessionCts;
         sessionCts = null;
@@ -1386,12 +1390,14 @@ public sealed partial class TickerHost : IDisposable
 
     private async void ScheduleQuoteRetry()
     {
-        if (quoteRetryPending || disposed) return;
+        if (quoteRetryPending || disposed || !started) return;
         quoteRetryPending = true;
+        var epoch = startEpoch;
+        var token = SessionToken;
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(60), lifetimeToken);
-            if (!disposed && BarsOn) _ = RefreshQuotesAsync();
+            await Task.Delay(TimeSpan.FromSeconds(60), token);
+            if (!disposed && started && epoch == startEpoch && BarsOn) _ = RefreshQuotesAsync();
         }
         catch (OperationCanceledException)
         {
