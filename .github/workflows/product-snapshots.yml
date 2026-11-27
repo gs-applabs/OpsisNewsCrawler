@@ -32,7 +32,8 @@ jobs:
           foreach ($mode in @('snapshot','snapshot-analytics','snapshot-bar','snapshot-welcome','snapshot-suite','snapshot-minimise','snapshot-portfolio')) {
             $folder = Join-Path $out $mode
             New-Item -ItemType Directory -Force $folder | Out-Null
-            $p = Start-Process -FilePath $exe -ArgumentList @("--$mode", ('"' + $folder + '"'), '--config', ('"' + $config + '"')) -PassThru
+            $target = if ($mode -in @('snapshot-bar','snapshot-suite','snapshot-minimise','snapshot-portfolio')) { Join-Path $folder "$mode.png" } else { $folder }
+            $p = Start-Process -FilePath $exe -ArgumentList @("--$mode", ('"' + $target + '"'), '--config', ('"' + $config + '"')) -PassThru
             if (!$p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; throw "Timeout: $mode" }
             if ($p.ExitCode -ne 0) { throw "Capture failed: $mode ($($p.ExitCode))" }
           }
