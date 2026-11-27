@@ -120,7 +120,7 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
         });
 
     public IReadOnlyList<PluginMenuItem> GetTrayMenuItems() => BuildTrayMenu(
-        () => NavigationRequested?.Invoke(NavigationKey), Refresh,
+        OnSettingsRequested, Refresh,
         () => { if (_controller.IsPaused) Resume(); else Pause(); }, CloseCrawler, OpenCrawler);
 
     /// <summary>

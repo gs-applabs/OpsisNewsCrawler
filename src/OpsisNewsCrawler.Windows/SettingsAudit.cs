@@ -337,7 +337,7 @@ public static class ScrollAudit
         form.Show();
         Application.DoEvents();
         panel.LoadFromConfig();
-        int checks = 0, moved = 0, pages = 0;
+        int checks = 0, moved = 0, pages = 0, errors = 0;
         for (var tab = 0; tab < panel.TabCount; tab++)
         {
             panel.SelectTab(tab);
@@ -352,7 +352,11 @@ public static class ScrollAudit
                 if (page is StableScrollPanel stable) stable.ScrollTo(0, target);
                 Application.DoEvents();
                 var before = -page.AutoScrollPosition.Y;
-                try { act(); } catch (Exception ex) when (ex is System.Reflection.TargetInvocationException or InvalidOperationException or ArgumentException or NullReferenceException) { }
+                try { act(); } catch (Exception ex) when (ex is System.Reflection.TargetInvocationException or InvalidOperationException or ArgumentException or NullReferenceException)
+                {
+                    errors++;
+                    report.AppendLine($"ERROR tab {tab}: {what}: {ex.GetBaseException().Message}");
+                }
                 for (var i = 0; i < 4; i++) { Application.DoEvents(); Thread.Sleep(20); }
                 var after = -page.AutoScrollPosition.Y;
                 checks++;
@@ -370,10 +374,10 @@ public static class ScrollAudit
             var label = All(page).OfType<Label>().FirstOrDefault(l => l.AutoSize && l.Visible);
             if (label is not null) Check("text of an auto-sized label", () => label.Text += " more");
         }
-        report.Insert(0, $"Scroll audit: {pages} pages that scroll, {checks} checks, {moved} moved\n");
+        report.Insert(0, $"Scroll audit: {pages} pages that scroll, {checks} checks, {moved} moved, {errors} errors\n");
         File.WriteAllText(reportPath, report.ToString());
         form.Close();
-        return moved == 0;
+        return pages > 0 && checks > 0 && moved == 0 && errors == 0;
     }
 
     private static IEnumerable<Control> All(Control root)

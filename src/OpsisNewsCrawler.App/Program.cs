@@ -92,8 +92,7 @@ internal static class Program
             ApplicationConfiguration.Initialize();
             var cfgAu = Array.IndexOf(args, "--config");
             using var auHost = new TickerHost(cfgAu >= 0 && cfgAu + 1 < args.Length ? args[cfgAu + 1] : null);
-            Environment.ExitCode = SettingsAudit.Run(auHost, args[auAt + 1]) ? 0 : 1;   // CI fails on a finding
-            return 0;
+            return SettingsAudit.Run(auHost, args[auAt + 1]) ? 0 : 1;
         }
         if (Array.IndexOf(args, "--make-brand-art") is >= 0 and var baAt && baAt + 1 < args.Length)
         {
@@ -151,16 +150,14 @@ internal static class Program
             ApplicationConfiguration.Initialize();
             var cfgSc = Array.IndexOf(args, "--config");
             using var scHost = new TickerHost(cfgSc >= 0 && cfgSc + 1 < args.Length ? args[cfgSc + 1] : null);
-            Environment.ExitCode = ScrollAudit.Run(scHost, args[scAt + 1]) ? 0 : 1;
-            return 0;
+            return ScrollAudit.Run(scHost, args[scAt + 1]) ? 0 : 1;
         }
         if (Array.IndexOf(args, "--audit-layout") is >= 0 and var lyAt && lyAt + 1 < args.Length)
         {
             ApplicationConfiguration.Initialize();
             var cfgLy = Array.IndexOf(args, "--config");
             using var lyHost = new TickerHost(cfgLy >= 0 && cfgLy + 1 < args.Length ? args[cfgLy + 1] : null);
-            Environment.ExitCode = LayoutAudit.Run(lyHost, args[lyAt + 1]) ? 0 : 1;
-            return 0;
+            return LayoutAudit.Run(lyHost, args[lyAt + 1]) ? 0 : 1;
         }
         if (Array.IndexOf(args, "--snapshot-portfolio") is >= 0 and var pfAt && pfAt + 1 < args.Length)
         {
