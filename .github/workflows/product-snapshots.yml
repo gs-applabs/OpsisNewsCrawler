@@ -37,13 +37,39 @@ jobs:
             if (!$p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; throw "Timeout: $mode" }
             if ($p.ExitCode -ne 0) { throw "Capture failed: $mode ($($p.ExitCode))" }
           }
+      - name: Capture full-height settings and additional hazard views
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $env:RUNNER_TEMP 'crawler-snapshot-build/OpsisNewsCrawler.exe'
+          $out = Join-Path $env:RUNNER_TEMP 'product-snapshots'
+          $config = Join-Path $env:RUNNER_TEMP 'crawler-snapshot-config.json'
+          $tall = Join-Path $out 'settings-full-height'
+          $hazards = Join-Path $out 'hazards'
+          New-Item -ItemType Directory -Force $tall,$hazards | Out-Null
+          function Capture([string]$mode,[string]$target,[string[]]$extraArgs=@()) {
+            $argsList = @("--$mode", ('"' + $target + '"')) + $extraArgs + @('--config', ('"' + $config + '"'))
+            $p = Start-Process -FilePath $exe -ArgumentList $argsList -PassThru
+            if (!$p.WaitForExit(90000)) { Stop-Process -Id $p.Id -Force; throw "Timeout: $mode" }
+            if ($p.ExitCode -ne 0 -or !(Test-Path $target)) { throw "Capture failed: $mode" }
+          }
+          $tabs = @(Get-ChildItem (Join-Path $out 'snapshot') -Filter 'tab*.png' -File)
+          foreach ($tab in $tabs) {
+            if ($tab.BaseName -match '^tab(\d+)$') {
+              $index = $Matches[1]
+              Capture 'snapshot-tall' (Join-Path $tall ("tab-{0:D2}.png" -f [int]$index)) @($index,'2200')
+            }
+          }
+          foreach ($mode in @('snapshot-live-icon','snapshot-hazard-bar','snapshot-hazard-icons')) {
+            Capture $mode (Join-Path $hazards "$mode.png")
+          }
       - name: Validate and publish gallery
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $src = Join-Path $env:RUNNER_TEMP 'product-snapshots'
           $files = @(Get-ChildItem $src -Recurse -File -Filter '*.png')
-          if ($files.Count -lt 8) { throw "Too few screenshots: $($files.Count)" }
+          if ($files.Count -lt 60) { throw "Too few screenshots: $($files.Count)" }
           Add-Type -AssemblyName System.Drawing
           foreach ($file in $files) {
             $image = [Drawing.Image]::FromFile($file.FullName)
@@ -52,7 +78,7 @@ jobs:
           $dest = 'docs/product-snapshots'
           if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
           New-Item -ItemType Directory -Force $dest | Out-Null
-          $lines = @('# Application screenshots / Στιγμιότυπα εφαρμογής', '', "Source commit: $env:GITHUB_SHA", '', 'Rendered by the actual application on Windows CI. Analytics use sample data. These are visual previews, not end-to-end acceptance tests.', '')
+          $lines = @('# Application screenshots / Στιγμιότυπα εφαρμογής', '', "Source commit: $env:GITHUB_SHA", '', 'Rendered by the actual application on Windows CI. Analytics and hazard illustrations use sample data; full-height settings reveal lower cards. These are visual previews, not end-to-end acceptance tests.', '')
           foreach ($file in ($files | Sort-Object FullName)) {
             $relative = [IO.Path]::GetRelativePath($src, $file.FullName).Replace('\','/')
             $target = Join-Path $dest $relative
