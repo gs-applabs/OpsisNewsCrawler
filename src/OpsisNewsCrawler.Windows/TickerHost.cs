@@ -322,7 +322,15 @@ public sealed partial class TickerHost : IDisposable
     public event Action? SettingsRequested;
 
     public TickerHost(string? configPath = null, Func<IntPtr, bool>? hostWindowDetector = null)
+        : this(configPath, hostWindowDetector, false, false) { }
+
+    // Hosted context must be known before ApplyConfig can register a standalone
+    // hotkey or replace the host's language. Preserve the existing constructor.
+    public TickerHost(string? configPath, Func<IntPtr, bool>? hostWindowDetector,
+        bool hostedByOpsis, bool languageFollowsHost)
     {
+        HostedByOpsis = hostedByOpsis;
+        LanguageFollowsHost = languageFollowsHost;
         this.configPath = configPath ?? AppConfig.DefaultPath;
         this.hostWindowDetector = hostWindowDetector;
         lifetimeToken = cts.Token;
@@ -331,7 +339,7 @@ public sealed partial class TickerHost : IDisposable
 
         State.SetMode(Config.Mode);
         Theme.SetMode(Config.ThemeMode, Config.OpacityPercent / 100.0, Config.ThemeFollowAccent);
-        Loc.SetLanguage(Config.Language);
+        if (!LanguageFollowsHost) Loc.SetLanguage(Config.Language);
 
         // Cached content and market history are loaded only when selected.
         Window = new TickerWindow(State, hostWindowDetector);
@@ -821,7 +829,7 @@ public sealed partial class TickerHost : IDisposable
         PruneExtraCategories();
         var urls = Config.Categories.SelectMany(c => c.Feeds).Select(f => f.Url).ToArray();
         news.RetainSources(urls);
-         quoteService?.Store.SaveIfDue();
+        quoteService?.Store.SaveIfDue();
         EvaluatePerformance();
         FamilyFeedBridge.Sync();   // returns at once when a plugin of this process provides the flow
     }
@@ -903,7 +911,9 @@ public sealed partial class TickerHost : IDisposable
 
     public void Stop()
     {
-        if (disposed || !started) return;
+        if (disposed) return;
+        // A stopped host can still have windows opened through settings.
+        // Cleanup is idempotent and must close those as well.
         started = false;
         pendingForced = false;
         unchecked { startEpoch++; }
@@ -926,6 +936,11 @@ public sealed partial class TickerHost : IDisposable
         analytics = null;
         analysis?.Close();
         analysis = null;
+        CloseLivePreview();
+        weatherMap?.Close();
+        weatherMap = null;
+        hazardDetail?.Close();
+        hazardDetail = null;
         quoteService?.Store.Save();
         newsArchive?.Flush(DateTimeOffset.UtcNow);
     }
@@ -1646,6 +1661,12 @@ public sealed partial class TickerHost : IDisposable
         portfolio = null;
         analytics?.Close();
         analytics = null;
+        analysis?.Close();
+        analysis = null;
+        welcome?.Dispose();
+        welcome = null;
+        suite?.Dispose();
+        suite = null;
         newsArchive?.Flush(DateTimeOffset.UtcNow);
         quoteService?.Store.Save();
         news.Dispose();

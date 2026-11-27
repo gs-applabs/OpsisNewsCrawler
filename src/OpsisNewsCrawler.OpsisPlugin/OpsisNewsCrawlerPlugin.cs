@@ -216,8 +216,8 @@ internal sealed class TickerController
         {
             if (_host is null)
             {
-                _host = new TickerHost { HostedByOpsis = true, LanguageFollowsHost = LanguageFromHost };
                 if (LanguageFromHost) Loc.SetLanguage(Context.Snapshot.Language);
+                _host = new TickerHost(null, null, hostedByOpsis: true, languageFollowsHost: LanguageFromHost);
                 _host.SetHostTier(Context.Snapshot.PerformanceTier);
                 _host.HostSafeMode = hostSafeMode;
                 _host.SetHostShellHold(shellHold);

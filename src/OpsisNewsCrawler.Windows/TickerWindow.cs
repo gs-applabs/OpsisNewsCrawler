@@ -961,22 +961,23 @@ public sealed class TickerWindow : Form
 
     public void SetPosition(TickerPosition value)
     {
+        var notifyHiddenReset = false;
         if (position != value)
         {
             slideActive = false;
             animToY = int.MinValue;
             fullscreenObserved = false;
             hiddenByFullscreen = false;
-            var wasHidden = hiddenByTaskbar;
+            notifyHiddenReset = hiddenByTaskbar;
             hiddenByTaskbar = false;
             observedTaskbar = IntPtr.Zero;
             measuredSpan = null;
             spanMeasured = false;
             integratedFallback = false;
-            if (wasHidden) HiddenByTaskbarChanged?.Invoke();
             measurementGeneration++;
         }
         position = value;
+        if (notifyHiddenReset) HiddenByTaskbarChanged?.Invoke();
         if (value != TickerPosition.Custom) SetEditMode(false);
         ApplyLook();
         Reposition();
@@ -1175,7 +1176,7 @@ public sealed class TickerWindow : Form
                 appliedBackdrop = null;
             }
             CompleteTaskbarMeasurement();
-            var cloaked = autoHide && Native.IsTaskbarHiddenByAutoHide();
+            var cloaked = !integratedFallback && autoHide && Native.IsTaskbarHiddenByAutoHide();
             if (cloaked != hiddenByTaskbar)
             {
                 hiddenByTaskbar = cloaked;
@@ -1188,6 +1189,12 @@ public sealed class TickerWindow : Form
                         HidePreview();
                         StartSlide(Top, screenBottom);
                     }
+                }
+                else if (!hiddenByFullscreen && integratedFallback)
+                {
+                    slideActive = false;
+                    Reposition();
+                    if (!Visible) Show();
                 }
                 else if (!hiddenByFullscreen)
                 {
@@ -1228,7 +1235,7 @@ public sealed class TickerWindow : Form
             var style = taskbarTick % TaskbarMaintenance.CheckEvery == 0 ? TaskbarStyle.Read().ToString() : lastTaskbarStyle;
             var flyout = Native.IsShellFlyoutActive();
             var todo = TaskbarMaintenance.Decide(taskbarTick, style != lastTaskbarStyle, flyout, taskbarTick % TaskbarMaintenance.TopCheckEvery != 0 || !Native.IsTaskbarCovering(Handle));
-            if (todo.KeepOnTop) Native.RestoreAboveTaskbar(Handle);
+            if (todo.KeepOnTop && !integratedFallback) Native.RestoreAboveTaskbar(Handle);
             if (todo.ApplyLook)
             {
                 // Rare recovery is deliberate; normal refreshes never reapply identical composition.
@@ -1418,9 +1425,9 @@ public sealed class TickerWindow : Form
         running = true;
         autoHide = Native.IsTaskbarAutoHide();
         var integrated = position == TickerPosition.TaskbarIntegrated;
-        var hidden = integrated && autoHide && Native.IsTaskbarHiddenByAutoHide();
-        if (hiddenByTaskbar != hidden) { hiddenByTaskbar = hidden; HiddenByTaskbarChanged?.Invoke(); }
         Reposition();
+        var hidden = integrated && !integratedFallback && autoHide && Native.IsTaskbarHiddenByAutoHide();
+        if (hiddenByTaskbar != hidden) { hiddenByTaskbar = hidden; HiddenByTaskbarChanged?.Invoke(); }
         if (!hidden && (!integrated || Native.GetTaskbarHandle() != IntPtr.Zero)) Show();
         RequestSample();
         taskbarTimer.Start();
