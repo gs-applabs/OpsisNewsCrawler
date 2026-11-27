@@ -212,7 +212,7 @@ internal static class Program
 
         var configAt = Array.IndexOf(args, "--config");
         using var host = new TickerHost(configAt >= 0 && configAt + 1 < args.Length ? args[configAt + 1] : null);
-        using var settings = new SettingsForm(host);
+        var settings = new Lazy<SettingsForm>(() => new SettingsForm(host));
 
         using var tray = new NotifyIcon
         {
@@ -259,7 +259,7 @@ internal static class Program
         menu.Items.Add(snoozeMenu);
         var menuPortfolio = menu.Items.Add(Loc.T("tray.portfolio"), null, (_, _) => host.ShowPortfolio());
         var menuAnalysis = menu.Items.Add(Loc.T("tray.analysis"), null, (_, _) => host.ShowAnalysis());
-        var menuSettings = menu.Items.Add(Loc.T("tray.settings"), null, (_, _) => settings.ShowSettings());
+        var menuSettings = menu.Items.Add(Loc.T("tray.settings"), null, (_, _) => settings.Value.ShowSettings());
         var menuRefresh = menu.Items.Add(Loc.T("tray.refresh"), null, (_, _) => host.Refresh());
         var menuWelcome = menu.Items.Add(Loc.T("tray.welcome"), null, (_, _) => host.ShowWelcome());
         var menuSuite = menu.Items.Add(Loc.T("tray.suite"), null, (_, _) => host.ShowSuite());
@@ -283,7 +283,7 @@ internal static class Program
             tray.BalloonTipIcon = ToolTipIcon.Info;
             tray.ShowBalloonTip(10000);
         };
-        tray.BalloonTipClicked += (_, _) => settings.ShowSettings();
+        tray.BalloonTipClicked += (_, _) => settings.Value.ShowSettings();
         // After an update setup was handed over, the program ends so the installer can replace its files and open it again.
         host.ExitRequested += () =>
         {
@@ -307,14 +307,14 @@ internal static class Program
             cancelSnooze.Text = Loc.T("pk.cancel.snooze");
             menuExit.Text = Loc.T("tray.exit");
         };
-        tray.DoubleClick += (_, _) => settings.ShowSettings();
+        tray.DoubleClick += (_, _) => settings.Value.ShowSettings();
 
-        host.SettingsRequested += settings.ShowSettings; // right-click on the strip
+        host.SettingsRequested += () => settings.Value.ShowSettings(); // right-click on the strip
 
         // A closing splash shrinks into the header icon of the settings window when that is open, otherwise into the tray area.
         host.MinimiseTargetProvider = () =>
         {
-            var header = settings.HeaderIconScreenRect();
+            var header = settings.IsValueCreated ? settings.Value.HeaderIconScreenRect() : Rectangle.Empty;
             return header.IsEmpty ? MinimiseTarget.Tray() : header;
         };
         InstallChecks.Run(host);
@@ -368,15 +368,15 @@ internal static class Program
         if (host.Config.IsFirstRun && !args.Contains("--settings"))
         {
             // First start ever: show the settings once so the owner can pick language, content and position.
-            settings.SelectTab(0);
-            settings.ShowSettings();
+            settings.Value.SelectTab(0);
+            settings.Value.ShowSettings();
         }
 
         if (args.Contains("--settings"))
         {
             var tabArg = Array.IndexOf(args, "--tab");
-            if (tabArg >= 0 && tabArg + 1 < args.Length && int.TryParse(args[tabArg + 1], out var tab)) settings.SelectTab(tab);
-            settings.ShowSettings(); // handy for testing and shortcuts
+            if (tabArg >= 0 && tabArg + 1 < args.Length && int.TryParse(args[tabArg + 1], out var tab)) settings.Value.SelectTab(tab);
+            settings.Value.ShowSettings(); // handy for testing and shortcuts
         }
 
         ResourceProbe? probe = null;
@@ -386,7 +386,11 @@ internal static class Program
             int.TryParse(args[probeAt + 2], out var seconds))
             probe = new ResourceProbe(host, args[probeAt + 1], seconds);
         try { Application.Run(host.Window); }
-        finally { probe?.Dispose(); }
+        finally
+        {
+            probe?.Dispose();
+            if (settings.IsValueCreated) settings.Value.Dispose();
+        }
         trayTimer.Stop();
         tray.Icon = staticIcon;
         liveTrayIcon?.Dispose();

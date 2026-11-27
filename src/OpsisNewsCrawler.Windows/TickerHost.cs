@@ -15,7 +15,8 @@ public sealed partial class TickerHost : IDisposable
     private readonly string configPath;
     private readonly Func<IntPtr, bool>? hostWindowDetector;
     private readonly RssNewsProvider news = new();
-    private readonly QuoteService quotes = new();
+    private QuoteService? quoteService;
+    private QuoteService quotes => quoteService ??= new QuoteService();
     private readonly System.Windows.Forms.Timer refreshTimer = new();
     private readonly System.Windows.Forms.Timer quoteTimer = new();
     private readonly System.Windows.Forms.Timer snoozeTimer = new();
@@ -43,6 +44,10 @@ public sealed partial class TickerHost : IDisposable
     private bool started;
     private int startEpoch; // discard delayed checks from a stopped session
     private int newsWidgetUsers; // visible instances only, including across monitors
+    private int marketWidgetUsers, weatherWidgetUsers;
+    private bool NewsWidgetActiveCategory => newsWidgetUsers > 0 &&
+        (IsActiveCategory(WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId) ||
+        Config.FindCategory(WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId) is null);
     private readonly Dictionary<string, DateTimeOffset> newsWidgetFetchAttempt =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -323,9 +328,7 @@ public sealed partial class TickerHost : IDisposable
         Theme.SetMode(Config.ThemeMode, Config.OpacityPercent / 100.0, Config.ThemeFollowAccent);
         Loc.SetLanguage(Config.Language);
 
-        LoadCachedNews();
-        LoadCachedWeather();
-
+        // Cached content and market history are loaded only when selected.
         Window = new TickerWindow(State, hostWindowDetector);
         WireWindow(Window);
         Window.PlacementEdited += b =>
@@ -379,6 +382,7 @@ public sealed partial class TickerHost : IDisposable
             if (hidden == taskbarHidden) return;
             taskbarHidden = hidden;
             UpdateMiniWeather();
+            ReconcileDemand();
         };
         w.RefreshRequested += () =>
         {
@@ -563,12 +567,10 @@ public sealed partial class TickerHost : IDisposable
         EvaluatePerformance();                      // the setting "Performance" may have changed
         ApplyRefreshIntervals();
         PushAll();
-        if (started && BarsOn)
+        if (started)
         {
-            _ = RefreshQuotesAsync();
-            _ = RefreshWeatherAsync();
-            _ = RefreshExtraNewsAsync();
-            UpdateMiniWeather();
+            ReconcileDemand();
+            if (BarsOn) UpdateMiniWeather();
         }
     }
 
@@ -645,7 +647,7 @@ public sealed partial class TickerHost : IDisposable
     {
         // A monitor was connected, disconnected or rearranged: add, remove and move the extra bars.
         if (disposed || !Window.IsHandleCreated) return;
-        try { Window.BeginInvoke(new Action(() => { if (!disposed) { SyncMonitorWindows(); PushAll(); } })); }
+        try { Window.BeginInvoke(new Action(() => { if (!disposed) { SyncMonitorWindows(); PushAll(); ReconcileDemand(); } })); }
         catch (InvalidOperationException) { }
     }
 
@@ -796,13 +798,12 @@ public sealed partial class TickerHost : IDisposable
         performanceTimer.Start();
         PushAll();
         if (Config.BarsEnabled) StartBars();
+        else ReconcileDemand();
         // Widgets without ticker bars can still request one existing RSS category
         // only while their News widget is visible.
         if (newsWidgetUsers > 0) NewsWidgetCategoryChanged();
-        _ = FirstUpdateCheckAsync(startEpoch);
         updateTimer.Tick -= OnUpdateTimer;
         updateTimer.Tick += OnUpdateTimer;
-        updateTimer.Start();
     }
 
     private void OnUpdateTimer(object? sender, EventArgs e) => _ = AutoCheckForUpdatesAsync();
@@ -816,7 +817,7 @@ public sealed partial class TickerHost : IDisposable
         var urls = Config.Categories.SelectMany(c => c.Feeds).Select(f => f.Url).ToArray();
         news.RetainSources(urls);
         extraNewsProvider.RetainSources(urls);
-        quotes.Store.SaveIfDue();
+        quoteService?.Store.SaveIfDue();
         EvaluatePerformance();
         FamilyFeedBridge.Sync();   // returns at once when a plugin of this process provides the flow
     }
@@ -826,19 +827,7 @@ public sealed partial class TickerHost : IDisposable
         Window.StartTicker();
         SecondWindow?.StartTicker();
         foreach (var extra in ExtraWindows) extra.StartTicker();
-        refreshTimer.Start();
-        quoteTimer.Start();
-        weatherTimer.Start();
-        hazardTimer.Interval = CurrentEnergyBudget.RefreshMs(
-            PerformanceProfile.Current.Scaled(Config.HazardRefreshMinutes * 60));
-        hazardTimer.Start();
-        alertTimer.Start();
-        breakingTimer.Start();
-        refreshScheduler.TryRun("news", () => RefreshAsync(force: true), lifetimeToken);
-        refreshScheduler.TryRun("quotes", () => RefreshQuotesAsync(), lifetimeToken);
-        refreshScheduler.TryRun("weather", RefreshWeatherAsync, lifetimeToken);
-        refreshScheduler.TryRun("hazards", RefreshHazardsAsync, lifetimeToken);
-        refreshScheduler.TryRun("weather-alerts", CheckWeatherAlertsAsync, lifetimeToken);
+        ReconcileDemand();
         UpdateMiniWeather();
     }
 
@@ -859,6 +848,7 @@ public sealed partial class TickerHost : IDisposable
         SecondWindow?.StopTicker();
         foreach (var extra in ExtraWindows) extra.StopTicker();
         UpdateMiniWeather(); // BarsOn is false now: the small bar goes away too
+        ReconcileDemand();
     }
 
     /// <summary>Raised after the master switch changed (tray menu and settings keep their check marks in step).</summary>
@@ -930,7 +920,7 @@ public sealed partial class TickerHost : IDisposable
         portfolioOpen = false;
         analytics?.Close();
         analytics = null;
-        quotes.Store.Save();
+        quoteService?.Store.Save();
         newsArchive?.Flush(DateTimeOffset.UtcNow);
     }
 
@@ -990,7 +980,7 @@ public sealed partial class TickerHost : IDisposable
         State2.SetScrollOffset(0);
         allItems = new();
         newsFailedFeeds = new();
-        LoadCachedNews();
+        if (NeedsActiveNews) LoadCachedNews();
         _ = RefreshAsync(force: true);
     }
 
@@ -1007,10 +997,11 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>What every bar that is on shows right now (main, second, monitors, desktop bar).</summary>
     private IEnumerable<BarSlots> AllBarSlots()
     {
+        if (!BarsOn) yield break;
         yield return Config.MainSlots();
-        if (Config.SecondBarEnabled) yield return Config.SecondSlots();
+        if (SecondWindow is not null) yield return Config.SecondSlots();
         foreach (var (cfg, _) in WantedMonitors()) yield return cfg.Slots();
-        if (Config.MiniWeatherEnabled || Config.MiniWhenTaskbarHidden) yield return Config.MiniSlots();
+        if (MiniWanted) yield return Config.MiniSlots();
     }
 
     private bool taskbarHidden;   // a bar inside the auto-hiding taskbar is hidden right now
@@ -1020,12 +1011,59 @@ public sealed partial class TickerHost : IDisposable
     {
         taskbarHidden = hidden;
         UpdateMiniWeather();
+        ReconcileDemand();
     }
     private bool MiniWanted => Config.MiniWeatherEnabled || (Config.MiniWhenTaskbarHidden && taskbarHidden);
 
     private bool Needs(SlotKind kind) => AllBarSlots().Any(slots => slots.Has(kind));
-    private bool NeedsNews => Needs(SlotKind.News);
-    private bool NeedsStocks => Needs(SlotKind.Stocks);
+    private bool NeedsNews => Needs(SlotKind.News) || newsWidgetUsers > 0;
+    private bool NeedsActiveNews => NewsWidgetActiveCategory || AllBarSlots().SelectMany(s => s.All())
+        .Any(s => s.Kind == SlotKind.News && IsActiveCategory(s.Category));
+    private bool NeedsStocks => Needs(SlotKind.Stocks) || marketWidgetUsers > 0 ||
+        portfolioOpen || analysis is { IsDisposed: false } ||
+        (BarsOn && Config.PriceAlerts.Any(a => a.Enabled));
+    private bool NeedsWeatherAlerts => BarsOn && Config.WeatherAlertsEnabled && Config.BreakingEnabled;
+
+    private readonly Dictionary<string, CancellationTokenSource> activeServices = new(StringComparer.Ordinal);
+    private CancellationToken DemandToken(string key) =>
+        activeServices.TryGetValue(key, out var source) ? source.Token : SessionToken;
+
+    // One owner for refresh timers. No separate daemon and no dormant timer wakeups.
+    private void ReconcileDemand()
+    {
+        if (disposed) return;
+        void Sync(string key, System.Windows.Forms.Timer timer, bool wanted, Func<Task> refresh)
+        {
+            wanted &= started;
+            if (!wanted)
+            {
+                timer.Stop();
+                if (activeServices.Remove(key, out var old)) { old.Cancel(); old.Dispose(); }
+                return;
+            }
+            if (activeServices.ContainsKey(key)) { if (!timer.Enabled) timer.Start(); return; }
+            var lease = CancellationTokenSource.CreateLinkedTokenSource(SessionToken);
+            activeServices[key] = lease;
+            timer.Start();
+            if (key == "news" && NeedsActiveNews && !hasRealItems) LoadCachedNews();
+            if (key == "weather" && !hasWeather) LoadCachedWeather();
+            refreshScheduler.TryRun(key, refresh, lease.Token);
+        }
+        Sync("news", refreshTimer, NeedsNews, () => RefreshAsync(force: true));
+        Sync("quotes", quoteTimer, NeedsStocks, () => RefreshQuotesAsync());
+        Sync("weather", weatherTimer, NeedsWeather, RefreshWeatherAsync);
+        Sync("hazards", hazardTimer, NeedsHazards, RefreshHazardsAsync);
+        Sync("weather-alerts", alertTimer, NeedsWeatherAlerts, CheckWeatherAlertsAsync);
+        breakingTimer.Enabled = started && BarsOn && (Config.BreakingEnabled || Config.PriceAlerts.Any(a => a.Enabled));
+        if (started && Config.CheckForUpdates)
+        {
+            if (!updateTimer.Enabled) { updateTimer.Start(); _ = FirstUpdateCheckAsync(startEpoch); }
+        }
+        else updateTimer.Stop();
+    }
+
+    internal string[] ActiveRefreshServices => activeServices.Keys.OrderBy(k => k).ToArray();
+    internal bool MarketStoreInitialized => quoteService is not null;
 
     private bool IsActiveCategory(string? id) => string.IsNullOrWhiteSpace(id) || string.Equals(id, Config.ActiveCategory, StringComparison.OrdinalIgnoreCase);
 
@@ -1060,7 +1098,18 @@ public sealed partial class TickerHost : IDisposable
         if (disposed) return;
         newsWidgetUsers = visible ? Math.Min(64, newsWidgetUsers + 1)
             : Math.Max(0, newsWidgetUsers - 1);
+        ReconcileDemand();
         if (visible && newsWidgetUsers == 1) NewsWidgetCategoryChanged();
+    }
+
+    public void SetWidgetVisible(string kind, bool visible)
+    {
+        if (disposed) return;
+        if (kind == "news") { SetNewsWidgetVisible(visible); return; }
+        if (kind == "markets") marketWidgetUsers = Math.Clamp(marketWidgetUsers + (visible ? 1 : -1), 0, 64);
+        else if (kind == "weather") weatherWidgetUsers = Math.Clamp(weatherWidgetUsers + (visible ? 1 : -1), 0, 64);
+        else return;
+        ReconcileDemand();
     }
 
     public void NewsWidgetCategoryChanged()
@@ -1174,6 +1223,7 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>Fetches the categories of <see cref="ExtraNewsCategories"/>, one after the other, and keeps (and stores) the last good result of each.</summary>
     private IReadOnlyList<NewsItem> StocksForDisplay()
     {
+        if (quoteService is null) return new[] { Placeholder(Loc.T("ph.loadingQuotes")) };
         var failed = quotes.LastFailed.Select(QuoteService.ProviderName).Distinct().ToList();
         var storedAt = quotes.StaleSources.Count > 0 ? quotes.StaleSources.Values.Min() : (DateTimeOffset?)null;
         var notice = Notice(failed, storedAt);
@@ -1298,7 +1348,7 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>Shows an alert on the bar (like an urgent headline) for every price limit that was just passed.</summary>
     private void CheckPriceAlerts()
     {
-        if (disposed || Config.PriceAlerts.Count == 0) return;
+        if (disposed || !BarsOn || Config.PriceAlerts.Count == 0) return;
         var hits = PriceAlertCheck.Evaluate(Config.PriceAlerts, quotes.LastQuotes);
         if (hits.Count == 0) return;
         var culture = System.Globalization.CultureInfo.CurrentCulture;
@@ -1425,7 +1475,8 @@ public sealed partial class TickerHost : IDisposable
     {
         portfolioOpen = open;
         if (!open) portfolio = null;
-        else _ = RefreshQuotesAsync(force: true);
+        ReconcileDemand();
+        if (open) _ = RefreshQuotesAsync(force: true);
     }
 
     /// <summary>Asks the price sources again now (also when no bar shows prices).</summary>
@@ -1458,8 +1509,9 @@ public sealed partial class TickerHost : IDisposable
         }
         analysis = new AnalysisForm(this);
         analysis.ShowPage(page);
-        analysis.FormClosed += (_, _) => analysis = null;
+        analysis.FormClosed += (_, _) => { analysis = null; ReconcileDemand(); };
         analysis.Show();
+        ReconcileDemand();
     }
 
     /// <summary>Test aid (--snapshot-analysis): opens the analysis window out of sight, shows one page, saves it as a PNG.</summary>
@@ -1517,6 +1569,8 @@ public sealed partial class TickerHost : IDisposable
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaysChanged;
         Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         cts.Cancel();
+        foreach (var source in activeServices.Values) { source.Cancel(); source.Dispose(); }
+        activeServices.Clear();
         refreshScheduler.Dispose();
         refreshTimer.Dispose();
         performanceTimer.Dispose();
@@ -1539,7 +1593,7 @@ public sealed partial class TickerHost : IDisposable
         analytics?.Close();
         analytics = null;
         newsArchive?.Flush(DateTimeOffset.UtcNow);
-        quotes.Store.Save();
+        quoteService?.Store.Save();
         news.Dispose();
         extraNewsProvider.Dispose();
         SecondWindow?.Dispose();

@@ -18,18 +18,18 @@ public sealed partial class TickerHost
     /// </summary>
     private async Task CheckWeatherAlertsAsync()
     {
-        if (disposed || !started || checkingAlerts || !Config.WeatherAlertsEnabled || !Config.BreakingEnabled) return;
+        if (disposed || !started || checkingAlerts || !NeedsWeatherAlerts) return;
         checkingAlerts = true;
         var epoch = startEpoch;
-        var token = SessionToken;
+        var token = DemandToken("weather-alerts");
         try
         {
             var city = Config.ResolveAlertCity();
             var found = await alertService.FetchAsync(city, token);
-            if (found is null || disposed || !started || epoch != startEpoch) return;
+            if (found is null || disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !NeedsWeatherAlerts) return;
             void Apply()
             {
-                if (disposed || !started || epoch != startEpoch) return;
+                if (disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !NeedsWeatherAlerts) return;
                 var keys = found.Select(a => city.Id + ":" + a.Kind).ToHashSet();
                 var fresh = found.Where(a => !weatherAlertKeys.Contains(city.Id + ":" + a.Kind)).ToList();
                 weatherAlertKeys = keys;
@@ -130,10 +130,10 @@ public sealed partial class TickerHost
     private TickerWindow? miniWeather;
     private readonly TickerState miniState = new();
 
-    private bool NeedsWeatherForBars => Needs(SlotKind.Weather);
+    private bool NeedsWeatherForBars => Needs(SlotKind.Weather) || weatherWidgetUsers > 0;
 
     /// <summary>Weather is fetched when a bar shows it, and for the first city when the animated icon shows it.</summary>
-    private bool NeedsWeather => NeedsWeatherForBars || Config.WeatherInIcon;
+    private bool NeedsWeather => NeedsWeatherForBars || (BarsOn && Config.WeatherInIcon);
 
     private IReadOnlyList<NewsItem> WeatherForDisplay()
     {
@@ -146,9 +146,9 @@ public sealed partial class TickerHost
 
     private async Task RefreshWeatherAsync()
     {
-        if (disposed || !started || !BarsOn || !NeedsWeather || refreshingWeather) return;
+        if (disposed || !started || !NeedsWeather || refreshingWeather) return;
         var epoch = startEpoch;
-        var token = SessionToken;
+        var token = DemandToken("weather");
         refreshingWeather = true;
         try
         {
@@ -160,7 +160,7 @@ public sealed partial class TickerHost
             var failed = !fromHost && weather.LastFailed;
             void Apply()
             {
-                if (disposed || !started || epoch != startEpoch || !BarsOn) return;
+                if (disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !NeedsWeather) return;
                 hasWeather = true;
                 weatherFailed = failed;
                 if (readings.Count > 0)
@@ -205,11 +205,11 @@ public sealed partial class TickerHost
     private async Task RetryWeatherLater()
     {
         var epoch = startEpoch;
-        var token = SessionToken;
+        var token = DemandToken("weather");
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(60), token);
-            if (!disposed && started && epoch == startEpoch && BarsOn) _ = RefreshWeatherAsync();
+            if (!disposed && started && epoch == startEpoch && NeedsWeather) _ = RefreshWeatherAsync();
         }
         catch (OperationCanceledException)
         {

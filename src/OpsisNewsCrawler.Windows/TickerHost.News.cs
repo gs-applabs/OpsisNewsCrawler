@@ -15,7 +15,7 @@ public sealed partial class TickerHost
         if (wanted.Count == 0) return;
         refreshingExtra = true;
         var epoch = startEpoch;
-        var token = sessionCts?.Token ?? lifetimeToken;
+        var token = DemandToken("news");
         try
         {
             foreach (var id in wanted)
@@ -65,6 +65,7 @@ public sealed partial class TickerHost
     {
         if (disposed || !started) return;
         if (!NeedsNews) return;
+        if (!NeedsActiveNews) { await RefreshExtraNewsAsync(); return; }
         if (refreshing)
         {
             // Remember a forced request (e.g. mode change) and run it as soon as the current one ends.
@@ -75,17 +76,17 @@ public sealed partial class TickerHost
 
         refreshing = true;
         var epoch = startEpoch;
-        var token = SessionToken;
+        var token = DemandToken("news");
         try
         {
             var category = Config.ActiveCategory;
             var items = await news.FetchAsync(Config.GetFeeds(category), Config.MaxItemsPerFeed, token, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst);
             var failedFeeds = news.LastFailedFeeds.ToList();
-            if (disposed || !started || epoch != startEpoch || !string.Equals(category, Config.ActiveCategory, StringComparison.OrdinalIgnoreCase)) return; // the category changed meanwhile; a new refresh is running
+            if (disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !NeedsActiveNews || !string.Equals(category, Config.ActiveCategory, StringComparison.OrdinalIgnoreCase)) return; // the category changed meanwhile; a new refresh is running
 
             void Apply()
             {
-                if (disposed || !started || epoch != startEpoch) return;
+                if (disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !NeedsActiveNews) return;
                 State.MarkNewsRefresh();
                 if (items.Count > 0)
                 {

@@ -96,7 +96,7 @@ public sealed class CrawlerWidgetPanel : UserControl
         if (newsVisibilityRegistered)
         {
             newsVisibilityRegistered = false;
-            host.SetNewsWidgetVisible(false);
+            host.SetWidgetVisible(kind, false);
         }
         timer.Stop();
         Interlocked.Exchange(ref refreshQueued, 0);
@@ -114,11 +114,11 @@ public sealed class CrawlerWidgetPanel : UserControl
 
     private void UpdateNewsWidgetVisibility()
     {
-        if (kind != "news") return;
+        if (kind is not ("news" or "markets" or "weather")) return;
         var shouldRegister = !IsDisposed && Visible && IsHandleCreated;
         if (newsVisibilityRegistered == shouldRegister) return;
         newsVisibilityRegistered = shouldRegister;
-        host.SetNewsWidgetVisible(shouldRegister);
+        host.SetWidgetVisible(kind, shouldRegister);
     }
 
     private void ApplyTheme()
@@ -388,7 +388,7 @@ public sealed class CrawlerWidgetPanel : UserControl
             if (newsVisibilityRegistered)
             {
                 newsVisibilityRegistered = false;
-                host.SetNewsWidgetVisible(false);
+                host.SetWidgetVisible(kind, false);
             }
             eventSubscription.Dispose();
             Theme.Changed -= ApplyTheme;
