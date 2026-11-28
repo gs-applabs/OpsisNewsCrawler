@@ -40,6 +40,11 @@ jobs:
           SOAK_MINUTES: ${{ inputs.minutes || (contains(github.event.pull_request.labels.*.name, 'extended-soak') && '30') || '3' }}
           SOAK_TIER: ${{ inputs.tier || 'Low' }}
         run: ./tools/resource-soak.ps1 -Minutes ([int]$env:SOAK_MINUTES) -Tier $env:SOAK_TIER -Out "$env:RUNNER_TEMP/crawler-soak"
+      - name: Verify idle configuration without optional services
+        shell: pwsh
+        env:
+          SOAK_TIER: ${{ inputs.tier || 'Low' }}
+        run: ./tools/resource-soak.ps1 -Minutes 2 -Tier $env:SOAK_TIER -Scenario Idle -Out "$env:RUNNER_TEMP/crawler-soak"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

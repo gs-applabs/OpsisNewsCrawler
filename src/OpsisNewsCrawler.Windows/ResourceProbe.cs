@@ -17,7 +17,7 @@ public sealed class ResourceProbe : IDisposable
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 5000 };
     private readonly List<string> rows = new()
     {
-        "elapsed_seconds,cpu_percent_all_cores,private_bytes,working_set_bytes,managed_bytes,gdi_handles,user_handles,handles,threads,refresh_jobs,frames,rss_bytes,cache_writes,cache_skips,file_writes,file_payload_bytes"
+        "elapsed_seconds,cpu_percent_all_cores,private_bytes,working_set_bytes,managed_bytes,gdi_handles,user_handles,handles,threads,refresh_jobs,frames,rss_bytes,cache_writes,cache_skips,file_writes,file_payload_bytes,active_services,refresh_timers_active,updates_active,market_initialized,bar_visible"
     };
     private TimeSpan previousCpu;
     private double previousSeconds;
@@ -43,7 +43,7 @@ public sealed class ResourceProbe : IDisposable
         previousSeconds = elapsed;
         var disk = DataCache.WriteDiagnostics;
         var files = SafeFile.Diagnostics;
-        rows.Add(FormattableString.Invariant($"{elapsed:F2},{percent:F3},{process.PrivateMemorySize64},{process.WorkingSet64},{GC.GetTotalMemory(false)},{GetGuiResources(process.Handle, 0)},{GetGuiResources(process.Handle, 1)},{process.HandleCount},{process.Threads.Count},{host.RunningRefreshes},{host.Window.RenderedFrames},{host.NetworkReceivedBytes},{disk.Writes},{disk.Skips},{files.Writes},{files.Bytes}"));
+        rows.Add(FormattableString.Invariant($"{elapsed:F2},{percent:F3},{process.PrivateMemorySize64},{process.WorkingSet64},{GC.GetTotalMemory(false)},{GetGuiResources(process.Handle, 0)},{GetGuiResources(process.Handle, 1)},{process.HandleCount},{process.Threads.Count},{host.RunningRefreshes},{host.Window.RenderedFrames},{host.NetworkReceivedBytes},{disk.Writes},{disk.Skips},{files.Writes},{files.Bytes},{host.ActiveRefreshServices.Count()},{(host.HasActiveRefreshTimers ? 1 : 0)},{(host.AutomaticUpdatesActive ? 1 : 0)},{(host.MarketStoreInitialized ? 1 : 0)},{(host.Window.Visible ? 1 : 0)}"));
         if (elapsed < duration) return;
         timer.Stop();
         finished = true;
