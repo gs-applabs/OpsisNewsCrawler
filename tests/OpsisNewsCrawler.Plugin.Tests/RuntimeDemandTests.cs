@@ -37,6 +37,26 @@ public sealed class RuntimeDemandTests
                 host.ApplyConfig();
                 Assert.False(host.AutomaticUpdatesActive);
                 Assert.Empty(host.ActiveRefreshServices);
+                // No live network is needed for this isolated demand check.
+                foreach (var category in host.Config.Categories)
+                    foreach (var feed in category.Feeds) feed.Enabled = false;
+                host.Config.BreakingEnabled = true;
+                host.SetWidgetVisible("breaking", true);
+                Assert.Equal(new[] { "news" }, host.ActiveRefreshServices);
+                Assert.False(host.Window.Visible);
+                Assert.False(host.MarketStoreInitialized);
+                host.SetWidgetVisible("breaking", true);
+                host.SetWidgetVisible("breaking", false);
+                Assert.Equal(new[] { "news" }, host.ActiveRefreshServices);
+                host.Config.BreakingEnabled = false;
+                host.ApplyConfig();
+                Assert.Empty(host.ActiveRefreshServices);
+                Assert.Empty(host.WidgetSnapshot("breaking"));
+                host.Config.BreakingEnabled = true;
+                host.ApplyConfig();
+                Assert.Equal(new[] { "news" }, host.ActiveRefreshServices);
+                host.SetWidgetVisible("breaking", false);
+                Assert.Empty(host.ActiveRefreshServices);
                 host.Stop();
                 Assert.False(host.HasActiveRefreshTimers);
                 Assert.False(host.MarketStoreInitialized);

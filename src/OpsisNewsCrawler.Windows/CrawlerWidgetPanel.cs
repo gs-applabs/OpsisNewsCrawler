@@ -30,6 +30,8 @@ public sealed class CrawlerWidgetPanel : UserControl
     private string gallerySignature = "";
     private bool highContrast;
     private bool newsVisibilityRegistered;
+    private readonly Font baseWidgetFont;
+    private bool widgetDisposed;
     private Font? scaledFont;
     private int appliedFontScale = -1;
     private readonly List<NewsItem> visible = new();
@@ -42,7 +44,8 @@ public sealed class CrawlerWidgetPanel : UserControl
         this.kind = kind;
         Dock = DockStyle.Fill;
         MinimumSize = new Size(210, 110);
-        Font = new Font("Segoe UI", 9.5f);
+        baseWidgetFont = new Font("Segoe UI", 9.5f);
+        Font = baseWidgetFont;
         heading.Text = kind.ToUpperInvariant();
         heading.Padding = new Padding(12, 6, 0, 0);
         heading.AccessibleRole = AccessibleRole.StaticText;
@@ -64,7 +67,7 @@ public sealed class CrawlerWidgetPanel : UserControl
         gallery.DpiChangedAfterParent += (_, _) => ResizeGalleryCards();
         Theme.Changed += ApplyTheme;
         Theme.HostAccentChanged += ApplyTheme;
-        if (kind == "news") host.NewsWidgetUpdated += RequestRefresh;
+        if (kind is "news" or "breaking") host.NewsWidgetUpdated += RequestRefresh;
         Loc.Changed += RefreshSafe;
         if (kind == "history") PluginFeeds.Changed += RequestRefresh;
         timer.Tick += (_, _) =>
@@ -98,7 +101,7 @@ public sealed class CrawlerWidgetPanel : UserControl
             newsVisibilityRegistered = false;
             host.SetWidgetVisible(kind, false);
         }
-        timer.Stop();
+        if (!widgetDisposed) timer.Stop();
         Interlocked.Exchange(ref refreshQueued, 0);
         base.OnHandleDestroyed(e);
     }
@@ -106,7 +109,7 @@ public sealed class CrawlerWidgetPanel : UserControl
     protected override void OnVisibleChanged(EventArgs e)
     {
         base.OnVisibleChanged(e);
-        if (IsDisposed) return;
+        if (IsDisposed || widgetDisposed) return;
         if (Visible && IsHandleCreated) { timer.Start(); RefreshSafe(); }
         else timer.Stop();
         UpdateNewsWidgetVisibility();
@@ -114,7 +117,7 @@ public sealed class CrawlerWidgetPanel : UserControl
 
     private void UpdateNewsWidgetVisibility()
     {
-        if (kind is not ("news" or "markets" or "weather")) return;
+        if (kind is not ("news" or "markets" or "weather" or "breaking")) return;
         var shouldRegister = !IsDisposed && Visible && IsHandleCreated;
         if (newsVisibilityRegistered == shouldRegister) return;
         newsVisibilityRegistered = shouldRegister;
@@ -381,9 +384,11 @@ public sealed class CrawlerWidgetPanel : UserControl
     {
         // Dispose the owned font only after WinForms has disposed child controls
         // which may still reference the same Font object.
-        var releaseFont = disposing ? scaledFont : null;
-        if (disposing)
+        var releaseBaseFont = disposing && !widgetDisposed;
+        var releaseFont = releaseBaseFont ? scaledFont : null;
+        if (disposing && !widgetDisposed)
         {
+            widgetDisposed = true;
             timer.Stop(); timer.Dispose();
             if (newsVisibilityRegistered)
             {
@@ -393,7 +398,7 @@ public sealed class CrawlerWidgetPanel : UserControl
             eventSubscription.Dispose();
             Theme.Changed -= ApplyTheme;
             Theme.HostAccentChanged -= ApplyTheme;
-            if (kind == "news") host.NewsWidgetUpdated -= RequestRefresh;
+            if (kind is "news" or "breaking") host.NewsWidgetUpdated -= RequestRefresh;
             Loc.Changed -= RefreshSafe;
             if (kind == "history") PluginFeeds.Changed -= RequestRefresh;
             ClearGallery();
@@ -401,5 +406,6 @@ public sealed class CrawlerWidgetPanel : UserControl
         }
         base.Dispose(disposing);
         releaseFont?.Dispose();
+        if (disposing && releaseBaseFont) baseWidgetFont.Dispose();
     }
 }

@@ -44,7 +44,9 @@ public sealed partial class TickerHost : IDisposable
     private bool started;
     private int startEpoch; // discard delayed checks from a stopped session
     private int newsWidgetUsers; // visible instances only, including across monitors
-    private int marketWidgetUsers, weatherWidgetUsers;
+    private int marketWidgetUsers, weatherWidgetUsers, breakingWidgetUsers;
+    private bool BreakingWidgetDemand => breakingWidgetUsers > 0 && Config.BreakingEnabled;
+    private IReadOnlyList<NewsItem> breakingWidgetItems = Array.Empty<NewsItem>();
     private bool NewsWidgetActiveCategory => newsWidgetUsers > 0 &&
         (IsActiveCategory(WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId) ||
         Config.FindCategory(WidgetStudio.Resolve(Config.WidgetProfiles, "news").NewsCategoryId) is null);
@@ -80,7 +82,7 @@ public sealed partial class TickerHost : IDisposable
         "news" => NewsWidgetSnapshot(),
         "markets" => stockItems.Where(x => x.Kind == NewsItemKind.Quote).Take(30).ToArray(),
         "weather" => WeatherForDisplay().Where(x => x.Kind == NewsItemKind.Weather).Take(30).ToArray(),
-        "breaking" => breakingItems.Take(30).ToArray(),
+        "breaking" => BreakingWidgetSnapshot(),
         "history" => PluginFeeds.FindRich("san-simera") is not null || PluginFeeds.Find("san-simera") is not null
             ? PluginFeedForDisplay("san-simera").Take(30).ToArray() : Array.Empty<NewsItem>(),
         _ => Array.Empty<NewsItem>()
@@ -1042,8 +1044,8 @@ public sealed partial class TickerHost : IDisposable
     private bool MiniWanted => Config.MiniWeatherEnabled || (Config.MiniWhenTaskbarHidden && taskbarHidden);
 
     private bool Needs(SlotKind kind) => AllBarSlots().Any(slots => slots.Has(kind));
-    private bool NeedsNews => Needs(SlotKind.News) || newsWidgetUsers > 0;
-    private bool NeedsActiveNews => NewsWidgetActiveCategory || AllBarSlots().SelectMany(s => s.All())
+    private bool NeedsNews => Needs(SlotKind.News) || newsWidgetUsers > 0 || BreakingWidgetDemand;
+    private bool NeedsActiveNews => BreakingWidgetDemand || NewsWidgetActiveCategory || AllBarSlots().SelectMany(s => s.All())
         .Any(s => s.Kind == SlotKind.News && IsActiveCategory(s.Category));
     private bool NeedsStocks => Needs(SlotKind.Stocks) || marketWidgetUsers > 0 ||
         portfolioOpen || analysis is { IsDisposed: false } ||
@@ -1074,6 +1076,7 @@ public sealed partial class TickerHost : IDisposable
 
     private void ReconcileDemandCore()
     {
+        if (!started || !BreakingWidgetDemand) breakingWidgetItems = Array.Empty<NewsItem>();
         // Category-only widgets must not fetch the unrelated primary category.
         var signature = started && NeedsNews
             ? (NeedsActiveNews ? Config.ActiveCategory : "") + "|" + string.Join("|", ExtraNewsCategories().OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
@@ -1081,6 +1084,7 @@ public sealed partial class TickerHost : IDisposable
         if (!string.Equals(signature, newsDemandSignature, StringComparison.OrdinalIgnoreCase))
         {
             newsDemandSignature = signature;
+            breakingWidgetItems = Array.Empty<NewsItem>();
             if (activeServices.Remove("news", out var previous)) { previous.Cancel(); previous.Dispose(); }
             PruneExtraCategories();
         }
@@ -1174,8 +1178,11 @@ public sealed partial class TickerHost : IDisposable
         if (kind == "news") { SetNewsWidgetVisible(visible); return; }
         if (kind == "markets") marketWidgetUsers = Math.Clamp(marketWidgetUsers + (visible ? 1 : -1), 0, 64);
         else if (kind == "weather") weatherWidgetUsers = Math.Clamp(weatherWidgetUsers + (visible ? 1 : -1), 0, 64);
+        else if (kind == "breaking") breakingWidgetUsers = Math.Clamp(breakingWidgetUsers + (visible ? 1 : -1), 0, 64);
         else return;
         ReconcileDemand();
+        if (kind == "breaking" && visible && started && BreakingWidgetDemand && hasRealItems)
+            DetectBreaking(allItems, widgetOnly: true);
     }
 
     public void NewsWidgetCategoryChanged()
@@ -1377,9 +1384,20 @@ public sealed partial class TickerHost : IDisposable
     }
 
     /// <summary>Finds new urgent headlines; the first time one is seen the intro plays and the bar turns red.</summary>
-    private void DetectBreaking(List<NewsItem> items)
+    private IReadOnlyList<NewsItem> BreakingWidgetSnapshot()
     {
-        if (!BarsOn || !Config.BreakingEnabled || (!Config.MainSlots().Has(SlotKind.News) && !breakingActive)) return;
+        if (!started || !Config.BreakingEnabled) return Array.Empty<NewsItem>();
+        var cutoff = DateTimeOffset.UtcNow.AddMinutes(-Config.BreakingMaxAgeMinutes);
+        return breakingWidgetItems.Where(i => i.PublishedAt >= cutoff && !readStore.IsRead(i.Url))
+            .Concat(BarsOn ? breakingItems.Where(i => string.IsNullOrEmpty(i.Url)) : Enumerable.Empty<NewsItem>())
+            .Take(30).ToArray();
+    }
+
+    private void DetectBreaking(List<NewsItem> items, bool widgetOnly = false)
+    {
+        var barDemand = !widgetOnly && BarsOn && Config.BreakingEnabled &&
+            (Config.MainSlots().Has(SlotKind.News) || breakingActive);
+        if (!barDemand && !BreakingWidgetDemand) return;
         var engine = new BreakingEngine(new BreakingOptions(BreakingEngine.ParseSensitivity(Config.BreakingSensitivity), Config.BreakingKeywords,
             TimeSpan.FromMinutes(Config.BreakingMaxAgeMinutes), breakingFeedback));
         // Several signals, not one word: confirmation by other publishers, speed, freshness, source reliability, disaster data, negative filters (see BreakingEngine).
@@ -1394,7 +1412,14 @@ public sealed partial class TickerHost : IDisposable
         var urgent = assessments.Where(a => a.IsBreaking)
             .Where(a => !readStore.IsRead(a.Item.Url))
             .Select(a => a.Item with { Breaking = true, Why = BreakingWhy.Detailed(a, BreakingEngine.ParseSensitivity(Config.BreakingSensitivity)) }).ToList();
-        if (urgent.Count == 0) return;
+        if (BreakingWidgetDemand)
+        {
+            breakingWidgetItems = urgent.Take(30).ToArray();
+            NewsWidgetUpdated?.Invoke();
+        }
+        // Widget-only use must not show a bar, play an alert, or mark the
+        // headline as already announced for a later explicitly enabled bar.
+        if (!barDemand || urgent.Count == 0) return;
 
         breakingVideoContext = urgent[0].Title;
         foreach (var item in urgent.Take(6))
