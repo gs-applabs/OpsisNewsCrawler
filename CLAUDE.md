@@ -9,7 +9,7 @@ comments stay in English; UI strings are bilingual "Ελληνικά / English".
 ## Current .NET 11 + Opsis 2.8 integration rule (2026-11-24)
 - Build with .NET 11; Crawler product version 0.30.0, Crawler plugin/contract ABI 1.0.0.0 and Opsis.UI 0.6.0 (assembly 0.1.0.0). The exact Opsis 2.8.0.2510 UI6 DLL is committed in `libs/`.
 - Host and all plugins must load the **same compiled** shared ABI contract binary. The app, Windows, plugin and tests reference `libs/OpsisNewsCrawler.Plugin.Abstractions.dll` from Opsis 2.8; the source project is a mirror and must never be packaged as a replacement. The plugin installer must reject inconsistent SHA256 for host contract or UI6; it must not silently replace host-owned binaries.
-- Current cumulative candidate is draft PR #15 (0.30.0). Read the current source ownership/backlog cross-check at the top of CHANGELOG.md before changing code; do not treat historical PR #7/#8 or pre-P2 status as current. Check exact refs, existing service owner and regression coverage. Review the CI source-overlap report before any new implementation; lexical matches require manual review, not automatic deletion. Actual candidate host loader, Chronikologio and remaining runtime gates must be verified.
+- Current runtime candidate is Pass 23 (0.30.0); canonical release handoff is `release/030-claude-final-gate` (PR #15 is the older integration draft). Read the current source ownership/backlog cross-check at the top of CHANGELOG.md before changing code; do not treat historical PR #7/#8 or pre-P2 status as current. Check exact refs, existing service owner and regression coverage. Review the CI source-overlap report before any new implementation; lexical matches require manual review, not automatic deletion. Pass 23 exact real host loader and Chronikologio smoke passed; final release-branch installer/resource gates and physical acceptance remain open. See release handoff above.
 - The current canonical development journal is `CHANGELOG.md`; do not create or link new dated progress/handoff files. Keep source documentation (`docs/DATA-SOURCES.md`, `docs/SECURITY.md`, etc.) separate from progress history.
 
 ## Mandatory pre-implementation cross-check (owner rule, permanent)
@@ -20,6 +20,9 @@ Before EVERY new feature, fix, refactor or Mega Pass:
 4. Review lexical overlap candidates manually; do not delete code based on text similarity alone. Reuse shared services across the Opsis family where supported; keep independent compatibility/migration paths until tested. No silent loss of prior requirements.
 5. Record affected requirements, existing owner, reuse decision, actual changes, regression tests and remaining gaps in the canonical CHANGELOG/current audit, before advancing. Preserve unmerged work, avoid canceling active long checks, and use exact-SHA Windows evidence; no percentages or completion claims unsupported by tests.
 This applies to all assistants and future sessions, not only the current pass. If evidence is unavailable, state the gap and do not claim a full cross-check.
+
+## Next release — owner handoff (2026-11-28)
+Use `release/030-claude-final-gate`, not main or the older PR #15 head. Read **Release handoff — 2026-11-28** at the top of CHANGELOG.md for exact candidate SHA, real host evidence, remaining gates, packaging and publication checklist. Check current GitHub Actions results; do not assume pending tests passed. The successor is documentation-only; verify that before relying on Pass 23 runtime evidence. Keep permanent pre-implementation cross-check in force. No merge or publication until gates are reviewed.
 
 ## READ FIRST
 1. `CHANGELOG.md` — canonical historical status and current P0/P1/P2 gates; do not use deleted historical progress files.

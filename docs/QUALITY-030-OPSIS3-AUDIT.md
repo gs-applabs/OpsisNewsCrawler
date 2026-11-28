@@ -99,3 +99,7 @@ Retrieved Pass 21 source-overlap artifact; nine windows resolve to eight map-for
 ## Pass 23
 
 Existing Yahoo catalogue search now uses a per-request consent and cancellable UI lease; never toggles background history/quotes flag. Query/group/page/visibility/opt-out/rebuild/disposal invalidate pending results. Existing provider and HTTP client/cooldown retained, no new scheduler. Core opt-out and STA stale result test added. Exact new Windows verification and Pass 21 soak pending. See CHANGELOG.
+
+## Release handoff (Pass 23 runtime)
+
+Exact Pass 23 Windows run 46109057013 passed 750 Core + 81 Plugin tests; zero exact duplicate C# files, one test fixture overlap. OPSIS PR21 / 46109175880 real host smoke passed with exact Crawler SHA, both plugins ABI 1.0.0.0 and common UI6. See canonical CHANGELOG release handoff for exact refs, remaining installer/soak and physical acceptance, and release checklist. Documentation-only successor on release/030-claude-final-gate; no release.
