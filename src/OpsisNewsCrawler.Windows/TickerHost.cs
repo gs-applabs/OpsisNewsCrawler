@@ -14,6 +14,8 @@ public sealed partial class TickerHost : IDisposable
 
     private readonly string configPath;
     private readonly Func<IntPtr, bool>? hostWindowDetector;
+    private readonly SynchronizationContext? uiContext;
+    private CancellationTokenSource? resumeDelay;
     private readonly RssNewsProvider news = new();
     private QuoteService? quoteService;
     private QuoteService quotes => quoteService ??= new QuoteService();
@@ -345,6 +347,7 @@ public sealed partial class TickerHost : IDisposable
 
         // Cached content and market history are loaded only when selected.
         Window = new TickerWindow(State, hostWindowDetector);
+        uiContext = SynchronizationContext.Current;
         WireWindow(Window);
         Window.PlacementEdited += b =>
         {
@@ -358,7 +361,7 @@ public sealed partial class TickerHost : IDisposable
         refreshTimer.Tick += (_, _) =>
         {
             // Visible widgets still need their own data if a foreground application freezes a ticker.
-            if (!Window.IsPausedByForeground || newsWidgetUsers > 0) RequestRefresh("news", () => RefreshAsync(force: false));
+            if (!Window.IsPausedByForeground || newsWidgetUsers > 0 || BreakingWidgetDemand) RequestRefresh("news", () => RefreshAsync(force: false));
         };
         quoteTimer.Tick += (_, _) =>
         {
@@ -643,20 +646,45 @@ public sealed partial class TickerHost : IDisposable
 
     private void OnPowerModeChanged(object? sender, Microsoft.Win32.PowerModeChangedEventArgs e)
     {
-        // After sleep the data is hours old and the network needs a few seconds to come back: refresh everything once it has.
-        if (e.Mode != Microsoft.Win32.PowerModes.Resume || disposed || !Window.IsHandleCreated) return;
+        if (e.Mode != Microsoft.Win32.PowerModes.Resume || disposed) return;
+        // The widget-only host may have no visible ticker HWND.
         try
         {
-            Window.BeginInvoke(new Action(async () =>
-            {
-                await Task.Delay(TimeSpan.FromSeconds(6));
-                if (disposed || !started) return;
-                RequestRefresh("news", () => RefreshAsync(force: true), latest: true);
-                RequestRefresh("quotes", () => RefreshQuotesAsync());
-                RequestRefresh("weather", RefreshWeatherAsync);
-            }));
+            if (uiContext is not null)
+                uiContext.Post(state => { _ = RefreshAfterResumeAsync(TimeSpan.FromSeconds(6)); }, null);
+            else if (Window.IsHandleCreated)
+                Window.BeginInvoke(new Action(() => _ = RefreshAfterResumeAsync(TimeSpan.FromSeconds(6))));
         }
         catch (InvalidOperationException) { }
+    }
+
+    internal bool ResumeRefreshPending => resumeDelay is not null;
+
+    internal async Task RefreshAfterResumeAsync(TimeSpan delay)
+    {
+        if (disposed || !started || activeServices.Count == 0 || resumeDelay is not null) return;
+        using var lease = CancellationTokenSource.CreateLinkedTokenSource(SessionToken);
+        resumeDelay = lease;
+        var epoch = startEpoch;
+        try
+        {
+            await Task.Delay(delay, lease.Token);
+            if (disposed || !started || epoch != startEpoch || lease.IsCancellationRequested) return;
+            RequestRefresh("news", () => RefreshAsync(force: true), latest: true);
+            RequestRefresh("quotes", () => RefreshQuotesAsync(), latest: true);
+            RequestRefresh("weather", RefreshWeatherAsync, latest: true);
+            RequestRefresh("hazards", RefreshHazardsAsync, latest: true);
+            RequestRefresh("weather-alerts", CheckWeatherAlertsAsync, latest: true);
+        }
+        catch (OperationCanceledException) when (lease.IsCancellationRequested) { }
+        finally { if (ReferenceEquals(resumeDelay, lease)) resumeDelay = null; }
+    }
+
+    private void CancelResumeRefresh()
+    {
+        var old = resumeDelay;
+        resumeDelay = null;
+        old?.Cancel(); // the awaiting operation owns disposal
     }
 
     private void OnDisplaysChanged(object? sender, EventArgs e)
@@ -919,6 +947,8 @@ public sealed partial class TickerHost : IDisposable
         // A stopped host can still have windows opened through settings.
         // Cleanup is idempotent and must close those as well.
         started = false;
+        CancelResumeRefresh();
+        CancelHistoryBackfill();
         pendingForced = false;
         unchecked { startEpoch++; }
         var oldSession = sessionCts;
@@ -1111,6 +1141,8 @@ public sealed partial class TickerHost : IDisposable
         Sync("weather", weatherTimer, NeedsWeather, RefreshWeatherAsync);
         Sync("hazards", hazardTimer, NeedsHazards, RefreshHazardsAsync);
         Sync("weather-alerts", alertTimer, NeedsWeatherAlerts, CheckWeatherAlertsAsync);
+        if (activeServices.Count == 0) CancelResumeRefresh();
+        if (!started || !NeedsStocks || !Config.HistoryFromYahoo) CancelHistoryBackfill();
         breakingTimer.Enabled = started && BarsOn && (Config.BreakingEnabled || Config.PriceAlerts.Any(a => a.Enabled));
         if (started && Config.CheckForUpdates)
         {
@@ -1389,8 +1421,8 @@ public sealed partial class TickerHost : IDisposable
         if (!started || !Config.BreakingEnabled) return Array.Empty<NewsItem>();
         var cutoff = DateTimeOffset.UtcNow.AddMinutes(-Config.BreakingMaxAgeMinutes);
         return breakingWidgetItems.Where(i => i.PublishedAt >= cutoff && !readStore.IsRead(i.Url))
-            .Concat(BarsOn ? breakingItems.Where(i => string.IsNullOrEmpty(i.Url)) : Enumerable.Empty<NewsItem>())
-            .Take(30).ToArray();
+            .Concat(BarsOn && breakingActive ? breakingItems : Enumerable.Empty<NewsItem>())
+            .DistinctBy(i => (i.Title, i.Url)).Take(30).ToArray();
     }
 
     private void DetectBreaking(List<NewsItem> items, bool widgetOnly = false)
@@ -1530,28 +1562,19 @@ public sealed partial class TickerHost : IDisposable
     }
 
     private bool quotesFailed;
-    private bool quoteRetryPending;
+    private readonly DeferredDemand quoteRetry = new();
 
     // ---- natural disasters --------------------------------------------------------------------------
 
-    private async void ScheduleQuoteRetry()
+    private void ScheduleQuoteRetry()
     {
-        if (quoteRetryPending || disposed || !started) return;
-        quoteRetryPending = true;
-        var epoch = startEpoch;
-        var token = SessionToken;
-        try
+        if (disposed || !started || !NeedsStocks || !activeServices.TryGetValue("quotes", out var lease)) return;
+        var token = lease.Token;
+        _ = quoteRetry.RunAsync(token, TimeSpan.FromSeconds(60), () =>
         {
-            await Task.Delay(TimeSpan.FromSeconds(60), token);
-            if (!disposed && started && epoch == startEpoch && BarsOn) RequestRefresh("quotes", () => RefreshQuotesAsync());
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        finally
-        {
-            quoteRetryPending = false;
-        }
+            if (!disposed && started && NeedsStocks && !token.IsCancellationRequested)
+                RequestRefresh("quotes", () => RefreshQuotesAsync());
+        });
     }
 
     // ---- portfolio window ---------------------------------------------------------------------------
@@ -1650,6 +1673,8 @@ public sealed partial class TickerHost : IDisposable
     {
         if (disposed) return;
         disposed = true;
+        CancelResumeRefresh();
+        CancelHistoryBackfill();
         sessionCts?.Cancel();
         sessionCts?.Dispose();
         sessionCts = null;

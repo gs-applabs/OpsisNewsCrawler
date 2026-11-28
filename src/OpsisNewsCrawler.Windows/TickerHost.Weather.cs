@@ -210,22 +210,17 @@ public sealed partial class TickerHost
         }
     }
 
-    private bool weatherRetryPending;
-    private async Task RetryWeatherLater()
+    private readonly DeferredDemand weatherRetry = new();
+    private Task RetryWeatherLater()
     {
-        if (weatherRetryPending || !NeedsWeather || disposed || !started) return;
-        weatherRetryPending = true;
-        var epoch = startEpoch;
-        var token = DemandToken("weather");
-        try
+        if (!NeedsWeather || disposed || !started || !activeServices.TryGetValue("weather", out var lease))
+            return Task.CompletedTask;
+        var token = lease.Token;
+        return weatherRetry.RunAsync(token, TimeSpan.FromSeconds(60), () =>
         {
-            await Task.Delay(TimeSpan.FromSeconds(60), token);
-            if (!disposed && started && epoch == startEpoch && NeedsWeather && !token.IsCancellationRequested) RequestRefresh("weather", RefreshWeatherAsync);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        finally { weatherRetryPending = false; }
+            if (!disposed && started && NeedsWeather && !token.IsCancellationRequested)
+                RequestRefresh("weather", RefreshWeatherAsync);
+        });
     }
 
     /// <summary>Where the small weather bar is: the saved place, or the middle of the primary desktop.</summary>

@@ -57,6 +57,8 @@ public sealed class RuntimeDemandTests
                 Assert.Equal(new[] { "news" }, host.ActiveRefreshServices);
                 host.SetWidgetVisible("breaking", false);
                 Assert.Empty(host.ActiveRefreshServices);
+                Assert.True(host.RefreshAfterResumeAsync(TimeSpan.FromSeconds(6)).IsCompletedSuccessfully);
+                Assert.False(host.ResumeRefreshPending);
                 host.Stop();
                 Assert.False(host.HasActiveRefreshTimers);
                 Assert.False(host.MarketStoreInitialized);

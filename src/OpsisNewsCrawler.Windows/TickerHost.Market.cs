@@ -7,7 +7,9 @@ namespace OpsisNewsCrawler.Windows;
 /// <summary>P0 module split from the ticker host; no change to the public host lifecycle or rendering.</summary>
 public sealed partial class TickerHost
 {
-    private bool backfilling;
+    private CancellationTokenSource? historyBackfill;
+
+    private void CancelHistoryBackfill() => historyBackfill?.Cancel();
 
     /// <summary>
     /// When the user switched it on (Sources &gt; Markets flow): fills the stored price history from Yahoo Finance, a few instruments per run,
@@ -15,16 +17,18 @@ public sealed partial class TickerHost
     /// </summary>
     public async void StartHistoryBackfill()
     {
-        if (!Config.HistoryFromYahoo || !NeedsStocks || backfilling || disposed || !started) return;
-        backfilling = true;
+        if (!Config.HistoryFromYahoo || !NeedsStocks || historyBackfill is not null || disposed || !started ||
+            !activeServices.TryGetValue("quotes", out var demand)) return;
+        using var lease = CancellationTokenSource.CreateLinkedTokenSource(demand.Token);
+        historyBackfill = lease;
         var epoch = startEpoch;
-        var token = DemandToken("quotes");
+        var token = lease.Token;
         try
         {
             var list = Config.Watchlist.Where(w => w.Enabled).Concat(PortfolioInstruments()).ToList();
             var ui = SynchronizationContext.Current;
-            var n = await YahooHistory.BackfillAsync(quotes.Store, list, 40, token, () => ui?.Post(_ => { if (!disposed && started && epoch == startEpoch) QuotesUpdated?.Invoke(); }, null));
-            if (n > 0 && !disposed && started && epoch == startEpoch)
+            var n = await YahooHistory.BackfillAsync(quotes.Store, list, 40, token, () => ui?.Post(_ => { if (!disposed && started && epoch == startEpoch && !token.IsCancellationRequested && Config.HistoryFromYahoo) QuotesUpdated?.Invoke(); }, null));
+            if (n > 0 && !disposed && started && epoch == startEpoch && !token.IsCancellationRequested && Config.HistoryFromYahoo)
             {
                 Log.Write($"Yahoo history added for {n} instruments.");
                 QuotesUpdated?.Invoke();
@@ -39,7 +43,7 @@ public sealed partial class TickerHost
         }
         finally
         {
-            backfilling = false;
+            historyBackfill = null;
         }
     }
 
