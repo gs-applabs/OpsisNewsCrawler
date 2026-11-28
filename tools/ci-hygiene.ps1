@@ -26,6 +26,13 @@ $guide = Get-Content (Join-Path $repo 'CLAUDE.md') -Raw
 foreach ($path in @('docs/TASKS.md','docs/HANDOFF.md')) {
     if ($guide.Contains($path)) { throw "Stale CLAUDE.md reference: $path" }
 }
+$agentGuide = Join-Path $repo 'AGENTS.md'
+if (!(Test-Path -LiteralPath $agentGuide) -or
+    !(Get-Content -LiteralPath $agentGuide -Raw).Contains('Mandatory pre-implementation cross-check') -or
+    !$guide.Contains('Mandatory pre-implementation cross-check (owner rule, permanent)') -or
+    !$history.Contains('Current source ownership and backlog cross-check')) {
+    throw 'Permanent source ownership / cross-check policy missing.'
+}
 $contract = Join-Path $repo 'libs/OpsisNewsCrawler.Plugin.Abstractions.dll'
 $ui = Join-Path $repo 'libs/Opsis.UI.dll'
 if (([Reflection.AssemblyName]::GetAssemblyName($contract).Version.ToString()) -ne '1.0.0.0') { throw 'Wrong canonical shared ABI DLL.' }
@@ -77,4 +84,4 @@ if ($env:RUNNER_TEMP) {
     New-Item -ItemType Directory -Force $dir | Out-Null
     $report | Set-Content -LiteralPath (Join-Path $dir 'source-overlap.txt') -Encoding utf8
 }
-$report | Select-Object -First 3 | ForEach-Object { Write-Host $_ }
+$report | ForEach-Object { Write-Host $_ }

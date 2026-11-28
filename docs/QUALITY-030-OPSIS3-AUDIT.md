@@ -91,3 +91,7 @@ Same-category RSS edits now cancel the previous news demand lease before reloadi
 ## Pass 21 — source ownership cross-check
 
 See the current N01–N40 reconciliation and ownership/remaining gates in CHANGELOG.md. All 271 tracked C# blob identities unique at 710708e; not semantic dedup certification. Pass 17 exact resource/idle run succeeded with active private memory +74.31 MiB, requiring investigation. The hygiene gate reports whole-file and normalized line-window overlaps across tracked source/tests for manual review. No production feature changed. Promote cumulative 18–20 plus audit only after verified Pass 17; exact new candidate must pass CI. No main merge/release.
+
+## Pass 22
+
+Retrieved Pass 21 source-overlap artifact; nine windows resolve to eight map-form windows and one independent UI test fixture pattern. MapDetailForm consolidates shared presentation and security; preserves separate domain markup and link policies. QuoteStore uses CrawlerDataPaths. Permanent cross-check rule in CLAUDE.md and AGENTS.md with CI presence guard; log candidates for future manual review. Windows source verification pending, Pass 21 soak remains active. See CHANGELOG.

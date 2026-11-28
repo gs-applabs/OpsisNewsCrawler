@@ -112,11 +112,7 @@ public sealed class QuoteStore
     public static readonly TimeSpan SaveInterval = TimeSpan.FromMinutes(1);
 
     /// <summary>The price cache; the folder can be redirected with the environment variable OPSISNEWSCRAWLER_DATA (a test aid, e.g. for screenshots with made-up data).</summary>
-    public static string DefaultPath => Path.Combine(
-        Environment.GetEnvironmentVariable("OPSISNEWSCRAWLER_DATA") is { Length: > 0 } dir
-            ? dir
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OpsisNewsCrawler"),
-        "quotes-cache.json");
+    public static string DefaultPath => Path.Combine(CrawlerDataPaths.Root, "quotes-cache.json");
 
     public QuoteStore(string? path = null)
     {

@@ -12,6 +12,15 @@ comments stay in English; UI strings are bilingual "Ελληνικά / English".
 - Current cumulative candidate is draft PR #15 (0.30.0). Read the current source ownership/backlog cross-check at the top of CHANGELOG.md before changing code; do not treat historical PR #7/#8 or pre-P2 status as current. Check exact refs, existing service owner and regression coverage. Review the CI source-overlap report before any new implementation; lexical matches require manual review, not automatic deletion. Actual candidate host loader, Chronikologio and remaining runtime gates must be verified.
 - The current canonical development journal is `CHANGELOG.md`; do not create or link new dated progress/handoff files. Keep source documentation (`docs/DATA-SOURCES.md`, `docs/SECURITY.md`, etc.) separate from progress history.
 
+## Mandatory pre-implementation cross-check (owner rule, permanent)
+Before EVERY new feature, fix, refactor or Mega Pass:
+1. Read the current CHANGELOG ownership ledger, current requirements and exact Git refs. Review actual CI/overlap evidence and do not call historical or staged work released.
+2. Locate existing implementation, callers, settings/UI, dependencies, tests and cross-app owner at the exact candidate SHA. Compare requested behavior with actual behavior, not names or old plans alone. Classify as existing / partial / missing / intentional compatibility / unverified.
+3. Extend or repair the existing canonical implementation first. Do not introduce a second provider, engine, scheduler, cache, widget, shared control, storage schema or family service for the same responsibility. Preserve settings, ABI and concurrent selected features; use optional demand and release on last consumer. A genuinely different responsibility or necessary standalone fallback must be recorded with rationale, ownership and tests.
+4. Review lexical overlap candidates manually; do not delete code based on text similarity alone. Reuse shared services across the Opsis family where supported; keep independent compatibility/migration paths until tested. No silent loss of prior requirements.
+5. Record affected requirements, existing owner, reuse decision, actual changes, regression tests and remaining gaps in the canonical CHANGELOG/current audit, before advancing. Preserve unmerged work, avoid canceling active long checks, and use exact-SHA Windows evidence; no percentages or completion claims unsupported by tests.
+This applies to all assistants and future sessions, not only the current pass. If evidence is unavailable, state the gap and do not claim a full cross-check.
+
 ## READ FIRST
 1. `CHANGELOG.md` — canonical historical status and current P0/P1/P2 gates; do not use deleted historical progress files.
 2. `docs/USER-REQUIREMENTS-2026-10-13.md` — the owner's latest requirement list, verbatim (Greek).

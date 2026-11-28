@@ -1,162 +1,21 @@
 using Microsoft.Web.WebView2.Core;
-using Microsoft.Web.WebView2.WinForms;
 using OpsisNewsCrawler.Core;
 using System.Globalization;
 using System.Net;
-using System.Text.Json;
 
 namespace OpsisNewsCrawler.Windows;
 
-/// <summary>
-/// Opened by a click on a city of the weather line: the current weather of the city on top of a live OpenStreetMap map (Leaflet),
-/// in a rectangular window above the bar with maximize / restore and close. The map needs internet; the weather box does not.
-/// The tiles come from the public OpenStreetMap servers (light use, attribution shown, the app identifies itself in the Referer).
-/// </summary>
-internal sealed class WeatherMapForm : Form
+/// <summary>Weather content over the common map window; external navigation remains denied.</summary>
+internal sealed class WeatherMapForm : MapDetailForm
 {
-    private const int ToolbarHeight = 44;
-    private const string TileReferer = "https://github.com/gs-applabs/OpsisNewsCrawler";
-
-    private readonly WebView2 web = new() { Dock = DockStyle.Fill, DefaultBackgroundColor = Color.FromArgb(30, 30, 30) };
-    private readonly Panel toolbar = new() { Dock = DockStyle.Bottom, Height = ToolbarHeight };
-    private readonly FlatButton maximize = new();
-    private readonly FlatButton close = new();
-    private readonly Label title = new() { AutoSize = false, TextAlign = ContentAlignment.MiddleLeft };
-    private readonly Label message = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Visible = false };
-    private readonly string html;
-    private Rectangle normalBounds;
-    private bool maximized;
-
     public WeatherMapForm(GreekCity city, WeatherReading? reading, bool stored, Rectangle anchorBar)
-    {
-        var name = Loc.IsGreek ? city.NameEl : city.NameEn;
-        html = BuildHtml(city, name, reading, stored);
-
-        FormBorderStyle = FormBorderStyle.None;
-        ShowInTaskbar = false;
-        TopMost = true;
-        StartPosition = FormStartPosition.Manual;
-        Text = Loc.T("app.name") + " — " + name;
-        Icon = AppIcon.Get();
-        BackColor = Theme.Background;
-        ForeColor = Theme.Text;
-        Font = new Font("Segoe UI", 9.5f);
-        KeyPreview = true;
-
-        var width = 560;
-        var height = 380 + ToolbarHeight;
-        // At the far right edge of the screen, its lower edge touching the top of the bar: the bar above the taskbar, or - when the bar
-        // is inside the taskbar - the top of the taskbar itself (the bar fills the taskbar, so both are the same line).
-        var screen = Screen.FromRectangle(anchorBar).Bounds;
-        var x = screen.Right - width;
-        var y = anchorBar.Top - height;
-        if (y < screen.Top) y = Math.Min(screen.Bottom - height, anchorBar.Bottom); // a bar at the top: open right below it
-        normalBounds = new Rectangle(x, Math.Max(screen.Top, y), width, height);
-        Bounds = normalBounds;
-
-        maximize.Text = "⤢";
-        close.Text = "✕";
-        foreach (var b in new[] { maximize, close })
-        {
-            b.Padding = new Padding(10, 3, 10, 3);
-            b.Font = new Font("Segoe UI Symbol", 11f);
-            b.Margin = new Padding(0, 6, 6, 6);
-        }
-        maximize.Click += (_, _) => ToggleMaximize();
-        close.Click += (_, _) => Close();
-
-        title.Text = name + "  ·  " + Loc.T("pk.weather.and.map");
-        title.ForeColor = Theme.TextMuted;
-        title.BackColor = Theme.Surface;
-        title.Dock = DockStyle.Fill;
-        title.Padding = new Padding(14, 0, 0, 0);
-        var buttons = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Padding = new Padding(0, 0, 8, 0), BackColor = Theme.Surface };
-        buttons.Controls.AddRange(new Control[] { maximize, close });
-        toolbar.BackColor = Theme.Surface;
-        toolbar.Controls.Add(buttons);
-        toolbar.Controls.Add(title);
-
-        message.ForeColor = Theme.TextMuted;
-        Controls.Add(message);
-        Controls.Add(web);
-        Controls.Add(toolbar);
-        web.BringToFront();
-
-        KeyDown += (_, e) =>
-        {
-            if (e.KeyCode != Keys.Escape) return;
-            if (maximized) ToggleMaximize(); else Close();
-        };
-        Load += async (_, _) => await StartAsync();
-    }
-
-    protected override void OnPaint(PaintEventArgs e)
-    {
-        base.OnPaint(e);
-        if (maximized) return;
-        using var pen = new Pen(Theme.Accent, 3f);
-        e.Graphics.DrawRectangle(pen, 1, 1, Width - 3, Height - 3);
-    }
-
-    private async Task StartAsync()
-    {
-        try
-        {
-            var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpsisNewsCrawler", "webview2");
-            var env = await CoreWebView2Environment.CreateAsync(null, folder);
-            await web.EnsureCoreWebView2Async(env);
-            var core = web.CoreWebView2;
-            core.Settings.AreDevToolsEnabled = false;
-            core.Settings.AreDefaultContextMenusEnabled = false;
-            core.Settings.IsStatusBarEnabled = false;
-            core.Settings.IsZoomControlEnabled = false;
-            core.Settings.AreHostObjectsAllowed = false;
-            core.Settings.IsWebMessageEnabled = false;
-            core.NewWindowRequested += (_, e) => e.Handled = true;
-            core.PermissionRequested += (_, e) => e.State = CoreWebView2PermissionState.Deny;
-            core.DownloadStarting += (_, e) => e.Cancel = true;
-            core.NavigationStarting += (_, e) =>
-            {
-                // Only the page we generate (a data: / about: document). Clicks on links inside the map go nowhere.
-                if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var target) || target.Scheme is not ("data" or "about")) e.Cancel = true;
-            };
-            // The public OpenStreetMap tile servers ask for an identifying Referer; a generated page has none of its own.
-            core.AddWebResourceRequestedFilter("https://tile.openstreetmap.org/*", CoreWebView2WebResourceContext.Image);
-            core.WebResourceRequested += (_, e) =>
-            {
-                try { e.Request.Headers.SetHeader("Referer", TileReferer); }
-                catch (Exception ex) when (ex is ArgumentException or InvalidOperationException) { }
-            };
-            core.NavigateToString(html);
-        }
-        catch (Exception ex)
-        {
-            web.Visible = false;
-            message.Text = ex is WebView2RuntimeNotFoundException
-                ? Loc.T("pk.microsoft.edge.webview2.runtime")
-                : Loc.T("pk.the.map.could.not") + ex.GetType().Name + ": " + ex.Message;
-            message.Visible = true;
-            message.BringToFront();
-        }
-    }
-
-    private void ToggleMaximize()
-    {
-        if (!maximized)
-        {
-            normalBounds = Bounds;
-            maximized = true;
-            Bounds = Screen.FromControl(this).Bounds;
-            maximize.Text = "⤡";
-        }
-        else
-        {
-            maximized = false;
-            Bounds = normalBounds;
-            maximize.Text = "⤢";
-        }
-        Invalidate();
-    }
+        : base(BuildHtml(city, Loc.IsGreek ? city.NameEl : city.NameEn, reading, stored),
+            Loc.T("app.name") + " — " + (Loc.IsGreek ? city.NameEl : city.NameEn),
+            (Loc.IsGreek ? city.NameEl : city.NameEn) + "  ·  " + Loc.T("pk.weather.and.map"),
+            anchorBar, 560, 380,
+            ex => ex is WebView2RuntimeNotFoundException ? Loc.T("pk.microsoft.edge.webview2.runtime") :
+                Loc.T("pk.the.map.could.not") + ex.GetType().Name + ": " + ex.Message)
+    { }
 
     /// <summary>The page: a Leaflet map centred on the city with a box of the current weather. Every text is HTML-encoded.</summary>
     internal static string BuildHtml(GreekCity city, string name, WeatherReading? r, bool stored)
@@ -208,30 +67,4 @@ if (typeof L !== 'undefined') {
 </script></body></html>";
     }
 
-    protected override CreateParams CreateParams
-    {
-        get
-        {
-            var cp = base.CreateParams;
-            cp.ExStyle |= 0x00000080; // WS_EX_TOOLWINDOW: not in Alt+Tab
-            return cp;
-        }
-    }
-
-    protected override void OnHandleCreated(EventArgs e)
-    {
-        base.OnHandleCreated(e);
-        Native.MarkNoSnap(Handle);
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            web.Dispose();
-            foreach (var b in new[] { maximize, close }) b.Font.Dispose();
-            Font.Dispose();
-        }
-        base.Dispose(disposing);
-    }
 }
