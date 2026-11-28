@@ -3,6 +3,7 @@ using Xunit.Abstractions;
 
 namespace OpsisNewsCrawler.Core.Tests;
 
+[Collection("custom places")]   // GreekCities.Custom is global: AppConfig.Normalize in a parallel test would empty it mid-assert
 public class WorldCatalogTests
 {
     private readonly ITestOutputHelper output;

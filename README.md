@@ -35,14 +35,30 @@
 
 For the newest installer always use [latest published release](https://github.com/gs-applabs/OpsisNewsCrawler/releases/latest). Version-specific links below are retained as reference. / Για τη νεότερη έκδοση χρησιμοποίησε τον σύνδεσμο τελευταίας δημοσιευμένης έκδοσης.
 
-- **Installer:** [OpsisNewsCrawler-Setup.exe](https://github.com/gs-applabs/OpsisNewsCrawler/releases/download/v0.30.0/OpsisNewsCrawler-Setup.exe) · [SHA-256](https://github.com/gs-applabs/OpsisNewsCrawler/releases/download/v0.30.0/OpsisNewsCrawler-Setup.exe.sha256)
+- **Installer:** [OpsisNewsCrawler-Setup.exe](https://github.com/gs-applabs/OpsisNewsCrawler/releases/download/v0.30.1/OpsisNewsCrawler-Setup.exe) · [SHA-256](https://github.com/gs-applabs/OpsisNewsCrawler/releases/download/v0.30.1/OpsisNewsCrawler-Setup.exe.sha256)
 - **Requirements / Απαιτήσεις:** Windows 11 · .NET 11 Desktop Runtime · optional OPSIS host.
 - **What's new / Νέα έκδοση:** News intelligence, analytics and independent Chronikologio integration. / Νέο κέντρο πληροφόρησης και αναλύσεων.
 - **Known limits / Όρια:** Text heuristics are not fact-checking; market analytics are not investment advice. Interactive Windows acceptance testing is not complete. / Οι αναλύσεις δεν αποτελούν επαλήθευση ειδήσεων ή επενδυτική σύσταση.
 
-See the [published release](https://github.com/gs-applabs/OpsisNewsCrawler/releases/tag/v0.30.0) for verification details. Review installation prompts and compare the checksum before running the installer. / Δείτε τις σημειώσεις έκδοσης και επαληθεύστε το SHA-256 πριν από την εγκατάσταση.
+See the [published release](https://github.com/gs-applabs/OpsisNewsCrawler/releases/tag/v0.30.1) for verification details. Review installation prompts and compare the checksum before running the installer. / Δείτε τις σημειώσεις έκδοσης και επαληθεύστε το SHA-256 πριν από την εγκατάσταση.
 
 ---
+
+## Νέα στο 0.30.1 / What is new in 0.30.1
+
+**Ελληνικά** — Μια μπάρα πιο ήρεμη και πιο ελαφριά:
+- Οι προαιρετικές υπηρεσίες (τιμές, καιρός, κίνδυνοι, ενημερώσεις) τρέχουν **μόνο όσο κάτι τις χρησιμοποιεί**· σε αδράνεια δεν γίνονται λήψεις ούτε εγγραφές.
+- Λήψεις τροφοδοσιών με συνολικό όριο χρόνου, ακύρωση παρωχημένων ανανεώσεων, λιγότερες εγγραφές στον δίσκο, περιορισμένες cache και εικονίδια.
+- Η μπάρα μέσα στη γραμμή εργασιών **δεν τρεμοπαίζει** και η επιλογή υλικού (Acrylic/Blur/Gradient) λειτουργεί.
+- Ο installer κλείνει ομαλά το πρόγραμμα που τρέχει και ελέγχει τα αναβαθμισμένα αρχεία.
+- Βοήθεια, ιστορικό και άδεια MIT σε τρεις καρτέλες, στις 14 γλώσσες.
+
+**English** — A calmer, lighter bar:
+- Optional services (prices, weather, hazards, updates) run **only while something uses them**; when idle nothing is downloaded or written.
+- Feed downloads have an end-to-end time limit, stale refreshes are cancelled, fewer disk writes, bounded caches and icons.
+- The bar inside the taskbar **no longer flickers** and the material choice (Acrylic/Blur/Gradient) works.
+- The installer closes the running program gracefully and verifies the upgraded files.
+- Help, history and MIT licence in three tabs, in 14 languages.
 
 ## Full documentation / Αναλυτική τεκμηρίωση
 

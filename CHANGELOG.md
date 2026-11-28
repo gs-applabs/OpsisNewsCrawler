@@ -7,6 +7,12 @@
 - Unified Help / Instructions, License and Version History in the GearWin layout; localized navigation and current candidate history, single embedded repository MIT license, keyboard F1. Candidate changes are not a separate release; verification is tracked in the quality audit.
 
 
+### 0.30.1 — 2026-11-28: release of the Pass 1-23 maintenance line
+
+- Publishes the cumulative maintenance work after v0.30.0 (Passes 1-23 below, runtime candidate `2f2616ce` plus documentation): demand-scoped services and cancellation, bounded RSS deadlines, cache/icon/write limits, taskbar flicker and material fixes, graceful installer shutdown with payload verification, help/history/licence tabs, family feed and map window fixes. v0.30.0 was already published, so the product version is 0.30.1 (plugin and contract ABI stay 1.0.0.0).
+- Release gate fix: `WorldCatalogTests` shares the "custom places" collection (`GreekCities.Custom` is global; a parallel `AppConfig.Normalize` made the pull-request run fail 1 of 750).
+- Resource evidence: extended soak 46108370603 (Pass 21, 30 min Low) private memory -2.99 MiB, GDI 0, CPU 0.53%; the +74.31 MiB of Pass 17 (46105509202) did not repeat. This is a smoke measurement, not a leak-free certification.
+
 ### Release handoff — 2026-11-28 (Pass 23 runtime, documentation-only successor)
 
 **Do not release from main or the older head of PR #15.** Runtime candidate is `2f2616ce4280be150a0605799e2670ea5b3334dc` (Passes 18–23 cumulative); this successor changes documentation only. The dedicated branch `release/030-claude-final-gate` is the canonical release-handoff branch, with a separate draft validation PR to main. Check its exact HEAD, CI and tree before packaging. PR #15 still holds Pass 21 `b1b7221` while its extended soak 46108370603 is running; do not cancel it or merge competing PRs. When the final candidate is verified, use only one PR for main, preserve history and close the superseded draft without merging. Do not silently substitute an older source. The owner requests Claude Code to perform the next release, not this session.

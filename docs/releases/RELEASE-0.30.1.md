@@ -1,6 +1,24 @@
-# Opsis News Crawler 0.30.0 — News intelligence and analytics (26/11/2026)
+# Opsis News Crawler 0.30.1 — A calmer, lighter bar (28/11/2026)
 
-**Release candidate / Υποψήφια έκδοση — not published by this handoff.**
+## Νέα στο 0.30.1 / What is new in 0.30.1
+
+**Ελληνικά**
+- Οι προαιρετικές υπηρεσίες (τιμές, καιρός, κίνδυνοι, έλεγχος ενημερώσεων) τρέχουν μόνο όσο κάτι τις χρησιμοποιεί· σε αδράνεια δεν γίνονται λήψεις ούτε εγγραφές. Ακύρωση παρωχημένων ανανεώσεων, συνολικό όριο χρόνου στις λήψεις τροφοδοσιών, λιγότερες εγγραφές στον δίσκο, περιορισμένες cache και εικονίδια.
+- Η μπάρα μέσα στη γραμμή εργασιών δεν τρεμοπαίζει και η επιλογή υλικού φόντου (Acrylic/Blur/Gradient) λειτουργεί.
+- Ο installer κλείνει ομαλά το πρόγραμμα που τρέχει και ελέγχει τα αρχεία της αναβάθμισης (δοκιμασμένο και με ορατή και με κρυφή μπάρα).
+- Η χειροκίνητη αναζήτηση Yahoo δεν ενεργοποιεί τις υπηρεσίες παρασκηνίου.
+- Βοήθεια, ιστορικό και άδεια MIT σε τρεις καρτέλες, στις 14 γλώσσες. Διορθώσεις στη ροή του Χρονικολογίου και στα παράθυρα χαρτών.
+
+**English**
+- Optional services (prices, weather, hazards, update checks) run only while something uses them; when idle nothing is downloaded or written. Stale refreshes are cancelled, feed downloads have an end-to-end time limit, fewer disk writes, bounded caches and icons.
+- The bar inside the taskbar no longer flickers and the backdrop material choice (Acrylic/Blur/Gradient) works.
+- The installer closes the running program gracefully and verifies the upgraded files (tested with a visible and a hidden bar).
+- A manual Yahoo search no longer switches background services on.
+- Help, history and MIT licence in three tabs, in 14 languages. Fixes in the Chronikologio family feed and the map windows.
+
+---
+
+## Περιλαμβάνει όλα της 0.30.0 / Includes everything of 0.30.0
 
 ## Ελληνικά
 
@@ -22,17 +40,17 @@
 
 ### Πηγές και διασύνδεση
 - Οι τροφοδοσίες χωρίς νέα εδώ και εβδομάδες ζητούνται αραιότερα· στήλη «Κατάσταση» στα διαγνωστικά RSS· η λίστα αναγνωσμένων έχει όριο 5.000.
-- **Χρονικολόγιο χωρίς Opsis:** η ροή «Σαν σήμερα» φτάνει στις μπάρες όταν τα δύο προγράμματα τρέχουν χωριστά. Απαιτεί έκδοση του Χρονικολογίου που γράφει το αρχείο (δεν έχει δημοσιευτεί ακόμη).
+- **Χρονικολόγιο χωρίς Opsis:** η ροή «Σαν σήμερα» φτάνει στις μπάρες όταν τα δύο προγράμματα τρέχουν χωριστά. Απαιτεί Χρονικολόγιο 1.2.0 ή νεότερο (δημοσιευμένο).
 
 ### Σταθερότητα και εξοικονόμηση πόρων
 - Ενεργοποίηση προαιρετικών υπηρεσιών μόνο όταν χρειάζονται, με κοινό μηχανισμό ανανέωσης, ακύρωση παρωχημένων αιτημάτων και κοινό παράθυρο χαρτών καιρού/φυσικών καταστροφών.
 - Η χειροκίνητη αναζήτηση Yahoo δεν ενεργοποιεί τις υπηρεσίες παρασκηνίου. Ενοποιημένη βοήθεια, άδεια MIT και ιστορικό έκδοσης.
-- Στον υποψήφιο Pass 23 πέρασαν 831 αυτοματοποιημένες δοκιμές και πραγματική φόρτωση Crawler/Χρονολογίου στον OPSIS 3 σε Windows VM. Η τελική πιστοποίηση εγκαταστάτη/πόρων εκκρεμεί· ενημέρωση στο CHANGELOG πριν από δημοσίευση.
+- 831 αυτοματοποιημένες δοκιμές (750 Core, 81 Plugin). Ο Pass 23 φορτώθηκε μαζί με το Χρονικολόγιο σε πραγματικό Opsis 3 σε Windows VM (CI).
 
 ### Όρια
 - Όλα είναι μετρήσεις πάνω στις ειδήσεις και τις αποθηκευμένες τιμές: όχι επαλήθευση, όχι επενδυτική σύσταση. Ονόματα, χώρες και διαφορές αναγνωρίζονται με απλούς κανόνες κειμένου.
 - Η απόδοση TWR χρειάζεται τιμή σε κάθε ημέρα συναλλαγής και δεν υπολογίζεται με split· οι συγκρίσεις είναι μόνο τιμής. Η αναζήτηση αρχείου σαρώνει το αρχείο.
-- Δεν έχουν ολοκληρωθεί χειροκίνητοι έλεγχοι σε φυσικό Windows 10/11, πλήρης κύκλος εγκατεστημένου host, ζωντανή δοκιμή Opsis 2.8 ή ανεξάρτητη συνύπαρξη με Χρονολόγιο· δεν υπάρχει υπογραφή Authenticode.
+- Δεν έχουν γίνει χειροκίνητοι έλεγχοι σε φυσικό Windows 10/11 (πολλές οθόνες, DPI, GPU, UAC/SmartScreen) ούτε πλήρης κύκλος εγκατεστημένου host· δεν υπάρχει υπογραφή Authenticode.
 
 ## English
 
@@ -54,12 +72,12 @@ A large release after 0.28.1. Needs the **.NET 11 Desktop Runtime**. As a plugin
 
 ### Sources and links
 - Feeds with no news for weeks are asked less often; a Status column in the RSS diagnostics; the read list is capped at 5,000.
-- **Chronikologio without Opsis:** the On this day flow reaches the bars when the two programs run separately. Needs a Chronikologio release that writes the file (not published yet).
+- **Chronikologio without Opsis:** the On this day flow reaches the bars when the two programs run separately. Needs Chronikologio 1.2.0 or newer (published).
 
 ### Stability and resource use
 - Demand-driven optional services, shared refresh, cancellation of stale requests and a shared weather/hazard map window.
 - Manual Yahoo catalogue search does not enable background services. Unified Help, MIT license and version history.
-- Pass 23 passed 831 automated tests and real Crawler/Chronikologio loading in Opsis 3 on a Windows VM. Final installer and resource certification remains pending; update CHANGELOG before publication.
+- 831 automated tests (750 Core, 81 Plugin). Pass 23 was loaded together with Chronikologio in a real Opsis 3 on a Windows VM (CI).
 
 ### Limits
 - Everything is counted from the news and stored prices: not verification, not investment advice. Names, countries and differences come from simple text rules.
