@@ -1030,6 +1030,12 @@ public sealed partial class TickerHost : IDisposable
     /// <summary>Call after the feed list of the active category was edited: fetch again from the start.</summary>
     public void ReloadNews()
     {
+        // Even when the category ID stays the same, feed edits must invalidate
+        // the in-flight generation before it can publish its old source list.
+        if (activeServices.Remove("news", out var oldNews)) { oldNews.Cancel(); oldNews.Dispose(); }
+        pendingForced = false;
+        breakingWidgetItems = Array.Empty<NewsItem>();
+        extraNews.Clear(); extraNewsAt.Clear(); extraNewsFailed.Clear(); newsWidgetFetchAttempt.Clear();
         // A different set of news: start from the beginning.
         State.SetScrollOffset(0);
         State2.SetScrollOffset(0);
@@ -1039,7 +1045,8 @@ public sealed partial class TickerHost : IDisposable
         newsDataAt = null;
         if (NeedsActiveNews) LoadCachedNews();
         ReconcileDemand();
-        RequestRefresh("news", () => RefreshAsync(force: true), latest: true);
+        NewsWidgetUpdated?.Invoke();
+        PushAll();
     }
 
     public void SetPosition(TickerPosition position)

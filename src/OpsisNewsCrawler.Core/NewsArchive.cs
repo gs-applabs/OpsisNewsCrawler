@@ -25,7 +25,7 @@ public sealed class NewsArchive
     private bool dirty;
 
     public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OpsisNewsCrawler", "news-archive.json");
+        CrawlerDataPaths.Root, "news-archive.json");
 
     private sealed record File_(List<ArchivedStory> Stories, List<ArticleChange> Changes);
 

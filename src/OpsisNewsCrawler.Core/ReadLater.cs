@@ -13,7 +13,7 @@ public sealed class ReadLaterStore
     private List<SavedArticle> items = new();
 
     public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OpsisNewsCrawler", "read-later.json");
+        CrawlerDataPaths.Root, "read-later.json");
 
     public ReadLaterStore(string? path = null)
     {

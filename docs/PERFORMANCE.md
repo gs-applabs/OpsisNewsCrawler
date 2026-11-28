@@ -71,3 +71,5 @@ The 30-minute Low run at 388b471 passed: 360 samples, mean CPU 0.64% across logi
 Pass 18: the Breaking widget is an explicit news consumer rather than an accidental dependency on visible ticker bars. It shares the existing news scheduler and assessment, no second timer or provider, and has a bounded snapshot. Widget-only activation has no bar/audio side effects. Existing widget font now has explicit disposal ownership. Runtime regression and final soak pending.
 
 Pass 19: coalesced, cancellable sleep/resume refresh and demand-scoped delayed retries; canceled generations cannot block replacement retries. History opt-out cancels in-flight optional backfill without stopping quote display. No new periodic production timers. Windows validation pending.
+
+Pass 20: source edits cancel stale network generation, cache and selected user data follow the existing explicit probe directory; bounded local reads protect cache and family feed from file growth after stat. Production defaults unchanged; existing offline cache preserved. New tests pending Windows validation.

@@ -6,7 +6,7 @@ public static class Log
     private static readonly object Gate = new();
 
     public static string Path => System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OpsisNewsCrawler", "crawler.log");
+        CrawlerDataPaths.Root, "crawler.log");
 
     public static void Write(string message)
     {

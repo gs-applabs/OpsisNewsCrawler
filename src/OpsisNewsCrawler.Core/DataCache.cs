@@ -24,8 +24,7 @@ public static class DataCache
     public static (long Writes, long Skips) WriteDiagnostics =>
         (Interlocked.Read(ref completedWrites), Interlocked.Read(ref skippedWrites));
 
-    public static string Folder => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OpsisNewsCrawler", "cache");
+    public static string Folder => Path.Combine(CrawlerDataPaths.Root, "cache");
 
     /// <summary>Only letters, digits, '-' and '_' are kept: the name ends up in a file name.</summary>
     public static string SafeName(string name)
@@ -119,7 +118,9 @@ public static class DataCache
             var path = PathOf(name);
             var info = new FileInfo(path);
             if (!info.Exists || info.Length > MaxEntryBytes) return null;
-            var result = JsonSerializer.Deserialize<Cached<T>>(File.ReadAllText(path));
+            var bytes = BoundedLocalFile.Read(path, MaxEntryBytes);
+            if (bytes is null) return null;
+            var result = JsonSerializer.Deserialize<Cached<T>>(bytes);
             if (result is not null)
             {
                 // Seed the fingerprint from the persisted cache at startup: the first unchanged

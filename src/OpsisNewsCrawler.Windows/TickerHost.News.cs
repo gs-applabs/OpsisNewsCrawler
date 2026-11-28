@@ -86,7 +86,8 @@ public sealed partial class TickerHost
 
             void Apply()
             {
-                if (disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !NeedsActiveNews) return;
+                if (disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !NeedsActiveNews ||
+                    !string.Equals(category, Config.ActiveCategory, StringComparison.OrdinalIgnoreCase)) return;
                 State.MarkNewsRefresh();
                 if (items.Count > 0)
                 {
@@ -111,7 +112,7 @@ public sealed partial class TickerHost
 
             if (Window.IsHandleCreated && Window.InvokeRequired) Window.Invoke(new Action(Apply));
             else Apply();
-            await RefreshExtraNewsAsync();
+            if (!token.IsCancellationRequested && epoch == startEpoch) await RefreshExtraNewsAsync();
         }
         catch (OperationCanceledException)
         {

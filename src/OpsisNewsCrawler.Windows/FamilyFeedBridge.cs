@@ -96,7 +96,9 @@ public static class FamilyFeedBridge
             var info = new FileInfo(path);
             if (!info.Exists || info.Length is 0 or > MaxFileBytes) return null;
             if ((info.Attributes & FileAttributes.ReparsePoint) != 0) return null;   // no links
-            using var doc = JsonDocument.Parse(File.ReadAllBytes(path), new JsonDocumentOptions { MaxDepth = 8 });
+            var bytes = OpsisNewsCrawler.Core.BoundedLocalFile.Read(path, (int)MaxFileBytes);
+            if (bytes is null) return null;
+            using var doc = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 8 });
             var root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("schema", out var schema) || schema.ValueKind != JsonValueKind.Number || !schema.TryGetInt32(out var schemaVersion) || schemaVersion != 1) return null;
             if (!root.TryGetProperty("key", out var key) || key.ValueKind != JsonValueKind.String || key.GetString() != FeedKey) return null;
