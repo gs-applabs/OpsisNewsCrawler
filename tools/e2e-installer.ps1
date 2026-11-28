@@ -308,6 +308,12 @@ if ($Scenario -eq 'fresh') {
 }
 
 # ---- 3. start it ------------------------------------------------------------------------------------------------------------------------
+if ($Scenario -eq 'from-per-user') {
+    $handoff = Join-Path $SettingsDir 'first-run.json'
+    $pending = if (Test-Path $handoff) { Get-Content $handoff -Raw | ConvertFrom-Json } else { $null }
+    Check ($null -ne $pending -and $pending.StartWithWindows -eq $true) 'installer persisted the explicit startup request before first launch'
+    if (Test-Path $handoff) { Copy-Item $handoff (Join-Path $Out 'startup-handoff-before.json') }
+}
 $exe = Join-Path $MachineDir 'OpsisNewsCrawler.exe'
 $smoke = Start-Process -FilePath $exe -PassThru        # a normal start: tray icon, bars, the welcome guide of a first run
 Start-Sleep -Seconds 12

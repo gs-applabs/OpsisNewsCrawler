@@ -574,6 +574,14 @@ const
 var
   HadAutostart: Boolean;
 
+function CaptureAutostart(): Boolean;
+var
+  Value: String;
+begin
+  Result := (RegQueryStringValue(HKCU, RunKeyPath, '{#MyAppName}', Value) and (Value <> '')) or
+    (RegQueryStringValue(HKLM, RunKeyPath, '{#MyAppName}', Value) and (Value <> ''));
+end;
+
 function PerUserCopyThere(Dir: String): Boolean;
 begin
   Result := RegKeyExists(HKCU, OldUninstallKey) or ((Dir <> '') and DirExists(Dir));
@@ -698,6 +706,8 @@ var
   Dir: String;
 begin
   Result := True;
+  // Capture before the legacy application or uninstaller can change Run.
+  HadAutostart := CaptureAutostart();
   // Do not touch the running Opsis host, or close anything merely by opening
   // the interactive wizard. This path is requested by the update command.
   if not HasSetupSwitch('/MODE=separate') then Exit;
@@ -718,7 +728,7 @@ var
   ResultCode, Attempt: Integer;
 begin
   Result := '';
-  HadAutostart := RunValueIsMine(HKCU, '{#MyAppName}') or RunValueIsMine(HKLM, '{#MyAppName}');
+  HadAutostart := HadAutostart or CaptureAutostart();
   Dir := '';
   Uninstaller := '';
   if RegQueryStringValue(HKCU, OldUninstallKey, 'InstallLocation', Dir) then Dir := RemoveBackslashUnlessRoot(Dir);
@@ -1026,7 +1036,11 @@ begin
     // (a config.json exists) never overwrites the user's language and bar, it only carries the "start with Windows" wish over.
     Dir := ExpandConstant('{userappdata}\OpsisNewsCrawler');
     ForceDirectories(Dir);
-    Wish := IsSeparate() and (WizardIsTaskSelected('startup') or (WizardSilent and HadAutostart));
+    Wish := IsSeparate() and (WizardIsTaskSelected('startup') or
+      (WizardSilent and (HadAutostart or HasSetupSwitch('/TASKS=startup'))));
+    Log('Startup handoff: standalone=' + IntToStr(Ord(IsSeparate())) +
+      ', selected=' + IntToStr(Ord(WizardIsTaskSelected('startup'))) +
+      ', previous=' + IntToStr(Ord(HadAutostart)) + ', requested=' + IntToStr(Ord(Wish)));
     Json := '';
     if not FileExists(Dir + '\config.json') then
     begin
@@ -1036,7 +1050,13 @@ begin
     end
     else if Wish then
       Json := '{"StartWithWindows":true}';
-    if Json <> '' then SaveStringToFile(Dir + '\first-run.json', Json, False)
+    if Json <> '' then
+    begin
+      if SaveStringToFile(Dir + '\first-run.json', Json, False) then
+        Log('Startup handoff: wrote first-run.json')
+      else
+        Log('Startup handoff: ERROR writing first-run.json');
+    end
     else if FileExists(Dir + '\config.json') then DeleteFile(Dir + '\first-run.json');
   end;
 end;

@@ -736,6 +736,8 @@ public sealed partial class TickerHost : IDisposable
 
     public void SaveConfig() => Config.Save(configPath);
 
+    internal void AcknowledgeStartupRegistration() => Config.AcknowledgeStartupRegistration(configPath);
+
     /// <summary>True only when the settings file was really written (used where a failed save must be rolled back).</summary>
     public bool TrySaveConfig() => Config.TrySave(configPath);
 

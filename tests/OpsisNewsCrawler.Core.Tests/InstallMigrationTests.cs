@@ -128,7 +128,11 @@ public class InstallMigrationTests
             Assert.True(config.StartWithWindowsRequested);
             Assert.Equal("el", config.Language);
             Assert.Equal(TickerPosition.BottomTaskbar, config.Position);
-            Assert.False(File.Exists(Path.Combine(dir, "first-run.json")));     // applied once
+            Assert.True(File.Exists(Path.Combine(dir, "first-run.json"))); // pending until real registration
+            Assert.True(AppConfig.Load(Path.Combine(dir, "config.json")).StartWithWindowsRequested);
+            config.AcknowledgeStartupRegistration(Path.Combine(dir, "config.json"));
+            Assert.False(File.Exists(Path.Combine(dir, "first-run.json")));
+            Assert.False(AppConfig.Load(Path.Combine(dir, "config.json")).StartWithWindowsRequested);
             Assert.DoesNotContain("StartWithWindowsRequested", File.ReadAllText(Path.Combine(dir, "config.json")));   // never saved as a setting
         }
         finally { Directory.Delete(dir, true); }
@@ -149,8 +153,10 @@ public class InstallMigrationTests
             Assert.Equal(TickerPosition.Top, config.Position);
             Assert.False(config.CheckForUpdates);
             Assert.True(config.StartWithWindowsRequested);
-            Assert.False(File.Exists(Path.Combine(dir, "first-run.json")));
+            Assert.True(File.Exists(Path.Combine(dir, "first-run.json")));
             Assert.Equal("de", AppConfig.Load(path).Language);
+            config.AcknowledgeStartupRegistration(path);
+            Assert.False(File.Exists(Path.Combine(dir, "first-run.json")));
         }
         finally { Directory.Delete(dir, true); }
     }

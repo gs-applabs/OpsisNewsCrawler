@@ -40,4 +40,42 @@ public sealed class Opsis3CompatibilityTests
         var controller = typeof(OpsisNewsCrawlerPlugin).GetField("_controller", flags)!.GetValue(plugin)!;
         Assert.Null(controller.GetType().GetField("_host", flags)!.GetValue(controller));
     }
+
+    [Fact]
+    public void BlockedPluginViewsNeverConstructASecondRuntime()
+    {
+        Exception? error = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                using var owner = new OpsisNewsCrawler.Core.InstanceGuard();
+                Assert.True(owner.TryAcquire());
+                var plugin = new OpsisNewsCrawlerPlugin();
+                plugin.Start();
+                using var page = plugin.GetNavigationItems().Single().CreatePage();
+                var widgets = plugin.GetWidgets().Select(w => w.CreateContent()).ToArray();
+                try
+                {
+                    plugin.SetMode("Economy");
+                    plugin.SetPosition("Top");
+                    var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                    var controller = typeof(OpsisNewsCrawlerPlugin).GetField("_controller", flags)!.GetValue(plugin)!;
+                    Assert.Null(controller.GetType().GetField("_host", flags)!.GetValue(controller));
+                    Assert.DoesNotContain(page.Controls.Cast<Control>(), c => c is OpsisNewsCrawler.Windows.SettingsPanel);
+                    Assert.All(widgets, w => Assert.DoesNotContain(w.Controls.Cast<Control>(), c => c is OpsisNewsCrawler.Windows.CrawlerWidgetPanel));
+                }
+                finally
+                {
+                    foreach (var widget in widgets) widget.Dispose();
+                    plugin.Stop();
+                }
+            }
+            catch (Exception ex) { error = ex; }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        Assert.True(thread.Join(30000), "Ownership test timed out");
+        if (error is not null) throw new Exception("Ownership regression", error);
+    }
 }

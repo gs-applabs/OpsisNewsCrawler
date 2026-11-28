@@ -520,10 +520,27 @@ public sealed class AppConfig
                 if (position == TickerPosition.TaskbarIntegrated) config.SecondBarEnabled = false;
             }
             if (config.IsFirstRun && !config.TrySave(configPath)) return;
-            File.Delete(file);
+            // Keep a requested startup action until the real standalone app
+            // confirms that it has written the correct per-user Run entry.
+            // Config readers (including the hosted plugin) cannot consume it.
+            if (!config.StartWithWindowsRequested) File.Delete(file);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
+        }
+    }
+
+    public void AcknowledgeStartupRegistration(string configPath)
+    {
+        if (!StartWithWindowsRequested) return;
+        try
+        {
+            File.Delete(Path.Combine(Path.GetDirectoryName(configPath) ?? "", "first-run.json"));
+            StartWithWindowsRequested = false;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Write("Startup handoff acknowledgement failed: " + ex.GetType().Name);
         }
     }
 
