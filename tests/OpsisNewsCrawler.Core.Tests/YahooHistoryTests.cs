@@ -201,6 +201,12 @@ public class UpdateLogicTests
 public sealed class YahooCatalogueTests
 {
     [Fact]
+    public async Task ManualSearchOptOutNeverStartsNetwork()
+    {
+        Assert.Empty(await YahooSearch.SearchAsync("TEST", CancellationToken.None, explicitlyEnabled: false));
+    }
+
+    [Fact]
     public void CatalogueSymbolsAreUniqueAndNamed()
     {
         var all = YahooPresets.All.SelectMany(g => g.Items).ToList();

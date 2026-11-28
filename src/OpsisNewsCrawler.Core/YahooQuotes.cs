@@ -34,10 +34,16 @@ public sealed record YahooHit(string Symbol, string Name, string Type, string Ex
 /// <summary>The search box of the catalogue: one request, only when the user presses the button.</summary>
 public static class YahooSearch
 {
-    public static async Task<IReadOnlyList<YahooHit>> SearchAsync(string query, CancellationToken ct)
+    public static Task<IReadOnlyList<YahooHit>> SearchAsync(string query, CancellationToken ct) =>
+        SearchAsync(query, ct, YahooAccess.Enabled);
+
+    /// <summary>Explicit opt-in for one user-initiated catalogue request, without
+    /// enabling background quotes/history. The same provider cooldown still applies.</summary>
+    public static async Task<IReadOnlyList<YahooHit>> SearchAsync(string query, CancellationToken ct, bool explicitlyEnabled)
     {
         query = query.Trim();
-        if (query.Length < 2 || !YahooAccess.Enabled || YahooAccess.IsBlocked) return Array.Empty<YahooHit>();
+        if (query.Length < 2 || !explicitlyEnabled || YahooAccess.IsBlocked) return Array.Empty<YahooHit>();
+        ct.ThrowIfCancellationRequested();
         var url = "https://query1.finance.yahoo.com/v1/finance/search?quotesCount=20&newsCount=0&listsCount=0&q=" + Uri.EscapeDataString(query);
         using var response = await YahooHistory.Http.GetAsync(url, ct).ConfigureAwait(false);
         if ((int)response.StatusCode is 401 or 403 or 429)

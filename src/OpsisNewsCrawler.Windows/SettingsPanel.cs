@@ -70,6 +70,7 @@ public sealed partial class SettingsPanel : UserControl
     private Label yahooStatus = null!;
     private readonly List<FlatButton> yahooPresetButtons = new();
     private List<YahooHit> yahooHits = new();
+    private CancellationTokenSource? yahooSearchLease;
     private Control yahooCatalog = null!;
     private FlatComboBox miniShape = null!;
     private FlatComboBox barShape = null!;
@@ -268,6 +269,7 @@ public sealed partial class SettingsPanel : UserControl
         }
         else
         {
+            CancelYahooSearch();
             FlushPendingChanges();
             previewTimer.Stop();
             overviewTimer.Stop();
@@ -279,6 +281,7 @@ public sealed partial class SettingsPanel : UserControl
     {
         if (disposing)
         {
+            CancelYahooSearch(updateUi: false);
             autoApplyTimer.Stop();
             autoApplyTimer.Dispose();
             previewTimer.Stop();
@@ -368,6 +371,7 @@ public sealed partial class SettingsPanel : UserControl
 
     private void Rebuild()
     {
+        CancelYahooSearch(updateUi: false);
         RightToLeft = Loc.IsRtl ? RightToLeft.Yes : RightToLeft.No;
         var selectedTab = built ? CurrentLeaf() : 0;
         var aboutSection = selectedAboutSection;
@@ -431,7 +435,12 @@ public sealed partial class SettingsPanel : UserControl
 
         barPreview = new BarPreview { Visible = false };
         tabs.SetFooter(barPreview);
-        tabs.SelectedIndexChanged += (_, _) => UpdatePreview();
+        tabs.SelectedIndexChanged += (_, _) =>
+        {
+            if (pageIds.TryGetValue("markets", out var markets) && tabs.SelectedIndex != markets)
+                CancelYahooSearch();
+            UpdatePreview();
+        };
         Controls.Add(tabs);
         Controls.Add(bar);
         built = true;
@@ -1291,6 +1300,7 @@ public sealed partial class SettingsPanel : UserControl
 
     public void LoadFromConfig()
     {
+        CancelYahooSearch();
         var was = loading;
         loading = true;
         try
@@ -1670,7 +1680,9 @@ public sealed partial class SettingsPanel : UserControl
     private void UpdateYahooUi()
     {
         var on = yahooHistory.Checked;
+        if (!on) CancelYahooSearch(updateUi: false);
         foreach (var c in new Control[] { yahooSearch, yahooSearchButton, yahooAddButton, yahooRemoveButton, yahooHitList, yahooGroup }.Concat(yahooPresetButtons)) c.Enabled = on;
+        yahooSearchButton.Enabled = on && yahooSearchLease is null;
         if (!on) yahooStatus.Text = L("yahoo.off");
         else if (yahooStatus.Text.Length == 0 || yahooStatus.Text == L("yahoo.off")) yahooStatus.Text = L("yahoo.localHint");
     }
@@ -1679,6 +1691,7 @@ public sealed partial class SettingsPanel : UserControl
     private void ShowYahooCatalogue()
     {
         if (yahooHitList is null || yahooHitList.IsDisposed) return;
+        CancelYahooSearch();
         var groupKey = yahooGroup.SelectedIndex > 0 && yahooGroup.SelectedIndex <= YahooPresets.All.Count ? YahooPresets.All[yahooGroup.SelectedIndex - 1].Key : null;
         var items = YahooPresets.Filter(groupKey, yahooSearch.Value);
         yahooHits = items.Select(x => new YahooHit(x.Item.Symbol, Loc.IsGreek ? x.Item.NameEl : x.Item.NameEn, L("yahoo.group." + x.GroupKey), "")).ToList();
@@ -1687,28 +1700,57 @@ public sealed partial class SettingsPanel : UserControl
         yahooStatus.Text = yahooHits.Count == 0 ? L("yahoo.none") : L("yahoo.localHint");
     }
 
-    private async Task RunYahooSearchAsync()
+    private void CancelYahooSearch(bool updateUi = true)
     {
+        var old = yahooSearchLease;
+        yahooSearchLease = null;
+        old?.Cancel(); // the awaiting operation owns disposal
+        if (old is not null && updateUi && !IsDisposed && !Disposing && yahooSearchButton is { IsDisposed: false })
+        {
+            yahooSearchButton.Enabled = yahooHistory.Checked;
+            yahooStatus.Text = yahooHistory.Checked ? L("yahoo.localHint") : L("yahoo.off");
+        }
+    }
+
+    // Test seam uses the same UI lifecycle without a provider request.
+    internal async Task RunYahooSearchAsync(Func<string, CancellationToken, Task<IReadOnlyList<YahooHit>>>? search = null)
+    {
+        if (IsDisposed || Disposing || !Visible || !yahooHistory.Checked || yahooSearchLease is not null) return;
         var query = yahooSearch.Value.Trim();
-        if (query.Length < 2 || !yahooHistory.Checked) return;
-        // the switch is applied with the other settings; a search needs it now
-        YahooAccess.Enabled = true;
+        if (query.Length < 2) return;
+        using var lease = new CancellationTokenSource();
+        yahooSearchLease = lease;
+        var token = lease.Token;
         yahooSearchButton.Enabled = false;
         yahooStatus.Text = Loc.T("pk.testing");
+        bool IsCurrent() => ReferenceEquals(yahooSearchLease, lease) && !token.IsCancellationRequested &&
+            !IsDisposed && !Disposing && Visible && yahooHistory.Checked &&
+            string.Equals(query, yahooSearch.Value.Trim(), StringComparison.Ordinal);
         try
         {
-            yahooHits = (await YahooSearch.SearchAsync(query, CancellationToken.None)).ToList();
+            // Explicit checked consent for this manual request only. Never toggle the
+            // process-wide history/quotes switch or restore an obsolete global value.
+            var result = await (search is null
+                ? YahooSearch.SearchAsync(query, token, explicitlyEnabled: true)
+                : search(query, token));
+            if (!IsCurrent()) return;
+            yahooHits = result.ToList();
             yahooHitList.ClearRows();
             foreach (var h in yahooHits) yahooHitList.AddRow($"{h.Symbol}  —  {h.Name}   ({h.Type}, {h.Exchange})", false);
             yahooStatus.Text = yahooHits.Count == 0 ? L("yahoo.none") : Loc.T("yahoo.found", yahooHits.Count);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException)
         {
-            yahooStatus.Text = Loc.T("yahoo.error", ex.Message);
+            if (IsCurrent()) yahooStatus.Text = Loc.T("yahoo.error", ex.Message);
         }
         finally
         {
-            if (!IsDisposed) { yahooSearchButton.Enabled = yahooHistory.Checked; YahooAccess.Enabled = host.Config.HistoryFromYahoo; }
+            if (ReferenceEquals(yahooSearchLease, lease))
+            {
+                yahooSearchLease = null;
+                if (!IsDisposed && !Disposing) yahooSearchButton.Enabled = yahooHistory.Checked;
+            }
         }
     }
 

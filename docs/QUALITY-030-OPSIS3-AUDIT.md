@@ -95,3 +95,7 @@ See the current N01–N40 reconciliation and ownership/remaining gates in CHANGE
 ## Pass 22
 
 Retrieved Pass 21 source-overlap artifact; nine windows resolve to eight map-form windows and one independent UI test fixture pattern. MapDetailForm consolidates shared presentation and security; preserves separate domain markup and link policies. QuoteStore uses CrawlerDataPaths. Permanent cross-check rule in CLAUDE.md and AGENTS.md with CI presence guard; log candidates for future manual review. Windows source verification pending, Pass 21 soak remains active. See CHANGELOG.
+
+## Pass 23
+
+Existing Yahoo catalogue search now uses a per-request consent and cancellable UI lease; never toggles background history/quotes flag. Query/group/page/visibility/opt-out/rebuild/disposal invalidate pending results. Existing provider and HTTP client/cooldown retained, no new scheduler. Core opt-out and STA stale result test added. Exact new Windows verification and Pass 21 soak pending. See CHANGELOG.
