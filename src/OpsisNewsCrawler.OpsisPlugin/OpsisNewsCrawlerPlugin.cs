@@ -345,6 +345,7 @@ internal sealed class OwnedCrawlerView : UserControl
     private readonly TickerController owner;
     private readonly Func<TickerHost, Control> factory;
     private Control? content;
+    private bool syncing, releasing, viewDisposed;
     private readonly Label unavailable = new()
     {
         Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter,
@@ -364,7 +365,10 @@ internal sealed class OwnedCrawlerView : UserControl
 
     private void Sync()
     {
-        if (Disposing || IsDisposed) return;
+        if (Disposing || IsDisposed || viewDisposed || syncing || releasing) return;
+        syncing = true;
+        try
+        {
         if (owner.CanCreateView)
         {
             if (content is null && Visible)
@@ -382,6 +386,8 @@ internal sealed class OwnedCrawlerView : UserControl
             unavailable.Text = owner.UnavailableText;
             unavailable.Visible = true;
         }
+        }
+        finally { syncing = false; }
     }
 
     protected override void OnVisibleChanged(EventArgs e)
@@ -392,18 +398,27 @@ internal sealed class OwnedCrawlerView : UserControl
 
     private void ReleaseContent()
     {
-        if (content is null) return;
-        if (content is SettingsPanel settings) settings.FlushPendingChanges();
+        if (content is null || releasing) return;
+        releasing = true;
         var previous = content;
         content = null;
-        Controls.Remove(previous);
-        previous.Dispose();
+        try
+        {
+            if (previous is SettingsPanel settings) settings.FlushPendingChanges();
+        }
+        finally
+        {
+            Controls.Remove(previous);
+            previous.Dispose();
+            releasing = false;
+        }
     }
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        if (disposing && !viewDisposed)
         {
+            viewDisposed = true;
             owner.AvailabilityChanged -= Sync;
             Loc.Changed -= Sync;
             ReleaseContent();

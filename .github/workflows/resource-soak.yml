@@ -1,6 +1,7 @@
 name: Windows resource soak
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'src/**'
       - 'tests/**'
@@ -24,6 +25,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   soak:
+    if: github.event.action != 'labeled' || github.event.label.name == 'extended-soak'
     runs-on: windows-latest
     timeout-minutes: 270
     steps:
@@ -35,7 +37,7 @@ jobs:
       - name: Run real ticker and record resource samples
         shell: pwsh
         env:
-          SOAK_MINUTES: ${{ inputs.minutes || '3' }}
+          SOAK_MINUTES: ${{ inputs.minutes || (contains(github.event.pull_request.labels.*.name, 'extended-soak') && '30') || '3' }}
           SOAK_TIER: ${{ inputs.tier || 'Low' }}
         run: ./tools/resource-soak.ps1 -Minutes ([int]$env:SOAK_MINUTES) -Tier $env:SOAK_TIER -Out "$env:RUNNER_TEMP/crawler-soak"
       - uses: actions/upload-artifact@v4
