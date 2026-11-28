@@ -602,6 +602,26 @@ function FindCrawlerWindow(Parent, After: HWND; ClassName: NativeInt; WindowName
   external 'FindWindowExW@user32.dll stdcall';
 function WindowProcessId(Wnd: HWND; var Pid: Cardinal): Cardinal;
   external 'GetWindowThreadProcessId@user32.dll stdcall';
+function OpenShutdownEvent(Access: Cardinal; Inherit: Boolean; Name: String): THandle;
+  external 'OpenEventW@kernel32.dll stdcall';
+function SignalShutdownEvent(Event: THandle): Boolean;
+  external 'SetEvent@kernel32.dll stdcall';
+function CloseShutdownHandle(Event: THandle): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+function RequestShutdownSignal(const Pid: String): Boolean;
+var
+  Event: THandle;
+begin
+  Result := False;
+  Event := OpenShutdownEvent(2 { EVENT_MODIFY_STATE }, False, 'Local\OpsisNewsCrawler.Shutdown.' + Pid);
+  if Event = 0 then Exit;
+  try
+    Result := SignalShutdownEvent(Event);
+  finally
+    CloseShutdownHandle(Event);
+  end;
+end;
 
 function HasSetupSwitch(const Switch: String): Boolean;
 var
@@ -659,6 +679,11 @@ begin
       Result := True;
       Exit;
     end;
+    for I := 0 to GetArrayLength(Pids) - 1 do
+      if RequestShutdownSignal(Pids[I]) then
+        Log('Signalled normal shutdown of installed Crawler PID ' + Pids[I])
+      else
+        Log('No shutdown event for installed Crawler PID ' + Pids[I] + '; checking legacy windows');
     Wnd := FindCrawlerWindow(0, 0, 0, '{#MyAppName}');
     Scanned := 0;
     while (Wnd <> 0) and (Scanned < 1024) do
@@ -675,7 +700,7 @@ begin
       Scanned := Scanned + 1;
     end;
     // Allow normal settings/history flush; never terminate unrelated images or Opsis.
-    for Attempt := 1 to 12 do
+    for Attempt := 1 to 30 do
     begin
       Sleep(500);
       Pids := InstalledProcesses(Dir);

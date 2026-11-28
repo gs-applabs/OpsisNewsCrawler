@@ -9,7 +9,7 @@
 #
 # Results: <Out>\report.md (also the job summary), the Inno logs, crawler.log, a screenshot. Exit code 1 on any failed check.
 param(
-    [Parameter(Mandatory)][ValidateSet('fresh', 'from-per-user', 'from-latest', 'from-candidate', 'update-helper', 'integrated')][string]$Scenario,
+    [Parameter(Mandatory)][ValidateSet('fresh', 'from-per-user', 'from-latest', 'from-candidate', 'from-candidate-hidden', 'update-helper', 'integrated')][string]$Scenario,
     [Parameter(Mandatory)][string]$NewSetup,
     [string]$Repository = 'gs-applabs/OpsisNewsCrawler',
     [string]$PerUserTag = 'v0.17.0',
@@ -172,13 +172,17 @@ if ($Scenario -eq 'integrated') {
 
 # ---- 1. the old version ----------------------------------------------------------------------------------------------------------------
 $oldIsPerUser = $false
-if ($Scenario -eq 'from-candidate') {
+if ($Scenario -in 'from-candidate','from-candidate-hidden') {
     # Install and run this exact candidate, then reinstall it with no force option.
     $tag = 'current candidate'
     $code = Run-Setup $NewSetup @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/MODE=separate','/DEPS=none') 'candidate-first-install.log'
     if ($code -ne 0) { Stop-OnFailure "Candidate initial install failed ($code)" }
     New-Item -ItemType Directory -Force $SettingsDir | Out-Null
-    Set-Content (Join-Path $SettingsDir 'config.json') '{"Language":"de","ScrollSpeed":80,"CheckForUpdates":false,"WelcomeDisabled":true}' -Encoding utf8
+    $candidateConfig = @{
+        Language='de'; ScrollSpeed=80; CheckForUpdates=$false; WelcomeDisabled=$true
+        BarsEnabled=($Scenario -ne 'from-candidate-hidden')
+    }
+    $candidateConfig | ConvertTo-Json | Set-Content (Join-Path $SettingsDir 'config.json') -Encoding utf8
     $oldExe = Join-Path $MachineDir 'OpsisNewsCrawler.exe'
     $oldRunning = Start-Process -FilePath $oldExe -PassThru
     Start-Sleep -Seconds 8
@@ -233,7 +237,7 @@ if ($Scenario -eq 'from-per-user') { $newArgs += '/TASKS="startup"','/CLOSEAPPLI
 # Explicit forced recovery is permitted for the legacy release only. Candidate
 # reinstalls MUST close gracefully, never hide a regression behind forced exit.
 if ($Scenario -eq 'from-latest') { $newArgs += '/CLOSEAPPLICATIONS','/FORCECLOSEAPPLICATIONS' }
-if ($Scenario -eq 'from-candidate') { $newArgs += '/CLOSEAPPLICATIONS' }
+if ($Scenario -in 'from-candidate','from-candidate-hidden') { $newArgs += '/CLOSEAPPLICATIONS' }
 if ($Scenario -eq 'update-helper') {
     $oldVersion = [version](($oldExeInfo = (Get-Item $oldExe).VersionInfo.ProductVersion).Split('+')[0])
     if ($oldVersion -lt [version]'0.20.3') {
@@ -268,11 +272,19 @@ if ($Scenario -eq 'update-helper') {
     $code = Run-Setup $NewSetup $newArgs 'new-setup.log'
     Check ($code -eq 0) "the new setup finished (exit code $code)"
     if ($code -ne 0) { Stop-OnFailure "Setup failed ($code); do not audit the old installed binaries" }
-    if ($Scenario -in 'from-latest','from-candidate') {
+    if ($Scenario -in 'from-latest','from-candidate','from-candidate-hidden') {
         Start-Sleep -Seconds 1
         $closed = $oldRunning.HasExited -or -not (Get-Process -Id $oldRunning.Id -ErrorAction SilentlyContinue)
         Check $closed 'the installer closed the running old program'
         if (!$closed) { Stop-OnFailure 'Old process still running; no further product audit' }
+        if ($Scenario -in 'from-candidate','from-candidate-hidden') {
+            $setupLog = Get-Content (Join-Path $Out 'new-setup.log') -Raw
+            Check ($setupLog -match 'Signalled normal shutdown of installed Crawler PID') 'candidate received explicit shutdown event'
+            if ($Scenario -eq 'from-candidate-hidden') {
+                $saved = Get-Content (Join-Path $SettingsDir 'config.json') -Raw | ConvertFrom-Json
+                Check ($saved.BarsEnabled -eq $false) 'hidden candidate keeps bars disabled after reinstall'
+            }
+        }
     }
 }
 Start-Sleep -Seconds 2

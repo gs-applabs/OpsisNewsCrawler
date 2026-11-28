@@ -110,6 +110,8 @@ public sealed class SettingsForm : Form
         base.Dispose(disposing);
     }
 
+    public void FlushPendingChanges() => panel.FlushPendingChanges();
+
     public void SelectTab(int index) => panel.SelectTab(index);
 
     /// <summary>Test helper (--snapshot): saves every tab as a PNG without needing the window to be visible on screen.</summary>

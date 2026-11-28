@@ -81,7 +81,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-2022]
-        scenario: [fresh, from-per-user, from-latest, from-candidate, update-helper]
+        scenario: [fresh, from-per-user, from-latest, from-candidate, from-candidate-hidden, update-helper]
         include:
           - os: windows-2025
             scenario: fresh

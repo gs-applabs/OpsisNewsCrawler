@@ -213,6 +213,9 @@ internal static class Program
         var configAt = Array.IndexOf(args, "--config");
         using var host = new TickerHost(configAt >= 0 && configAt + 1 < args.Length ? args[configAt + 1] : null);
         var settings = new Lazy<SettingsForm>(() => new SettingsForm(host));
+        using var context = new ApplicationContext();
+        host.Window.FormClosed += (_, _) => context.ExitThread();
+        var exiting = false;
 
         using var tray = new NotifyIcon
         {
@@ -268,12 +271,16 @@ internal static class Program
         void UpdatePauseItem() => menuPause.Text = Loc.T(host.Paused ? "tray.resume" : "tray.pause");
         host.PausedChanged += UpdatePauseItem;
         menu.Items.Add(new ToolStripSeparator());
-        var menuExit = menu.Items.Add(Loc.T("tray.exit"), null, (_, _) =>
+        void RequestExit()
         {
+            if (exiting) return;
+            exiting = true;
+            if (settings.IsValueCreated) settings.Value.FlushPendingChanges();
             host.Stop();
             tray.Visible = false;
-            Application.Exit();
-        });
+            context.ExitThread();
+        }
+        var menuExit = menu.Items.Add(Loc.T("tray.exit"), null, (_, _) => RequestExit());
         tray.ContextMenuStrip = menu;
         // A new version: one notification per version; a click on it opens the settings (Information > Updates).
         host.UpdateAnnounce += info =>
@@ -285,12 +292,7 @@ internal static class Program
         };
         tray.BalloonTipClicked += (_, _) => settings.Value.ShowSettings();
         // After an update setup was handed over, the program ends so the installer can replace its files and open it again.
-        host.ExitRequested += () =>
-        {
-            host.Stop();
-            tray.Visible = false;
-            Application.Exit();
-        };
+        host.ExitRequested += RequestExit;
         Loc.Changed += () =>
         {
             menuBars.Text = Loc.T("chk.barsEnabled");
@@ -385,9 +387,15 @@ internal static class Program
             Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true" &&
             int.TryParse(args[probeAt + 2], out var seconds))
             probe = new ResourceProbe(host, args[probeAt + 1], seconds);
-        try { Application.Run(host.Window); }
+        // No MainForm.Show: disabled bars stay hidden.
+        using var shutdownListener = InstallerShutdownListener.TryCreate(
+            SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext(), RequestExit);
+        try { Application.Run(context); }
         finally
         {
+            if (settings.IsValueCreated) settings.Value.FlushPendingChanges();
+            host.Stop();
+            tray.Visible = false;
             probe?.Dispose();
             if (settings.IsValueCreated) settings.Value.Dispose();
         }
