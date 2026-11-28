@@ -9,7 +9,7 @@ comments stay in English; UI strings are bilingual "Ελληνικά / English".
 ## Current .NET 11 + Opsis 2.8 integration rule (2026-11-24)
 - Build with .NET 11; Crawler product version 0.30.0, Crawler plugin/contract ABI 1.0.0.0 and Opsis.UI 0.6.0 (assembly 0.1.0.0). The exact Opsis 2.8.0.2510 UI6 DLL is committed in `libs/`.
 - Host and all plugins must load the **same compiled** shared ABI contract binary. The app, Windows, plugin and tests reference `libs/OpsisNewsCrawler.Plugin.Abstractions.dll` from Opsis 2.8; the source project is a mirror and must never be packaged as a replacement. The plugin installer must reject inconsistent SHA256 for host contract or UI6; it must not silently replace host-owned binaries.
-- The latest active P0 is draft PR #8 based on draft .NET 11 PR #7. Build/test, actual host loader, Chronikologio and installer/rollback gates are still required. Do not mark P0 complete because the source compiles.
+- Current cumulative candidate is draft PR #15 (0.30.0). Read the current source ownership/backlog cross-check at the top of CHANGELOG.md before changing code; do not treat historical PR #7/#8 or pre-P2 status as current. Check exact refs, existing service owner and regression coverage. Review the CI source-overlap report before any new implementation; lexical matches require manual review, not automatic deletion. Actual candidate host loader, Chronikologio and remaining runtime gates must be verified.
 - The current canonical development journal is `CHANGELOG.md`; do not create or link new dated progress/handoff files. Keep source documentation (`docs/DATA-SOURCES.md`, `docs/SECURITY.md`, etc.) separate from progress history.
 
 ## READ FIRST

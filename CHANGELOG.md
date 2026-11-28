@@ -6,6 +6,62 @@
 - Preserved topic identities, improved RSS timeouts and redirects, and hardened live previews.
 - Unified Help / Instructions, License and Version History in the GearWin layout; localized navigation and current candidate history, single embedded repository MIT license, keyboard F1. Candidate changes are not a separate release; verification is tracked in the quality audit.
 
+
+### Current source ownership and backlog cross-check — Pass 21 (2026-11-28)
+
+Audit basis: main `811be98`, verified Pass 17 `c282a2f`, cumulative Pass 20 `710708e` (36 ahead, 0 behind, 101 changed files). The complete Git tree returned 499 entries, 170 production/mirror C# files and 101 test C# files. All 271 C# blob identities were unique: no exact whole-file duplicate. This is not a proof of semantic deduplication. The prior 40 Crawler backlog IDs below are reconciled from the retained changelog and current source paths; source presence is not end-to-end certification. The original standalone proposal attachments were not recoverable from the accessible file search; do not infer missing wording.
+
+| ID | Existing implementation / canonical owner | Residual or limitation |
+|---|---|---|
+| N01 | TopicWatch / TopicMatcher / P2InsightsForm | stable IDs and topic filter; full UI gate |
+| N02 | EmergingTopics | existing analysis, not a second trend engine |
+| N03 | StoryAnalysis.Timeline / StoryExplorer | existing |
+| N04 | StoryAnalysis.Differences | numbers and reported denials; not factual verification |
+| N05 | StoryAnalysis.CommonOrigins / PublisherIdentity | heuristic agency grouping |
+| N06 | FactCheckSupport.MentionsRetraction | mentions, not an external fact-check service |
+| N07 | NewsArchive.Observe / Changes | headline changes, opt-in |
+| N08 | NewsGeo.Hint | one unambiguous country or unknown |
+| N09 | NewsAnalytics.Entities | text heuristic |
+| N10 | NewsSearch.Find | in-memory search |
+| N11 | NewsAnalytics.Places / AnalyticsForm.PaintMap | continental schematic, not geocoded event map |
+| N12 | same publication geography visual | coverage counts, not factual event heatmap |
+| N13 | NewsAnalytics.Relations / PaintGraph | co-occurrence only |
+| N14 | StoryAnalysis.Timeline / NewsAnalytics.Trend | reuse existing time series; full UI review |
+| N15 | NewsAnalytics.Trend / PaintTrend | existing term trend |
+| N16 | AnalyticsForm tiles / Coverage | existing news mosaic |
+| N17 | FocusReaderForm / P2InsightsForm | existing |
+| N18 | FocusReaderForm comparison | existing two-report view |
+| N19 | NewsAnalytics.Coverage | existing publisher coverage |
+| N20 | WidgetStudio / WidgetStudioPresets | reuse five existing widgets |
+| N21 | AnalyticsForm market tiles / QuoteService | existing market heatmap |
+| N22 | EconomicCalendar.Select / imported results | imported JSON; live source not established |
+| N23 | same calendar dividends | imported JSON |
+| N24 | MarketMetrics.Compare | price benchmark, not total-return benchmark |
+| N25 | MarketMetrics.Allocation | currency-separated allocation |
+| N26 | MarketMetrics.AnnualisedVolatility | minimum samples required |
+| N27 | MarketMetrics.MaxDrawdown | existing |
+| N28 | MarketMetrics.TimeWeightedReturnPercent / LedgerValuations | requires valid valuation on each trade day; split limitation |
+| N29 | EconomicCalendar imported macro indicators | no new live provider |
+| N30 | NewsAnalytics.NearMove | temporal association only |
+| N31 | RssNewsProvider / FeedDiscovery | validation and parser tests |
+| N32 | RssNewsProvider.Health / diagnostics | existing |
+| N33 | FeedActivityPolicy | quiet/dormant detection, not automatic disabling |
+| N34 | FeedRetryPolicy.QuietDelay / existing timer | adaptive intervals |
+| N35 | RssNewsProvider / RedirectGuardHandler | bounded requests, cooldown, Retry-After |
+| N36 | RssNewsProvider conditional GET / 304 tests | existing |
+| N37 | DataCache / shared RssNewsProvider | one generated news cache; separate quote/archive stores serve different data |
+| N38 | ReadStore / cache/archive limits | 5,000 read entries, generated-cache caps; actual long-run storage gate |
+| N39 | NewsArchive.Search / NewsSearch | implemented as scan, no dedicated full-text index |
+| N40 | FeedRetryPolicy / RssNewsProvider cooldown | temporary source isolation |
+
+All 40 retained IDs have an identified existing implementation path or narrower implementation; this is a reconciled inventory, not 40 newly completed features. N39 indexing, real live calendar data (if required), accuracy of heuristics and runtime gates are not silently completed. The old P1 table below is historical; its 'not started' for N39 refers to the earlier pre-P2 state. No second implementations of topic analysis, story clustering, archive, gallery, charts, portfolio, alerts, calendar or digest are authorized.
+
+**Exclusive runtime ownership:** Standalone Program and plugin TickerController use the same TickerHost, one host-owned RssNewsProvider, lazy QuoteService/QuoteStore, RefreshScheduler, DataCache, bounded CrawlerEventDispatch and five widget IDs. InstanceGuard protects the normal profile. DeferredDemand owns delayed retry only, not a parallel periodic scheduler. Existing BreakingEngine is the urgent scoring owner; legacy Breaking.IsBreaking remains a possible compatibility overlap to audit for callers, while Breaking.ToPlayableUrl and Normalize are used helpers. Do not delete the whole legacy file. QuoteStore retains an older data-root expression; CrawlerDataPaths is the shared owner for future path consolidation, with probe behavior preserved. Existing SettingsPanel asynchronous Yahoo search uses CancellationToken.None; audit cancellation and stale UI results before adding any new search. These are review targets, not verified identical behavior. Legacy portfolio and transaction ledger intentionally coexist for migration; do not merge balances automatically.
+
+**Cross-app ownership:** Opsis owns capability discovery/broker, trust/permissions and future SDK2/sandbox, shell/DeskStrip, placement, host palette and shared weather. Opsis.UI owns common controls. Chronikologio owns calendar/history; Crawler only consumes san-simera through PluginFeeds or FamilyFeedBridge. Media Suite owns general media conversion/playback; Crawler retains explicit live-news preview and MediaSuiteBridge M3U handoff. GearWin owns general diagnostics/repair/backups. Shared Opsis.UI and ABI blobs at Crawler Pass 20 and Opsis R81 `cae751ab` match exactly (4a5b4e0a1e1ec56780a1f581b79f0b272e3b52bd, 7beb06349daef31ae4c80f2a47a32c7477f1e50d); no new contract or UI fork. Host workflow still pins older Crawler `4d97e29`; exact candidate dual-plugin runtime is open. The 10 later SDK/host-owned proposals are excluded from Crawler reimplementation, not declared completed.
+
+**New verified evidence:** Pass 17 Windows/ABI/installer/soak 4/4 green. Run 46105509202 active Low 30 min / 360 samples: CPU 0.44% all cores, private bytes +74.31 MiB, GDI delta 0, SafeFile +0.401 MiB logical payload; idle Low 2 min / 24 samples: CPU 0.01%, private +0.07 MiB, GDI delta 0, zero logical writes and idle demand gate passed. The active memory growth is an investigation priority despite smoke pass; not proof of leak or leak-free operation. Passes 18–20 require own exact Windows validation. Existing hygiene script now produces a source overlap review report over tracked C# files (whole file hashes and exact normalized substantial line windows); lexical candidates are review-only, not semantic proof, and no files are removed. Review report before each subsequent code pass and use existing owner + test rather than creating duplicate service. Physical multi-monitor/DPI, installed host lifecycle, manual functional controls and long final soak remain open. No main merge or release.
+
 ### 0.30.0 — 2026-11-26: analytics (P2 of the backlog); includes the news-intelligence work below, which was planned as 0.29.0 and not released on its own
 
 One Analytics window (Intelligence centre) over data the program already holds; no new provider, scheduler or cache except the opt-in archive. Implemented with unit tests and checked as rendered images with sample data (`--snapshot-analytics`), not manually on Windows.

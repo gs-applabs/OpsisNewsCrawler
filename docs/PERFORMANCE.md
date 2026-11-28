@@ -73,3 +73,5 @@ Pass 18: the Breaking widget is an explicit news consumer rather than an acciden
 Pass 19: coalesced, cancellable sleep/resume refresh and demand-scoped delayed retries; canceled generations cannot block replacement retries. History opt-out cancels in-flight optional backfill without stopping quote display. No new periodic production timers. Windows validation pending.
 
 Pass 20: source edits cancel stale network generation, cache and selected user data follow the existing explicit probe directory; bounded local reads protect cache and family feed from file growth after stat. Production defaults unchanged; existing offline cache preserved. New tests pending Windows validation.
+
+Pass 17 final measurement (46105509202): active Low 30 min, 360 samples, CPU 0.44% all cores, private +74.31 MiB, GDI delta 0, SafeFile +0.401 MiB; idle Low 2 min, 24 samples, CPU 0.01%, private +0.07 MiB, GDI delta 0, no logical writes and no optional service/RSS/render demand. Active private growth passed the broad 256 MiB smoke cap but is a P0 investigation; compare identical configs and memory/handle trends, not just endpoint deltas. Exact subsequent candidate still unverified.
