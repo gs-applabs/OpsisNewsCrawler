@@ -119,35 +119,42 @@ public static class YahooHistory
     public static async Task<int> BackfillAsync(QuoteStore store, IEnumerable<QuoteInstrument> instruments, int maxInstruments, CancellationToken ct, Action? progress = null)
     {
         var today = DateTime.UtcNow.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
+        const string blockedKey = "__yahoo_history_blocked__";
+        if (store.BackfillDay(blockedKey) == today) return 0;
         var done = 0;
-        foreach (var inst in instruments.GroupBy(i => i.StoreKey).Select(g => g.First()).Take(400))
+        var attempted = 0;
+        try
         {
-            if (ct.IsCancellationRequested || done >= maxInstruments) break;
-            var key = inst.StoreKey;
-            if (store.BackfillDay(key) == today) continue;
-            if (YahooSymbols.For(inst) is not { } symbol) continue;
-            try
+            foreach (var inst in instruments.GroupBy(i => i.StoreKey).Select(g => g.First()).Take(400))
             {
-                using var response = await Http.GetAsync(string.Format(Url, Uri.EscapeDataString(symbol)), ct).ConfigureAwait(false);
-                if ((int)response.StatusCode is 429 or 401 or 403)
+                if (ct.IsCancellationRequested || attempted >= maxInstruments) break;
+                var key = inst.StoreKey;
+                if (store.BackfillDay(key) == today || YahooSymbols.For(inst) is not { } symbol) continue;
+                if (attempted > 0) await Task.Delay(1000, ct).ConfigureAwait(false);
+                attempted++;
+                store.MarkBackfill(key, today); // count attempts, not only successes
+                try
                 {
-                    Log.Write($"Yahoo history: {(int)response.StatusCode} - stopped for now (not retried today).");
+                    using var response = await Http.GetAsync(string.Format(Url, Uri.EscapeDataString(symbol)), ct).ConfigureAwait(false);
+                    if ((int)response.StatusCode is 429 or 401 or 403)
+                    {
+                        store.MarkBackfill(blockedKey, today);
+                        Log.Write($"Yahoo history: {(int)response.StatusCode} - stopped for today.");
+                        break;
+                    }
+                    if (!response.IsSuccessStatusCode) continue;
+                    var candles = Parse(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+                    if (candles.Count > 0) { store.MergeCandles(key, candles); done++; progress?.Invoke(); }
+                    store.SaveIfDue();
+                }
+                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
+                {
+                    if (!ct.IsCancellationRequested) Log.Write($"Yahoo history {symbol}: {ex.GetType().Name}");
                     break;
                 }
-                store.MarkBackfill(key, today); // one try per instrument and day, whatever the answer
-                if (!response.IsSuccessStatusCode) continue;
-                var candles = Parse(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
-                if (candles.Count > 0) { store.MergeCandles(key, candles); store.Save(); done++; progress?.Invoke(); }
             }
-            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
-            {
-                if (ct.IsCancellationRequested) break;
-                Log.Write($"Yahoo history {symbol}: {ex.GetType().Name}");
-                break;
-            }
-            await Task.Delay(1000, ct).ConfigureAwait(false);
         }
-        if (done > 0) store.Save();
+        finally { store.SaveIfDue(); }
         return done;
     }
 }

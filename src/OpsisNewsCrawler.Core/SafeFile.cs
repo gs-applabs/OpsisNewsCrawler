@@ -3,11 +3,30 @@ namespace OpsisNewsCrawler.Core;
 /// <summary>Writes small settings/cache files so that a crash or power loss never leaves a half-written file behind.</summary>
 public static class SafeFile
 {
+    private static long writeCount, bytesWritten;
+    /// <summary>Logical file payload successfully committed via SafeFile; not physical SSD NAND writes.</summary>
+    public static (long Writes, long Bytes) Diagnostics =>
+        (Interlocked.Read(ref writeCount), Interlocked.Read(ref bytesWritten));
+
     public static void WriteAllText(string path, string text)
     {
-        var temp = path + ".tmp";
-        File.WriteAllText(temp, text);
-        File.Move(temp, path, overwrite: true);
+        lock (WriteGate)
+        {
+            var temp = path + ".tmp";
+            try
+            {
+                File.WriteAllText(temp, text);
+                var bytes = new FileInfo(temp).Length;
+                File.Move(temp, path, overwrite: true);
+                Interlocked.Increment(ref writeCount);
+                Interlocked.Add(ref bytesWritten, bytes);
+            }
+            finally
+            {
+                try { File.Delete(temp); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
+        }
     }
 
     /// <summary>

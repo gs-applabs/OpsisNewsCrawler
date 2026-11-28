@@ -30,4 +30,18 @@ public sealed class HostWeatherPayloadTests
     [InlineData("""{"broken":""")]
     public void RejectsInvalidOrStalePayload(string json) =>
         Assert.Null(HostWeatherPayload.Parse("athens", json, Now));
+
+    [Fact]
+    public void PartialHostCoverageRequestsOnlyMissingCitiesAndPreservesOrder()
+    {
+        WeatherReading Reading(string id, double temp) => new(id, temp, 65, 8, 0, 0, true, Now);
+        var requested = new[] { "athens", "patra", "larisa", "athens" };
+        var shared = new[] { Reading("athens", 20) };
+        Assert.Equal(new[] { "patra", "larisa" }, HostWeatherPayload.MissingCities(requested, shared));
+        var merged = HostWeatherPayload.Merge(requested, shared,
+            new[] { Reading("patra", 17), Reading("athens", 99), Reading("unselected", 1) },
+            new[] { Reading("larisa", 15), Reading("patra", 12) });
+        Assert.Equal(new[] { "athens", "patra", "larisa" }, merged.Select(r => r.CityId));
+        Assert.Equal(new double[] { 20, 17, 15 }, merged.Select(r => r.TemperatureC));
+    }
 }

@@ -41,10 +41,10 @@ public sealed class SettingsForm : Form
         };
 
         // The title-bar icon moves like the one in the notification area (only while the window is visible and animation is on).
-        LiveIconState.Changed += () => iconFramesStale = true;
+        LiveIconState.Changed += OnLiveIconChanged;
         iconTimer.Tick += (_, _) =>
         {
-            if (iconFramesStale) { iconFramesStale = false; iconFrames = null; }
+            if (iconFramesStale) { iconFramesStale = false; ReleaseIconFrames(); }
             var animate = Visible && host.Config.BarsEnabled;
             if (!animate)
             {
@@ -55,7 +55,7 @@ public sealed class SettingsForm : Form
             iconFrame = (iconFrame + 1) % iconFrames.Length;
             Icon = iconFrames[iconFrame];
         };
-        iconTimer.Start();
+        VisibleChanged += OnIconVisibilityChanged;
 
         HandleCreated += (_, _) => Theme.ApplyTitleBar(this);
         Theme.Changed += OnThemeChanged;
@@ -71,6 +71,24 @@ public sealed class SettingsForm : Form
         };
     }
 
+    private void OnLiveIconChanged() => iconFramesStale = true;
+
+    private void OnIconVisibilityChanged(object? sender, EventArgs e)
+    {
+        if (Disposing || IsDisposed) return;
+        if (Visible) iconTimer.Start();
+        else { iconTimer.Stop(); ReleaseIconFrames(); }
+    }
+
+    private void ReleaseIconFrames()
+    {
+        if (iconFrames is null) return;
+        Icon = staticIcon;
+        foreach (var frame in iconFrames) frame.Dispose();
+        iconFrames = null;
+        iconFrame = 0;
+    }
+
     private void OnThemeChanged()
     {
         BackColor = Theme.Background;
@@ -83,11 +101,16 @@ public sealed class SettingsForm : Form
         if (disposing)
         {
             Theme.Changed -= OnThemeChanged;
+            LiveIconState.Changed -= OnLiveIconChanged;
+            VisibleChanged -= OnIconVisibilityChanged;
+            iconTimer.Stop();
             iconTimer.Dispose();
-            if (iconFrames is not null) foreach (var f in iconFrames) f.Dispose();
+            ReleaseIconFrames();
         }
         base.Dispose(disposing);
     }
+
+    public void FlushPendingChanges() => panel.FlushPendingChanges();
 
     public void SelectTab(int index) => panel.SelectTab(index);
 
@@ -108,6 +131,14 @@ public sealed class SettingsForm : Form
             using var bmp = new Bitmap(Width, Height);
             DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
             bmp.Save(Path.Combine(folder, $"tab{i}.png"));
+        }
+        foreach (var section in new[] { "license", "history" })
+        {
+            if (!panel.SelectPage(section)) continue;
+            Application.DoEvents();
+            using var bmp = new Bitmap(Width, Height);
+            DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
+            bmp.Save(Path.Combine(folder, $"about-{section}.png"));
         }
         Hide();
     }

@@ -132,7 +132,9 @@ internal sealed class LivePreviewForm : Form
         {
             var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpsisNewsCrawler", "webview2");
             var env = await CoreWebView2Environment.CreateAsync(null, folder);
+            if (IsDisposed || Disposing) return;
             await web.EnsureCoreWebView2Async(env);
+            if (IsDisposed || Disposing) return;
             var settings = web.CoreWebView2.Settings;
             settings.AreDevToolsEnabled = false;
             settings.AreDefaultContextMenusEnabled = false;
@@ -144,7 +146,7 @@ internal sealed class LivePreviewForm : Form
             web.CoreWebView2.DownloadStarting += (_, e) => e.Cancel = true;
             web.CoreWebView2.NavigationStarting += (_, e) =>
             {
-                if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var target) || target.Scheme is not ("http" or "https" or "about")) e.Cancel = true;
+                if (!NetGuard.IsPublicHttpUrl(e.Uri) && !string.Equals(e.Uri, "about:blank", StringComparison.OrdinalIgnoreCase)) e.Cancel = true;
             };
             settings.AreHostObjectsAllowed = false;
             settings.IsWebMessageEnabled = false;
@@ -152,6 +154,7 @@ internal sealed class LivePreviewForm : Form
         }
         catch (Exception ex)
         {
+            if (IsDisposed || Disposing) return;
             web.Visible = false;
             message.Text = ex is WebView2RuntimeNotFoundException ? Loc.T("live.noRuntime") : Loc.T("live.error", ex.GetType().Name + ": " + ex.Message);
             message.Visible = true;
@@ -180,6 +183,7 @@ internal sealed class LivePreviewForm : Form
             // Works for the YouTube player page and for any page with a <video> element.
             var script = "(function(){var v=document.querySelector('video');if(!v)return 'none';if(v.paused){v.play();return 'playing';}v.pause();return 'paused';})()";
             var result = await web.CoreWebView2.ExecuteScriptAsync(script);
+            if (IsDisposed || Disposing) return;
             playing = result.Contains("playing") ? true : result.Contains("paused") ? false : playing;
             playPause.Text = playing ? "⏸" : "▶";
         }

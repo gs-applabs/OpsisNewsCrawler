@@ -126,8 +126,37 @@ public class InstallMigrationTests
             File.WriteAllText(Path.Combine(dir, "first-run.json"), "{\"Position\":\"BottomTaskbar\",\"Language\":\"el\",\"StartWithWindows\":true}");
             var config = AppConfig.Load(Path.Combine(dir, "config.json"));
             Assert.True(config.StartWithWindowsRequested);
-            Assert.False(File.Exists(Path.Combine(dir, "first-run.json")));     // applied once
+            Assert.Equal("el", config.Language);
+            Assert.Equal(TickerPosition.BottomTaskbar, config.Position);
+            Assert.True(File.Exists(Path.Combine(dir, "first-run.json"))); // pending until real registration
+            Assert.True(AppConfig.Load(Path.Combine(dir, "config.json")).StartWithWindowsRequested);
+            config.AcknowledgeStartupRegistration(Path.Combine(dir, "config.json"));
+            Assert.False(File.Exists(Path.Combine(dir, "first-run.json")));
+            Assert.False(AppConfig.Load(Path.Combine(dir, "config.json")).StartWithWindowsRequested);
             Assert.DoesNotContain("StartWithWindowsRequested", File.ReadAllText(Path.Combine(dir, "config.json")));   // never saved as a setting
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+    [Fact]
+    public void StaleFirstRunMarkerCannotOverrideExistingUserChoices()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "crawler-upgrade-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "config.json");
+            new AppConfig { Language = "de", Position = TickerPosition.Top, CheckForUpdates = false }.Save(path);
+            File.WriteAllText(Path.Combine(dir, "first-run.json"),
+                "{\"Language\":\"en\",\"Position\":\"TaskbarIntegrated\",\"StartWithWindows\":true}");
+            var config = AppConfig.Load(path);
+            Assert.Equal("de", config.Language);
+            Assert.Equal(TickerPosition.Top, config.Position);
+            Assert.False(config.CheckForUpdates);
+            Assert.True(config.StartWithWindowsRequested);
+            Assert.True(File.Exists(Path.Combine(dir, "first-run.json")));
+            Assert.Equal("de", AppConfig.Load(path).Language);
+            config.AcknowledgeStartupRegistration(path);
+            Assert.False(File.Exists(Path.Combine(dir, "first-run.json")));
         }
         finally { Directory.Delete(dir, true); }
     }

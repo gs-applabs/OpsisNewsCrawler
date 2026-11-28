@@ -21,15 +21,28 @@ public sealed partial class SettingsPanel
             : "Private offline filters. Enter a name, comma-separated keywords and optional region.",720));
         topicList=new FlatList { Width=720, Height=160 };
         topicList.SetShowChecks(true);
-        topicList.ItemChecked += (i,yes) => { if(i>=0 && i<workTopics.Count) workTopics[i].Enabled=yes; };
+        topicList.ItemChecked += (i,yes) =>
+        {
+            if (loading || i < 0 || i >= workTopics.Count) return;
+            workTopics[i].Enabled = yes;
+            MarkDirty();
+        };
+        transientControls.Add(topicList);
         inner.Controls.Add(topicList);
         topicName=new FlatText { Width=210 };
         topicTerms=new FlatText { Width=300 };
         topicRegion=new FlatText { Width=150 };
-        var inputs=new FlowLayoutPanel { AutoSize=true, FlowDirection=FlowDirection.LeftToRight, WrapContents=true, MaximumSize=new Size(740,0) };
-        inputs.Controls.Add(topicName); inputs.Controls.Add(topicTerms); inputs.Controls.Add(topicRegion);
-        inner.Controls.Add(inputs);
-        var add=new FlatButton { Text=Loc.IsGreek ? "Προσθήκη θέματος" : "Add topic" };
+        transientControls.Add(topicName);
+        transientControls.Add(topicTerms);
+        transientControls.Add(topicRegion);
+        topicName.AccessibleName = L("col.name");
+        topicTerms.AccessibleName = Loc.IsGreek ? "Λέξεις-κλειδιά (με κόμμα)" : "Keywords (comma-separated)";
+        topicRegion.AccessibleName = Loc.IsGreek ? "Περιοχή (προαιρετικά)" : "Region (optional)";
+        inner.Controls.Add(Row(topicName.AccessibleName, topicName, 235));
+        inner.Controls.Add(Row(topicTerms.AccessibleName, topicTerms, 235));
+        inner.Controls.Add(Row(topicRegion.AccessibleName, topicRegion, 235));
+        var add=new FlatButton { Name="addTopic", Text=Loc.IsGreek ? "Προσθήκη θέματος" : "Add topic" };
+        transientControls.Add(add);
         add.Click += (_,_) =>
         {
             var name=topicName.Value.Trim();
@@ -37,14 +50,25 @@ public sealed partial class SettingsPanel
                 .Where(t=>t.Length>=3).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList();
             if(name.Length==0 || terms.Count==0)
             { topicStatus.Text=Loc.IsGreek ? "Χρειάζεται όνομα και μία λέξη τουλάχιστον." : "Enter a name and at least one keyword."; return; }
+            if (workTopics.Count >= 50)
+            { topicStatus.Text = Loc.IsGreek ? "Μέγιστο 50 θέματα." : "Maximum 50 topics."; return; }
+            if (name.Length > 80)
+            { topicStatus.Text = Loc.IsGreek ? "Το όνομα επιτρέπεται έως 80 χαρακτήρες." : "Names may contain up to 80 characters."; return; }
             workTopics.Add(new TopicWatch{Name=name,Terms=terms,Region=topicRegion.Value.Trim()});
-            RebuildTopics(); MarkDirty(); topicName.Value=""; topicTerms.Value=""; topicRegion.Value="";
+            TopicWatch.EnsureStableIds(workTopics);
+            RebuildTopics(); topicList.SelectedIndex = workTopics.Count - 1;
+            MarkDirty(); topicName.Value=""; topicTerms.Value=""; topicRegion.Value="";
+            topicStatus.Text = Loc.IsGreek ? "Το θέμα προστέθηκε." : "Topic added.";
         };
-        var remove=new FlatButton { Text=Loc.IsGreek ? "Αφαίρεση" : "Remove" };
+        var remove=new FlatButton { Name="removeTopic", Text=Loc.IsGreek ? "Αφαίρεση" : "Remove" };
+        transientControls.Add(remove);
         remove.Click += (_,_) =>
         {
             if(topicList.SelectedIndex < 0 || topicList.SelectedIndex>=workTopics.Count)return;
-            workTopics.RemoveAt(topicList.SelectedIndex); RebuildTopics(); MarkDirty();
+            var selected = topicList.SelectedIndex;
+            workTopics.RemoveAt(selected); RebuildTopics(); MarkDirty();
+            if (workTopics.Count > 0) topicList.SelectedIndex = Math.Min(selected, workTopics.Count - 1);
+            topicStatus.Text = Loc.IsGreek ? "Το θέμα αφαιρέθηκε." : "Topic removed.";
         };
         var action=new FlowLayoutPanel {AutoSize=true,FlowDirection=FlowDirection.LeftToRight,WrapContents=true};
         action.Controls.Add(add); action.Controls.Add(remove); inner.Controls.Add(action);
@@ -57,9 +81,10 @@ public sealed partial class SettingsPanel
         insightFlow.Controls.Add(Note(Loc.IsGreek
             ? "Συγκεντρωμένες υπάρχουσες ειδήσεις, πηγές και γεγονότα της οικογένειας Opsis. Η εξαγωγή HTML λειτουργεί χωρίς δίκτυο."
             : "Current local news, sources and Opsis suite events. HTML digest export works offline.",720));
-        var open=new FlatButton {Text=Loc.IsGreek ? "Άνοιγμα κέντρου ειδήσεων P2" : "Open P2 news center"};
+        var open=new FlatButton {Text=L("nav.openIntelligence")};
+        transientControls.Add(open);
         open.SetPrimary(true);
-        open.Click += (_,_) => {using var form=new P2InsightsForm(host);form.ShowDialog(this);};
+        open.Click += (_,_) => {FlushPendingChanges(); using var form=new P2InsightsForm(host);form.ShowDialog(this);};
         insightFlow.Controls.Add(open); insights.Controls.Add(insightFlow); flow.Controls.Add(insights);
         return page;
     }

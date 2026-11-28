@@ -274,7 +274,7 @@ public sealed class EuronextListProvider : IQuoteProvider
                 results.Add(new MarketQuote(inst.Symbol, inst.NameEn, price.Value, change, asOf, Delayed: true, ChangeFromOpen: fromOpen));
             }
         }
-        if (results.Count > 0) store.Save();
+        if (results.Count > 0) store.SaveIfDue();
         return results;
     }
 

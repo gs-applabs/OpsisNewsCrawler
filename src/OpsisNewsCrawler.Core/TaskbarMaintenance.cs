@@ -14,7 +14,7 @@ public static class TaskbarMaintenance
     public const int CheckEvery = 30;
 
     /// <summary>Ticks between two looks at the z-order (a few window calls, no change to the window): the bar is put back quickly when the taskbar covers it, and only then.</summary>
-    public const int TopCheckEvery = 10;
+    public const int TopCheckEvery = 2;
 
     /// <summary>Ticks between two unconditional re-applications of the look (a recovery after Explorer restarted; about 30-90 s).</summary>
     public const int LookRefreshEvery = 900;
@@ -28,6 +28,14 @@ public static class TaskbarMaintenance
 
     public static bool IsShellFlyout(string? className) => !string.IsNullOrEmpty(className) && ShellFlyoutClasses.Contains(className, StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>A foreground window must actually cover this monitor and lack a normal caption. A global busy notification alone is not fullscreen.</summary>
+    public static bool CoversMonitor(bool hasCaption, int left, int top, int right, int bottom, int screenLeft, int screenTop, int screenRight, int screenBottom) =>
+        !hasCaption && left <= screenLeft && top <= screenTop && right >= screenRight && bottom >= screenBottom;
+
+    /// <summary>Two consecutive fullscreen observations suppress a transient foreground transition. Leaving fullscreen restores immediately.</summary>
+    public static bool ConfirmFullscreen(bool candidate, bool previouslyObserved, bool alreadyHidden) =>
+        candidate && (previouslyObserved || alreadyHidden);
+
     public static Actions Decide(int tick, bool taskbarStyleChanged, bool shellFlyoutHasFocus, bool alreadyOnTop)
     {
         if (shellFlyoutHasFocus) return new Actions(false, false, false);   // the user is using the tray overflow or another flyout: touch nothing
@@ -36,5 +44,34 @@ public static class TaskbarMaintenance
             KeepOnTop: tick % TopCheckEvery == 0 && !alreadyOnTop,
             ApplyLook: taskbarStyleChanged || (tick > 0 && tick % LookRefreshEvery == 0),
             Reposition: check);
+    }
+
+    public const int MinimumIntegratedWidth = 180;
+    public const int ButtonPadding = 6;
+
+    // Clamp all occupied spans to the usable taskbar and account for padding
+    // BEFORE comparing against the minimum. Never expand a measured gap into buttons.
+    public static (int Left, int Right)? SelectFreeSpan(int left, int right,
+        IEnumerable<(int L, int R)> occupied)
+    {
+        if (right <= left) return null;
+        var reach = left;
+        (int Left, int Right)? best = null;
+        void Consider(int from, int to)
+        {
+            from += ButtonPadding;
+            to -= ButtonPadding;
+            if (to - from >= MinimumIntegratedWidth &&
+                (best is null || to - from > best.Value.Right - best.Value.Left))
+                best = (from, to);
+        }
+        foreach (var (l, r) in occupied.Select(x => (Math.Max(left, x.L), Math.Min(right, x.R)))
+                     .Where(x => x.Item2 > x.Item1).OrderBy(x => x.Item1))
+        {
+            if (l > reach) Consider(reach, l);
+            reach = Math.Max(reach, r);
+        }
+        Consider(reach, right);
+        return best;
     }
 }

@@ -13,6 +13,13 @@ public sealed class TopicWatch
     public string Region { get; set; } = "";
     public bool Enabled { get; set; } = true;
 
+    /// <summary>Editable copy; preserve the stable identity across unrelated settings saves.</summary>
+    public TopicWatch Clone() => new()
+    {
+        Id = Id, Name = Name, Region = Region, Enabled = Enabled,
+        Terms = (Terms ?? new()).ToList()
+    };
+
     /// <summary>Gives every topic a unique short id; keeps the ones that are already valid and unique.</summary>
     public static void EnsureStableIds(IList<TopicWatch> topics)
     {

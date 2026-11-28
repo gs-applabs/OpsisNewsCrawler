@@ -41,7 +41,6 @@ internal sealed class CrawlerEventDispatch : IDisposable
                 }
             }
             catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
-            finally { stop.Dispose(); }
         });
     }
 
@@ -51,8 +50,10 @@ internal sealed class CrawlerEventDispatch : IDisposable
     public void Dispose()
     {
         if (Interlocked.Exchange(ref disposed, 1) != 0) return;
-        channel.Writer.TryComplete();
         stop.Cancel();
+        channel.Writer.TryComplete();
+        _ = pump.ContinueWith(_ => stop.Dispose(), CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         // Do not await the subscriber on the host UI thread: it may be stuck.
         // The pump has a bounded queue and self-disposes its token on exit.
     }

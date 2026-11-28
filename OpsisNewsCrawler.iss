@@ -17,7 +17,7 @@
 #define MyAppName "Opsis News Crawler"
 #define MyPublisher "gs-applabs"
 #define MyAppUrl "https://github.com/gs-applabs/OpsisNewsCrawler"
-#define MyAppVersion "0.30.0"
+#define MyAppVersion "0.30.1"
 #ifndef BinDir
 #define BinDir "bin"
 #endif
@@ -574,6 +574,14 @@ const
 var
   HadAutostart: Boolean;
 
+function CaptureAutostart(): Boolean;
+var
+  Value: String;
+begin
+  Result := (RegQueryStringValue(HKCU, RunKeyPath, '{#MyAppName}', Value) and (Value <> '')) or
+    (RegQueryStringValue(HKLM, RunKeyPath, '{#MyAppName}', Value) and (Value <> ''));
+end;
+
 function PerUserCopyThere(Dir: String): Boolean;
 begin
   Result := RegKeyExists(HKCU, OldUninstallKey) or ((Dir <> '') and DirExists(Dir));
@@ -586,19 +594,156 @@ begin
   Result := RegQueryStringValue(Root, RunKeyPath, Name, Value) and (Value <> '');
 end;
 
-// Ends a running copy of the program before the old per-user copy is removed. No script engine is started: taskkill ends it by its image name.
-// (An earlier version asked a 32-bit PowerShell for the path of each process; a 32-bit PowerShell cannot read the path of a 64-bit process, so nothing was
-// ended and the folder stayed locked: "An earlier per-user copy could not be removed" on a machine where the old program was running.)
-// Setup would have to close the program anyway (AppMutex); a copy started from a build folder is ended too, and the log says so.
-procedure EndProgramsIn(Dir: String);
+// Restart Manager could not close the published 0.30.0 tray application.
+// Request WM_CLOSE only from the actual installed executable's ticker windows,
+// including hidden ones. WMI supplies the full image path even from 32-bit Setup.
+// The mutex and Restart Manager remain in place as a second line of protection.
+function FindCrawlerWindow(Parent, After: HWND; ClassName: NativeInt; WindowName: String): HWND;
+  external 'FindWindowExW@user32.dll stdcall';
+function WindowProcessId(Wnd: HWND; var Pid: Cardinal): Cardinal;
+  external 'GetWindowThreadProcessId@user32.dll stdcall';
+function OpenShutdownEvent(Access: Cardinal; Inherit: Boolean; Name: String): THandle;
+  external 'OpenEventW@kernel32.dll stdcall';
+function SignalShutdownEvent(Event: THandle): Boolean;
+  external 'SetEvent@kernel32.dll stdcall';
+function CloseShutdownHandle(Event: THandle): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+function RequestShutdownSignal(const Pid: String): Boolean;
 var
-  ResultCode: Integer;
+  Event: THandle;
 begin
-  if Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM {#MyAppExe}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-    Log('Old per-user copy ' + Dir + ': taskkill finished with exit code ' + IntToStr(ResultCode) + ' (128 = no program was running)')
-  else
-    Log('Old per-user copy ' + Dir + ': taskkill could not be started');
-  Sleep(1500);   // the files are released a moment after the process ends
+  Result := False;
+  Event := OpenShutdownEvent(2 { EVENT_MODIFY_STATE }, False, 'Local\OpsisNewsCrawler.Shutdown.' + Pid);
+  if Event = 0 then Exit;
+  try
+    Result := SignalShutdownEvent(Event);
+  finally
+    CloseShutdownHandle(Event);
+  end;
+end;
+
+function HasSetupSwitch(const Switch: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+    if SameText(ParamStr(I), Switch) then
+    begin
+      Result := True;
+      Exit;
+    end;
+end;
+
+function InstalledProcesses(const Dir: String): TArrayOfString;
+var
+  Locator, Service, Processes, Item: Variant;
+  I, N: Integer;
+  Expected, Actual: String;
+begin
+  SetLength(Result, 0);
+  if Dir = '' then Exit;
+  Expected := ExpandFileName(AddBackslash(Dir) + '{#MyAppExe}');
+  Locator := CreateOleObject('WbemScripting.SWbemLocator');
+  Service := Locator.ConnectServer('.', 'root\CIMV2');
+  Processes := Service.ExecQuery('SELECT ProcessId, ExecutablePath FROM Win32_Process WHERE Name = ''{#MyAppExe}''');
+  for I := 0 to Processes.Count - 1 do
+  begin
+    Item := Processes.ItemIndex(I);
+    if not VarIsNull(Item.ExecutablePath) then
+    begin
+      Actual := Item.ExecutablePath;
+      if SameText(Expected, ExpandFileName(Actual)) then
+      begin
+        N := GetArrayLength(Result);
+        SetLength(Result, N + 1);
+        Result[N] := IntToStr(Item.ProcessId);
+      end;
+    end;
+  end;
+end;
+
+function EndProgramsIn(const Dir: String; AllowForce: Boolean): Boolean;
+var
+  Pids: TArrayOfString;
+  Wnd: HWND;
+  Pid: Cardinal;
+  I, Attempt, ResultCode, Scanned: Integer;
+begin
+  Result := False;
+  try
+    Pids := InstalledProcesses(Dir);
+    if GetArrayLength(Pids) = 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
+    for I := 0 to GetArrayLength(Pids) - 1 do
+      if RequestShutdownSignal(Pids[I]) then
+        Log('Signalled normal shutdown of installed Crawler PID ' + Pids[I])
+      else
+        Log('No shutdown event for installed Crawler PID ' + Pids[I] + '; checking legacy windows');
+    Wnd := FindCrawlerWindow(0, 0, 0, '{#MyAppName}');
+    Scanned := 0;
+    while (Wnd <> 0) and (Scanned < 1024) do
+    begin
+      Pid := 0;
+      WindowProcessId(Wnd, Pid);
+      for I := 0 to GetArrayLength(Pids) - 1 do
+        if Pids[I] = IntToStr(Pid) then
+        begin
+          Log('Requesting normal close of installed Crawler PID ' + Pids[I]);
+          PostMessage(Wnd, $0010, 0, 0);
+        end;
+      Wnd := FindCrawlerWindow(0, Wnd, 0, '{#MyAppName}');
+      Scanned := Scanned + 1;
+    end;
+    // Allow normal settings/history flush; never terminate unrelated images or Opsis.
+    for Attempt := 1 to 30 do
+    begin
+      Sleep(500);
+      Pids := InstalledProcesses(Dir);
+      if GetArrayLength(Pids) = 0 then
+      begin
+        Result := True;
+        Exit;
+      end;
+    end;
+    if AllowForce then
+    begin
+      // Only an explicitly authorized legacy recovery may force the verified
+      // installed PIDs; no /IM wildcard and no child process tree termination.
+      for I := 0 to GetArrayLength(Pids) - 1 do
+        if Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /PID ' + Pids[I], '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+          Log('Legacy close of installed PID ' + Pids[I] + ': ' + IntToStr(ResultCode));
+      Sleep(1000);
+      Pids := InstalledProcesses(Dir);
+    end;
+    Result := GetArrayLength(Pids) = 0;
+  except
+    Log('Could not verify or close the installed Crawler: ' + GetExceptionMessage);
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+var
+  Dir: String;
+begin
+  Result := True;
+  // Capture before the legacy application or uninstaller can change Run.
+  HadAutostart := CaptureAutostart();
+  // Do not touch the running Opsis host, or close anything merely by opening
+  // the interactive wizard. This path is requested by the update command.
+  if not HasSetupSwitch('/MODE=separate') then Exit;
+  if not HasSetupSwitch('/CLOSEAPPLICATIONS') then Exit;
+  if not RegQueryStringValue(HKLM, OldUninstallKey, 'InstallLocation', Dir) then
+    Dir := ExpandConstant('{autopf}\{#MyAppName}');
+  if not FileExists(AddBackslash(Dir) + '{#MyAppExe}') then Exit;
+  Result := EndProgramsIn(Dir, HasSetupSwitch('/FORCECLOSEAPPLICATIONS'));
+  if not Result then
+    SuppressibleMsgBox('Close Opsis News Crawler completely before updating. No program files were replaced.' + #13#10 +
+      'Κλείστε πλήρως τον Crawler πριν την αναβάθμιση. Δεν αντικαταστάθηκαν αρχεία.', mbError, MB_OK, IDOK);
 end;
 
 // Returns '' when the per-user copy is gone, otherwise the reason.
@@ -608,7 +753,7 @@ var
   ResultCode, Attempt: Integer;
 begin
   Result := '';
-  HadAutostart := RunValueIsMine(HKCU, '{#MyAppName}') or RunValueIsMine(HKLM, '{#MyAppName}');
+  HadAutostart := HadAutostart or CaptureAutostart();
   Dir := '';
   Uninstaller := '';
   if RegQueryStringValue(HKCU, OldUninstallKey, 'InstallLocation', Dir) then Dir := RemoveBackslashUnlessRoot(Dir);
@@ -621,7 +766,11 @@ begin
   Programs := Lowercase(ExpandConstant('{localappdata}\Programs\'));
   if (Dir <> '') and (Pos(Programs, Lowercase(AddBackslash(Dir))) = 1) then
   begin
-    EndProgramsIn(Dir);
+    if not EndProgramsIn(Dir, HasSetupSwitch('/FORCECLOSEAPPLICATIONS')) then
+    begin
+      Result := Dir;
+      Exit;
+    end;
     // the uninstaller must lie in that folder: a value of the registry is never run from anywhere else
     if (Uninstaller <> '') and FileExists(Uninstaller) and (Pos(Lowercase(AddBackslash(Dir)), Lowercase(Uninstaller)) = 1) then
     begin
@@ -871,6 +1020,14 @@ begin
     Result := Result + #13#10 + 'No plugin files were replaced. The standalone mode remains available.';
     Exit;
   end;
+  // Check the actual chosen installation folder too (including custom locations).
+  if IsSeparate() and HasSetupSwitch('/CLOSEAPPLICATIONS') and
+     FileExists(AddBackslash(WizardDirValue) + '{#MyAppExe}') then
+    if not EndProgramsIn(WizardDirValue, HasSetupSwitch('/FORCECLOSEAPPLICATIONS')) then
+    begin
+      Result := 'Close the running Crawler before updating. No files were replaced.';
+      Exit;
+    end;
   // Run the rollback snapshot only after ABI/UI6/Chronikologio checks succeeded.
   // A failure aborts setup before any Crawler files are replaced.
   Result := PrepareP0Rollback();
@@ -904,7 +1061,11 @@ begin
     // (a config.json exists) never overwrites the user's language and bar, it only carries the "start with Windows" wish over.
     Dir := ExpandConstant('{userappdata}\OpsisNewsCrawler');
     ForceDirectories(Dir);
-    Wish := IsSeparate() and (WizardIsTaskSelected('startup') or (WizardSilent and HadAutostart));
+    Wish := IsSeparate() and (WizardIsTaskSelected('startup') or
+      (WizardSilent and (HadAutostart or HasSetupSwitch('/TASKS=startup'))));
+    Log('Startup handoff: standalone=' + IntToStr(Ord(IsSeparate())) +
+      ', selected=' + IntToStr(Ord(WizardIsTaskSelected('startup'))) +
+      ', previous=' + IntToStr(Ord(HadAutostart)) + ', requested=' + IntToStr(Ord(Wish)));
     Json := '';
     if not FileExists(Dir + '\config.json') then
     begin
@@ -914,7 +1075,14 @@ begin
     end
     else if Wish then
       Json := '{"StartWithWindows":true}';
-    if Json <> '' then SaveStringToFile(Dir + '\first-run.json', Json, False);
+    if Json <> '' then
+    begin
+      if SaveStringToFile(Dir + '\first-run.json', Json, False) then
+        Log('Startup handoff: wrote first-run.json')
+      else
+        Log('Startup handoff: ERROR writing first-run.json');
+    end
+    else if FileExists(Dir + '\config.json') then DeleteFile(Dir + '\first-run.json');
   end;
 end;
 

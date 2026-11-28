@@ -378,6 +378,7 @@ internal sealed class TickerCanvas : Control
         if (showIcons == value) return;
         showIcons = value;
         BuildLayout();
+        if (showIcons) RequestIcons();
         Invalidate();
     }
 
@@ -388,7 +389,19 @@ internal sealed class TickerCanvas : Control
         keyboardIndex = -1;
         AccessibleDescription = string.Join(". ", items.Take(8).Select(x => x.Title));
         BuildLayout();
+        if (showIcons) RequestIcons();
+        Invalidate();
+    }
 
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        if (!IsDisposed && Visible && showIcons) RequestIcons();
+    }
+
+    private void RequestIcons()
+    {
+        if (IsDisposed || !Visible || !IsHandleCreated || !showIcons) return;
         foreach (var host in entries.Where(e => e.Item.Kind == NewsItemKind.News).Select(e => e.Host).Where(h => h.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             FaviconCache.Request(host, () =>
@@ -396,7 +409,6 @@ internal sealed class TickerCanvas : Control
                 if (IsHandleCreated && !IsDisposed) BeginInvoke(new Action(() => Invalidate()));
             });
         }
-        Invalidate();
     }
 
     private int keyboardIndex = -1;
@@ -942,12 +954,7 @@ internal sealed class TickerCanvas : Control
             HazardIcons.Draw(g, rect, kind, level);
             return;
         }
-        var icon = entry.Host.Length > 0 ? FaviconCache.TryGetFor(entry.Host, darkSurface) : null;
-        if (icon is not null)
-        {
-            g.DrawImage(icon, rect);
-            return;
-        }
+        if (entry.Host.Length > 0 && FaviconCache.TryDraw(g, entry.Host, darkSurface, rect)) return;
 
         var name = entry.Item.Source;
         var hash = 0;
@@ -982,6 +989,7 @@ internal sealed class TickerCanvas : Control
         lock (FadeRamps)
         {
             if (FadeRamps.TryGetValue(width, out var ramp)) return ramp;
+            if (FadeRamps.Count >= 64) FadeRamps.Clear();
             ramp = new float[width];
             for (var x = 0; x < width; x++) { var t = (x + 0.5f) / width; ramp[x] = t * t; }
             return FadeRamps[width] = ramp;
@@ -1035,6 +1043,8 @@ internal sealed class TickerCanvas : Control
     {
         if (disposing)
         {
+            lookTimer.Stop();
+            lookTimer.Dispose();
             titleFont.Dispose();
             sourceFont.Dispose();
             badgeFont.Dispose();

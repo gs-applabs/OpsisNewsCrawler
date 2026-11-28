@@ -92,8 +92,7 @@ internal static class Program
             ApplicationConfiguration.Initialize();
             var cfgAu = Array.IndexOf(args, "--config");
             using var auHost = new TickerHost(cfgAu >= 0 && cfgAu + 1 < args.Length ? args[cfgAu + 1] : null);
-            Environment.ExitCode = SettingsAudit.Run(auHost, args[auAt + 1]) ? 0 : 1;   // CI fails on a finding
-            return 0;
+            return SettingsAudit.Run(auHost, args[auAt + 1]) ? 0 : 1;
         }
         if (Array.IndexOf(args, "--make-brand-art") is >= 0 and var baAt && baAt + 1 < args.Length)
         {
@@ -151,16 +150,14 @@ internal static class Program
             ApplicationConfiguration.Initialize();
             var cfgSc = Array.IndexOf(args, "--config");
             using var scHost = new TickerHost(cfgSc >= 0 && cfgSc + 1 < args.Length ? args[cfgSc + 1] : null);
-            Environment.ExitCode = ScrollAudit.Run(scHost, args[scAt + 1]) ? 0 : 1;
-            return 0;
+            return ScrollAudit.Run(scHost, args[scAt + 1]) ? 0 : 1;
         }
         if (Array.IndexOf(args, "--audit-layout") is >= 0 and var lyAt && lyAt + 1 < args.Length)
         {
             ApplicationConfiguration.Initialize();
             var cfgLy = Array.IndexOf(args, "--config");
             using var lyHost = new TickerHost(cfgLy >= 0 && cfgLy + 1 < args.Length ? args[cfgLy + 1] : null);
-            Environment.ExitCode = LayoutAudit.Run(lyHost, args[lyAt + 1]) ? 0 : 1;
-            return 0;
+            return LayoutAudit.Run(lyHost, args[lyAt + 1]) ? 0 : 1;
         }
         if (Array.IndexOf(args, "--snapshot-portfolio") is >= 0 and var pfAt && pfAt + 1 < args.Length)
         {
@@ -215,7 +212,10 @@ internal static class Program
 
         var configAt = Array.IndexOf(args, "--config");
         using var host = new TickerHost(configAt >= 0 && configAt + 1 < args.Length ? args[configAt + 1] : null);
-        var settings = new SettingsForm(host);
+        var settings = new Lazy<SettingsForm>(() => new SettingsForm(host));
+        using var context = new ApplicationContext();
+        host.Window.FormClosed += (_, _) => context.ExitThread();
+        var exiting = false;
 
         using var tray = new NotifyIcon
         {
@@ -229,12 +229,17 @@ internal static class Program
         var staticIcon = AppIcon.Get();
         var liveDirty = 1;
         LiveIconState.Changed += () => Interlocked.Exchange(ref liveDirty, 1);
-        var trayTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+        Icon? liveTrayIcon = null;
+        using var trayTimer = new System.Windows.Forms.Timer { Interval = 1000 };
         trayTimer.Tick += (_, _) =>
         {
             if (Interlocked.Exchange(ref liveDirty, 0) != 1) return;
-            var frames = AppIconArt.BuildTrayFrames(Math.Max(16, SystemInformation.SmallIconSize.Width));
-            tray.Icon = frames.Length > 0 ? frames[0] : staticIcon;
+            using var bitmap = AppIconArt.Render(Math.Max(16, SystemInformation.SmallIconSize.Width), 0);
+            var next = AppIconArt.ToIcon(bitmap);
+            var previous = liveTrayIcon;
+            tray.Icon = next;
+            liveTrayIcon = next;
+            previous?.Dispose();
             var tip = LiveIconState.Tip;
             tray.Text = tip.Length == 0 ? "Opsis News Crawler" : ("Opsis News Crawler\n" + tip).Substring(0, Math.Min(("Opsis News Crawler\n" + tip).Length, 127));
         };
@@ -257,7 +262,7 @@ internal static class Program
         menu.Items.Add(snoozeMenu);
         var menuPortfolio = menu.Items.Add(Loc.T("tray.portfolio"), null, (_, _) => host.ShowPortfolio());
         var menuAnalysis = menu.Items.Add(Loc.T("tray.analysis"), null, (_, _) => host.ShowAnalysis());
-        var menuSettings = menu.Items.Add(Loc.T("tray.settings"), null, (_, _) => settings.ShowSettings());
+        var menuSettings = menu.Items.Add(Loc.T("tray.settings"), null, (_, _) => settings.Value.ShowSettings());
         var menuRefresh = menu.Items.Add(Loc.T("tray.refresh"), null, (_, _) => host.Refresh());
         var menuWelcome = menu.Items.Add(Loc.T("tray.welcome"), null, (_, _) => host.ShowWelcome());
         var menuSuite = menu.Items.Add(Loc.T("tray.suite"), null, (_, _) => host.ShowSuite());
@@ -266,12 +271,16 @@ internal static class Program
         void UpdatePauseItem() => menuPause.Text = Loc.T(host.Paused ? "tray.resume" : "tray.pause");
         host.PausedChanged += UpdatePauseItem;
         menu.Items.Add(new ToolStripSeparator());
-        var menuExit = menu.Items.Add(Loc.T("tray.exit"), null, (_, _) =>
+        void RequestExit()
         {
+            if (exiting) return;
+            exiting = true;
+            if (settings.IsValueCreated) settings.Value.FlushPendingChanges();
             host.Stop();
             tray.Visible = false;
-            Application.Exit();
-        });
+            context.ExitThread();
+        }
+        var menuExit = menu.Items.Add(Loc.T("tray.exit"), null, (_, _) => RequestExit());
         tray.ContextMenuStrip = menu;
         // A new version: one notification per version; a click on it opens the settings (Information > Updates).
         host.UpdateAnnounce += info =>
@@ -281,14 +290,9 @@ internal static class Program
             tray.BalloonTipIcon = ToolTipIcon.Info;
             tray.ShowBalloonTip(10000);
         };
-        tray.BalloonTipClicked += (_, _) => settings.ShowSettings();
+        tray.BalloonTipClicked += (_, _) => settings.Value.ShowSettings();
         // After an update setup was handed over, the program ends so the installer can replace its files and open it again.
-        host.ExitRequested += () =>
-        {
-            host.Stop();
-            tray.Visible = false;
-            Application.Exit();
-        };
+        host.ExitRequested += RequestExit;
         Loc.Changed += () =>
         {
             menuBars.Text = Loc.T("chk.barsEnabled");
@@ -305,14 +309,14 @@ internal static class Program
             cancelSnooze.Text = Loc.T("pk.cancel.snooze");
             menuExit.Text = Loc.T("tray.exit");
         };
-        tray.DoubleClick += (_, _) => settings.ShowSettings();
+        tray.DoubleClick += (_, _) => settings.Value.ShowSettings();
 
-        host.SettingsRequested += settings.ShowSettings; // right-click on the strip
+        host.SettingsRequested += () => settings.Value.ShowSettings(); // right-click on the strip
 
         // A closing splash shrinks into the header icon of the settings window when that is open, otherwise into the tray area.
         host.MinimiseTargetProvider = () =>
         {
-            var header = settings.HeaderIconScreenRect();
+            var header = settings.IsValueCreated ? settings.Value.HeaderIconScreenRect() : Rectangle.Empty;
             return header.IsEmpty ? MinimiseTarget.Tray() : header;
         };
         InstallChecks.Run(host);
@@ -366,18 +370,38 @@ internal static class Program
         if (host.Config.IsFirstRun && !args.Contains("--settings"))
         {
             // First start ever: show the settings once so the owner can pick language, content and position.
-            settings.SelectTab(0);
-            settings.ShowSettings();
+            settings.Value.SelectTab(0);
+            settings.Value.ShowSettings();
         }
 
         if (args.Contains("--settings"))
         {
             var tabArg = Array.IndexOf(args, "--tab");
-            if (tabArg >= 0 && tabArg + 1 < args.Length && int.TryParse(args[tabArg + 1], out var tab)) settings.SelectTab(tab);
-            settings.ShowSettings(); // handy for testing and shortcuts
+            if (tabArg >= 0 && tabArg + 1 < args.Length && int.TryParse(args[tabArg + 1], out var tab)) settings.Value.SelectTab(tab);
+            settings.Value.ShowSettings(); // handy for testing and shortcuts
         }
 
-        Application.Run(host.Window);
+        ResourceProbe? probe = null;
+        var probeAt = Array.IndexOf(args, "--resource-soak");
+        if (probeAt >= 0 && probeAt + 2 < args.Length && configArgAt >= 0 &&
+            Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true" &&
+            int.TryParse(args[probeAt + 2], out var seconds))
+            probe = new ResourceProbe(host, args[probeAt + 1], seconds);
+        // No MainForm.Show: disabled bars stay hidden.
+        using var shutdownListener = InstallerShutdownListener.TryCreate(
+            SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext(), RequestExit);
+        try { Application.Run(context); }
+        finally
+        {
+            if (settings.IsValueCreated) settings.Value.FlushPendingChanges();
+            host.Stop();
+            tray.Visible = false;
+            probe?.Dispose();
+            if (settings.IsValueCreated) settings.Value.Dispose();
+        }
+        trayTimer.Stop();
+        tray.Icon = staticIcon;
+        liveTrayIcon?.Dispose();
         return 0;
     }
 }

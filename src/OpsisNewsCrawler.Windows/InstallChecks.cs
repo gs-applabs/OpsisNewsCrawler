@@ -15,7 +15,18 @@ public static class InstallChecks
         try
         {
             // The setup writes the user's wish "Start with Windows" into first-run.json; the per-user Run value is written here, in the user's own context.
-            if (host.Config.StartWithWindowsRequested) StartupRegistration.Set(true);
+            if (host.Config.StartWithWindowsRequested)
+            {
+                StartupRegistration.Set(true);
+                var actual = WinRegistry.Current.GetString(UserHive.CurrentUser, InstallMigration.RunKey, InstallMigration.RunValue);
+                var expected = Environment.ProcessPath;
+                if (!string.IsNullOrEmpty(expected) && string.Equals(actual, "\"" + expected + "\"", StringComparison.OrdinalIgnoreCase))
+                {
+                    host.AcknowledgeStartupRegistration();
+                    Log.Write("Startup handoff: registered and acknowledged.");
+                }
+                else Log.Write("Startup handoff: registration not confirmed; retained for retry.");
+            }
             if (UpdateResultLog.TakeUnseenFailure() is { } failed)
                 MessageBox.Show(Loc.T("upd.lastFailed", failed.Version, $"{failed.Message} ({failed.ExitCode})", AboutTexts.Version), Loc.T("upd.confirmTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
             else if (UpdateResultLog.Last() is { Failed: false })

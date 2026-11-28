@@ -29,10 +29,28 @@ internal sealed class FlatNav : Control
     private int hover = -1;        // entry index under the pointer
     private int scrollY;
     private string filter = "";
+    private readonly HashSet<int> matchingLeaves = new();
 
     public event EventHandler? SelectedIndexChanged;
 
     private Control? badge;
+    private Control? footer;
+    private bool footerShown;
+    private int preferredFooterHeight;
+    public void SetFooter(Control value)
+    {
+        footer = value;
+        preferredFooterHeight = value.Height;
+        Controls.Add(value);
+        LayoutPages();
+    }
+
+    public void ShowFooter(bool visible)
+    {
+        if (footerShown == visible) return;
+        footerShown = visible;
+        LayoutPages();
+    }
 
     /// <summary>A small control (the animated program icon) shown in the title band of the content pane.</summary>
     public Control? Badge
@@ -53,12 +71,15 @@ internal sealed class FlatNav : Control
         search = new TextBox
         {
             Size = new Size(RailWidth - 28, 27), BorderStyle = BorderStyle.FixedSingle,
-            PlaceholderText = Loc.T("settings.search"), Font = new Font("Segoe UI", 9f), Tag = "surface"
+            PlaceholderText = Loc.T("settings.search"), AccessibleName = Loc.T("settings.search"), Font = new Font("Segoe UI", 9f), Tag = "surface"
         };
         search.TextChanged += (_, _) =>
         {
             filter = search.Text.Trim();
             scrollY = 0;
+            matchingLeaves.Clear();
+            if (filter.Length > 0)
+                foreach (var entry in entries.Where(e => e.Page is not null && MatchesText(e))) matchingLeaves.Add(entry.Leaf);
             var firstMatch = entries.FirstOrDefault(e => e.Page is not null && Matches(e));
             if (selected >= 0 && !Matches(entries.First(e => e.Leaf == selected)) && firstMatch is not null) SelectedIndex = firstMatch.Leaf;
             Invalidate();
@@ -85,6 +106,7 @@ internal sealed class FlatNav : Control
             selected = value;
             for (var i = 0; i < pages.Count; i++) pages[i].Visible = i == value;
             LayoutPages();
+            RevealSelection();
             Invalidate();
             SelectedIndexChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -106,7 +128,33 @@ internal sealed class FlatNav : Control
         return leaf;
     }
 
-    private bool Matches(Entry e) => filter.Length == 0 || e.Title.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
+    private static IEnumerable<string> SearchLabels(Control root)
+    {
+        foreach (Control child in root.Controls)
+        {
+            // Search labels and action captions, not input values or live news.
+            if (child is Label or FlatButton or FlatCheckBox or FlatCard)
+                if (!string.IsNullOrWhiteSpace(child.Text)) yield return child.Text;
+            if (!string.IsNullOrWhiteSpace(child.AccessibleName)) yield return child.AccessibleName;
+            foreach (var text in SearchLabels(child)) yield return text;
+        }
+    }
+
+    private static bool ContainsText(string value, string term) =>
+        System.Globalization.CultureInfo.CurrentCulture.CompareInfo.IndexOf(value, term,
+            System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace) >= 0;
+
+    private bool Matches(Entry e) => filter.Length == 0 || matchingLeaves.Contains(e.Leaf);
+
+    internal void SearchFor(string query) => search.Text = query;
+    internal bool SearchMatches(int leaf) => leaf >= 0 && leaf < pages.Count && (filter.Length == 0 || matchingLeaves.Contains(leaf));
+
+    private bool MatchesText(Entry e)
+    {
+        if (e.Page is null) return false;
+        var haystack = e.Title + " " + string.Join(" ", SearchLabels(e.Page));
+        return filter.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(term => ContainsText(haystack, term));
+    }
 
     private IEnumerable<int> VisibleEntries()
     {
@@ -137,10 +185,26 @@ internal sealed class FlatNav : Control
         }
     }
 
+    private void RevealSelection()
+    {
+        Measure();
+        var hit = hits.FirstOrDefault(h => entries[h.Entry].Leaf == selected && entries[h.Entry].Page is not null);
+        if (hit.Rect.IsEmpty) return;
+        if (hit.Rect.Top < ListTop) scrollY -= ListTop - hit.Rect.Top;
+        else if (hit.Rect.Bottom > Height - 10) scrollY += hit.Rect.Bottom - (Height - 10);
+        Measure();
+    }
+
     private void LayoutPages()
     {
         search.Location = new Point(RailLeft + 14, SearchTop);
-        foreach (var p in pages) p.SetBounds(ContentLeft, TitleHeight, ContentWidth, Math.Max(0, Height - TitleHeight));
+        var footerHeight = footerShown && footer is not null ? Math.Min(preferredFooterHeight, Math.Max(0, Height - TitleHeight - 100)) : 0;
+        foreach (var p in pages) p.SetBounds(ContentLeft, TitleHeight, ContentWidth, Math.Max(0, Height - TitleHeight - footerHeight));
+        if (footer is not null)
+        {
+            footer.Visible = footerHeight > 0;
+            if (footerHeight > 0) footer.SetBounds(ContentLeft, Height - footerHeight, ContentWidth, footerHeight);
+        }
         if (badge is not null)
             badge.Location = new Point(Rtl ? ContentLeft + 22 : ContentLeft + ContentWidth - badge.Width - 22, Math.Max(2, (TitleHeight - badge.Height) / 2 - 2));
     }
@@ -172,6 +236,7 @@ internal sealed class FlatNav : Control
     {
         base.OnMouseMove(e);
         var h = -1;
+        if (e.Y < ListTop) return;
         foreach (var (rect, entry) in hits) if (entries[entry].Page is not null && rect.Contains(e.Location)) h = entry;
         if (h == hover) return;
         hover = h;
@@ -190,7 +255,7 @@ internal sealed class FlatNav : Control
     protected override void OnMouseUp(MouseEventArgs e)
     {
         base.OnMouseUp(e);
-        if (e.Button != MouseButtons.Left) return;
+        if (e.Button != MouseButtons.Left || e.Y < ListTop) return;
         foreach (var (rect, entry) in hits)
             if (entries[entry].Page is { } && rect.Contains(e.Location)) { SelectedIndex = entries[entry].Leaf; return; }
     }
@@ -199,6 +264,21 @@ internal sealed class FlatNav : Control
     {
         if (keyData == (Keys.Control | Keys.F)) { search.Focus(); search.SelectAll(); return true; }
         if (keyData == Keys.Escape && search.Focused && search.TextLength > 0) { search.Clear(); return true; }
+        if (search.Focused && keyData is Keys.Down or Keys.Up)
+        {
+            var candidates = entries.Where(e => e.Page is not null && Matches(e)).Select(e => e.Leaf).ToList();
+            if (candidates.Count > 0)
+            {
+                var index = candidates.IndexOf(selected);
+                SelectedIndex = candidates[Math.Clamp(index < 0 ? 0 : index + (keyData == Keys.Down ? 1 : -1), 0, candidates.Count - 1)];
+            }
+            return true;
+        }
+        if (search.Focused && keyData == Keys.Enter)
+        {
+            if (selected >= 0 && SearchMatches(selected)) pages[selected].SelectNextControl(null, true, true, true, false);
+            return true;
+        }
         return base.ProcessCmdKey(ref msg, keyData);
     }
 
@@ -261,7 +341,8 @@ internal sealed class FlatNav : Control
         // the title of the page that is shown
         if (selected >= 0)
         {
-            var title = new Rectangle(ContentLeft + 22, 10, Math.Max(0, ContentWidth - 44), 34);
+            var reserve = badge is null ? 0 : badge.Width + 12;
+            var title = new Rectangle(ContentLeft + 22 + (Rtl ? reserve : 0), 10, Math.Max(0, ContentWidth - 44 - reserve), 34);
             TextRenderer.DrawText(g, SelectedTitle, TitleFont, title, Theme.Text,
                 rtlFlag | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
             using var line = new Pen(Theme.Border);

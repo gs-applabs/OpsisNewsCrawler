@@ -18,16 +18,18 @@ public sealed partial class TickerHost
     /// </summary>
     private async Task CheckWeatherAlertsAsync()
     {
-        if (disposed || checkingAlerts || !Config.WeatherAlertsEnabled || !Config.BreakingEnabled) return;
+        if (disposed || !started || checkingAlerts || !NeedsWeatherAlerts) return;
         checkingAlerts = true;
+        var epoch = startEpoch;
+        var token = DemandToken("weather-alerts");
         try
         {
             var city = Config.ResolveAlertCity();
-            var found = await alertService.FetchAsync(city, lifetimeToken);
-            if (found is null || disposed) return;
+            var found = await alertService.FetchAsync(city, token);
+            if (found is null || disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !NeedsWeatherAlerts) return;
             void Apply()
             {
-                if (disposed) return;
+                if (disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !NeedsWeatherAlerts) return;
                 var keys = found.Select(a => city.Id + ":" + a.Kind).ToHashSet();
                 var fresh = found.Where(a => !weatherAlertKeys.Contains(city.Id + ":" + a.Kind)).ToList();
                 weatherAlertKeys = keys;
@@ -103,6 +105,8 @@ public sealed partial class TickerHost
         var provider = HostWeatherProvider;
         if (!HostedByOpsis || provider is null) return Array.Empty<WeatherReading>();
         var readings = new List<WeatherReading>(ids.Count);
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budget.CancelAfter(TimeSpan.FromSeconds(12));
         foreach (var cityId in ids.Take(12))
         {
             ct.ThrowIfCancellationRequested();
@@ -110,11 +114,12 @@ public sealed partial class TickerHost
             if (city is null) continue;
             try
             {
-                var json = await provider(city.Lat, city.Lon).WaitAsync(TimeSpan.FromSeconds(12), ct);
+                var json = await provider(city.Lat, city.Lon).WaitAsync(budget.Token);
                 var parsed = HostWeatherPayload.Parse(city.Id, json, DateTimeOffset.UtcNow);
                 if (parsed is not null) readings.Add(parsed);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (OperationCanceledException) when (budget.IsCancellationRequested) { break; }
             catch (Exception ex) { Log.Write("Opsis shared weather unavailable: " + ex.GetType().Name); }
         }
         return readings;
@@ -128,10 +133,10 @@ public sealed partial class TickerHost
     private TickerWindow? miniWeather;
     private readonly TickerState miniState = new();
 
-    private bool NeedsWeatherForBars => Needs(SlotKind.Weather);
+    private bool NeedsWeatherForBars => Needs(SlotKind.Weather) || weatherWidgetUsers > 0;
 
     /// <summary>Weather is fetched when a bar shows it, and for the first city when the animated icon shows it.</summary>
-    private bool NeedsWeather => NeedsWeatherForBars || Config.WeatherInIcon;
+    private bool NeedsWeather => NeedsWeatherForBars || (BarsOn && Config.WeatherInIcon);
 
     private IReadOnlyList<NewsItem> WeatherForDisplay()
     {
@@ -144,21 +149,27 @@ public sealed partial class TickerHost
 
     private async Task RefreshWeatherAsync()
     {
-        if (disposed || !started || !BarsOn || !NeedsWeather || refreshingWeather) return;
+        if (disposed || !started || !NeedsWeather || refreshingWeather) return;
         var epoch = startEpoch;
-        var token = SessionToken;
+        var token = DemandToken("weather");
         refreshingWeather = true;
         try
         {
             var ids = Config.WeatherCities.Distinct().ToList();
             if (!NeedsWeatherForBars) ids = ids.Take(1).ToList();   // only the icon wants it
             var shared = await TryHostWeatherAsync(ids, token);
-            var fromHost = shared.Count > 0;
-            var readings = fromHost ? shared : await weather.FetchAsync(ids, token);
-            var failed = !fromHost && weather.LastFailed;
+            var missing = HostWeatherPayload.MissingCities(ids, shared);
+            var fallback = missing.Length == 0 ? Array.Empty<WeatherReading>() : await weather.FetchAsync(missing, token);
+            token.ThrowIfCancellationRequested();
+            var freshFallback = weather.LastFailed && missing.Length > 0
+                ? Array.Empty<WeatherReading>()
+                : fallback.Where(r => missing.Contains(r.CityId, StringComparer.OrdinalIgnoreCase)).ToArray();
+            var fresh = HostWeatherPayload.Merge(ids, shared, freshFallback, Array.Empty<WeatherReading>());
+            var failed = HostWeatherPayload.MissingCities(ids, fresh).Length > 0;
+            var readings = HostWeatherPayload.Merge(ids, fresh, fallback, weatherReadings);
             void Apply()
             {
-                if (disposed || !started || epoch != startEpoch || !BarsOn) return;
+                if (disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !NeedsWeather) return;
                 hasWeather = true;
                 weatherFailed = failed;
                 if (readings.Count > 0)
@@ -167,7 +178,7 @@ public sealed partial class TickerHost
                     if (!failed)
                     {
                         weatherDataAt = DateTimeOffset.Now;
-                        if (!fromHost) DataCache.Save("weather", readings.ToList()); // Opsis already caches its own weather
+                        if (shared.Count == 0) DataCache.Save("weather", readings.ToList()); // Opsis already caches its own weather
                     }
                 }
                 foreach (var item in WeatherForDisplay().Where(x => x.Kind == NewsItemKind.Weather).Take(15))
@@ -177,8 +188,7 @@ public sealed partial class TickerHost
                 UpdateMiniWeather();
                 UpdateLiveIcon();
             }
-            if (!Window.IsHandleCreated) return;
-            if (Window.InvokeRequired) Window.BeginInvoke(new Action(Apply)); else Apply();
+            if (Window.IsHandleCreated && Window.InvokeRequired) Window.BeginInvoke(new Action(Apply)); else Apply();
             if (started && epoch == startEpoch && (readings.Count == 0 || failed)) _ = RetryWeatherLater();
         }
         catch (OperationCanceledException)
@@ -200,18 +210,17 @@ public sealed partial class TickerHost
         }
     }
 
-    private async Task RetryWeatherLater()
+    private readonly DeferredDemand weatherRetry = new();
+    private Task RetryWeatherLater()
     {
-        var epoch = startEpoch;
-        var token = SessionToken;
-        try
+        if (!NeedsWeather || disposed || !started || !activeServices.TryGetValue("weather", out var lease))
+            return Task.CompletedTask;
+        var token = lease.Token;
+        return weatherRetry.RunAsync(token, TimeSpan.FromSeconds(60), () =>
         {
-            await Task.Delay(TimeSpan.FromSeconds(60), token);
-            if (!disposed && started && epoch == startEpoch && BarsOn) _ = RefreshWeatherAsync();
-        }
-        catch (OperationCanceledException)
-        {
-        }
+            if (!disposed && started && NeedsWeather && !token.IsCancellationRequested)
+                RequestRefresh("weather", RefreshWeatherAsync);
+        });
     }
 
     /// <summary>Where the small weather bar is: the saved place, or the middle of the primary desktop.</summary>

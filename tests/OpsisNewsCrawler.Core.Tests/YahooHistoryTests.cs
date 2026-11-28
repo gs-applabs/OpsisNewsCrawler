@@ -179,7 +179,7 @@ public class UpdateLogicTests
     }
 
     [Fact]
-    public void NewConfig_ChecksForUpdates_AndOldSettingsGetTheNewDefaultOnce()
+    public void NewConfig_ChecksForUpdates_ButMigrationPreservesExplicitOptOut()
     {
         Assert.True(new AppConfig().CheckForUpdates);
         var path = Path.Combine(Path.GetTempPath(), "cfg-" + Guid.NewGuid().ToString("N") + ".json");
@@ -187,11 +187,12 @@ public class UpdateLogicTests
         {
             File.WriteAllText(path, "{\"CheckForUpdates\": false}");
             var old = AppConfig.Load(path);
-            Assert.True(old.CheckForUpdates);
+            Assert.False(old.CheckForUpdates);
             Assert.Equal(1, old.UpdateLogicVersion);
-            old.CheckForUpdates = false;   // the user switches it off afterwards
             old.Save(path);
             Assert.False(AppConfig.Load(path).CheckForUpdates);
+            File.WriteAllText(path, "{}");
+            Assert.True(AppConfig.Load(path).CheckForUpdates); // omitted key still gets the normal default
         }
         finally { File.Delete(path); }
     }
@@ -199,6 +200,12 @@ public class UpdateLogicTests
 
 public sealed class YahooCatalogueTests
 {
+    [Fact]
+    public async Task ManualSearchOptOutNeverStartsNetwork()
+    {
+        Assert.Empty(await YahooSearch.SearchAsync("TEST", CancellationToken.None, explicitlyEnabled: false));
+    }
+
     [Fact]
     public void CatalogueSymbolsAreUniqueAndNamed()
     {

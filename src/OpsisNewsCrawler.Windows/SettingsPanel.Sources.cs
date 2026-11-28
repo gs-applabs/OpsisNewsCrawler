@@ -40,6 +40,7 @@ public sealed partial class SettingsPanel
         var testFeed = new FlatButton { Text = Loc.T("pk.test") };
         testFeed.Click += (_, _) => TestFeeds(selectedOnly: true);
         var testAll = new FlatButton { Text = Loc.T("pk.test.all") };
+        foreach (var action in new Control[] { testFeed, testAll, exportOpml }) transientControls.Add(action);
         testAll.Click += (_, _) => TestFeeds(selectedOnly: false);
         var moveUp = new FlatButton { Text = "▲" };
         moveUp.Click += (_, _) => MoveFeed(-1);
@@ -66,7 +67,9 @@ public sealed partial class SettingsPanel
         right.Controls.Add(new Label { Text = L("lbl.addSite"), AutoSize = true, MaximumSize = new Size(520, 0), Margin = new Padding(0, 10, 0, 4) });
         var addRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
         siteBox = new FlatText { Width = 300 };
+        transientControls.Add(siteBox);
         var addSite = new FlatButton { Text = L("btn.addSite") };
+        transientControls.Add(addSite);
         addSite.Click += (_, _) => AddFromSite();
         addRow.Controls.Add(siteBox);
         addRow.Controls.Add(addSite);
@@ -77,6 +80,7 @@ public sealed partial class SettingsPanel
         right.Controls.Add(new Label { Text = L("lbl.presets"), AutoSize = true, Margin = new Padding(0, 10, 0, 4) });
         var presetRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
         presets = new FlatComboBox { Width = 300 };
+        transientControls.Add(presets);
         presets.SetItems(AppConfig.PresetFeeds.Select(p => p.Name), -1);
         var addPreset = new FlatButton { Text = L("btn.addPreset") };
         addPreset.Click += (_, _) => AddPreset();
@@ -93,6 +97,8 @@ public sealed partial class SettingsPanel
         worldFeedCountry = new FlatComboBox { Width = 270 };
         worldFeedRow.Controls.Add(worldFeedContinent);
         worldFeedRow.Controls.Add(worldFeedCountry);
+        transientControls.Add(worldFeedContinent);
+        transientControls.Add(worldFeedCountry);
         right.Controls.Add(worldFeedRow);
         worldFeedList = new FlatList { Width = 520, Height = 30 * 4 + 4 };
         right.Controls.Add(worldFeedList);

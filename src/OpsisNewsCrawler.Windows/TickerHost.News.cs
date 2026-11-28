@@ -9,21 +9,24 @@ public sealed partial class TickerHost
 {
     private async Task RefreshExtraNewsAsync()
     {
-        if (disposed || refreshingExtra) return;
+        if (disposed || !started || !NeedsNews || refreshingExtra) return;
+        PruneExtraCategories();
         var wanted = ExtraNewsCategories();
         if (wanted.Count == 0) return;
         refreshingExtra = true;
+        var epoch = startEpoch;
+        var token = DemandToken("news");
         try
         {
             foreach (var id in wanted)
             {
-                if (disposed || cts.IsCancellationRequested) return;
-                var items = await extraNewsProvider.FetchAsync(Config.GetFeeds(id), Config.MaxItemsPerFeed, lifetimeToken, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst);
-                var failedFeeds = extraNewsProvider.LastFailedFeeds.ToList();
+                if (disposed || !started || epoch != startEpoch || token.IsCancellationRequested) return;
+                var items = await news.FetchAsync(Config.GetFeeds(id), Config.MaxItemsPerFeed, token, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst, TimeSpan.FromSeconds(30));
+                var failedFeeds = news.LastFailedFeeds.ToList();
                 var category = id;
                 void Apply()
                 {
-                    if (disposed) return;
+                    if (disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !ExtraNewsCategories().Contains(category, StringComparer.OrdinalIgnoreCase)) return;
                     if (items.Count > 0)
                     {
                         extraNews[category] = items.ToList();
@@ -60,8 +63,9 @@ public sealed partial class TickerHost
 
     private async Task RefreshAsync(bool force)
     {
-        if (disposed) return;
+        if (disposed || !started) return;
         if (!NeedsNews) return;
+        if (!NeedsActiveNews) { await RefreshExtraNewsAsync(); return; }
         if (refreshing)
         {
             // Remember a forced request (e.g. mode change) and run it as soon as the current one ends.
@@ -71,16 +75,19 @@ public sealed partial class TickerHost
         if (!force && State.LastNewsRefresh is { } last && DateTimeOffset.UtcNow - last < MinRefreshGap) return;
 
         refreshing = true;
+        var epoch = startEpoch;
+        var token = DemandToken("news");
         try
         {
             var category = Config.ActiveCategory;
-            var items = await news.FetchAsync(Config.GetFeeds(category), Config.MaxItemsPerFeed, lifetimeToken, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst);
+            var items = await news.FetchAsync(Config.GetFeeds(category), Config.MaxItemsPerFeed, token, Config.NewsMaxAgeHours, Config.NewsSortNewestFirst, TimeSpan.FromSeconds(30));
             var failedFeeds = news.LastFailedFeeds.ToList();
-            if (disposed || !string.Equals(category, Config.ActiveCategory, StringComparison.OrdinalIgnoreCase)) return; // the category changed meanwhile; a new refresh is running
+            if (disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !NeedsActiveNews || !string.Equals(category, Config.ActiveCategory, StringComparison.OrdinalIgnoreCase)) return; // the category changed meanwhile; a new refresh is running
 
             void Apply()
             {
-                if (disposed) return;
+                if (disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !NeedsActiveNews ||
+                    !string.Equals(category, Config.ActiveCategory, StringComparison.OrdinalIgnoreCase)) return;
                 State.MarkNewsRefresh();
                 if (items.Count > 0)
                 {
@@ -92,7 +99,7 @@ public sealed partial class TickerHost
                     DetectBreaking(allItems);
                     if (Config.ArchiveNews) Archive.Observe(allItems, DateTimeOffset.UtcNow);
                     foreach (var item in allItems.Where(i => i.Kind == NewsItemKind.News).Take(20))
-                        SuiteEventHub.Publish(new SuiteEvent(SuiteEventKind.News, "crawler", item.Url,
+                        PublishSuiteEvent(new SuiteEvent(SuiteEventKind.News, "crawler", item.Url,
                             item.Title, item.PublishedAt, item.Url, item.Summary));
                 }
                 else
@@ -105,7 +112,7 @@ public sealed partial class TickerHost
 
             if (Window.IsHandleCreated && Window.InvokeRequired) Window.Invoke(new Action(Apply));
             else Apply();
-            await RefreshExtraNewsAsync();
+            if (!token.IsCancellationRequested && epoch == startEpoch) await RefreshExtraNewsAsync();
         }
         catch (OperationCanceledException)
         {
@@ -117,10 +124,10 @@ public sealed partial class TickerHost
         finally
         {
             refreshing = false;
-            if (pendingForced && !disposed)
+            if (pendingForced && !disposed && started)
             {
                 pendingForced = false;
-                _ = RefreshAsync(force: true);
+                RequestRefresh("news", () => RefreshAsync(force: true), latest: true);
             }
         }
     }

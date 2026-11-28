@@ -21,9 +21,13 @@ public sealed class RedirectGuardHandler : DelegatingHandler
         var origin = request.RequestUri ?? throw new InvalidOperationException("request without an address");
         var originIsPublic = NetGuard.IsPublicHost(origin.Host);
         var hops = 0;
+        var original = request;
+        try
+        {
         while (true)
         {
             var response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            response.RequestMessage ??= request;
             if (response.StatusCode is not (HttpStatusCode.MovedPermanently or HttpStatusCode.Found or HttpStatusCode.SeeOther
                     or HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect)
                 || response.Headers.Location is null)
@@ -47,11 +51,15 @@ public sealed class RedirectGuardHandler : DelegatingHandler
             foreach (var h in request.Headers)
             {
                 // Conditional headers belong to the first address only.
-                if (h.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase) && !string.Equals(current.Host, next.Host, StringComparison.OrdinalIgnoreCase)) continue;
+                if (h.Key.Equals("If-None-Match", StringComparison.OrdinalIgnoreCase) || h.Key.Equals("If-Modified-Since", StringComparison.OrdinalIgnoreCase) || h.Key.Equals("Host", StringComparison.OrdinalIgnoreCase)) continue;
+                if ((h.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase) || h.Key.Equals("Cookie", StringComparison.OrdinalIgnoreCase) || h.Key.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase)) &&
+                    !string.Equals(current.GetLeftPart(UriPartial.Authority), next.GetLeftPart(UriPartial.Authority), StringComparison.OrdinalIgnoreCase)) continue;
                 follow.Headers.TryAddWithoutValidation(h.Key, h.Value);
             }
-            request.Dispose();
+            if (!ReferenceEquals(request, original)) request.Dispose();
             request = follow;
         }
+        }
+        finally { if (!ReferenceEquals(request, original)) request.Dispose(); }
     }
 }

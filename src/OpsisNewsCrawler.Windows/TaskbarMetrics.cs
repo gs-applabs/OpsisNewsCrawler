@@ -13,8 +13,7 @@ namespace OpsisNewsCrawler.Windows;
 /// </summary>
 internal static class TaskbarMetrics
 {
-    private const int MinGap = 180;
-    private const int Pad = 6;
+    internal readonly record struct Measurement(bool Known, (int Left, int Right)? Span);
 
     private delegate bool EnumProc(IntPtr hwnd, IntPtr lParam);
     [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr lParam);
@@ -26,12 +25,12 @@ internal static class TaskbarMetrics
     [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
 
     /// <summary>Largest empty horizontal span of the taskbar in screen coordinates, or null when it cannot be determined.</summary>
-    public static (int Left, int Right)? MeasureFreeSpan()
+    public static Measurement MeasureFreeSpan()
     {
         try
         {
             var tb = Native.GetTaskbarRect();
-            if (tb.IsEmpty || tb.Width < tb.Height) return null;
+            if (tb.IsEmpty || tb.Width < tb.Height) return default;
             var tray = Native.GetTaskbarHandle();
             var trayLeft = Native.GetTrayNotifyRect() is { IsEmpty: false } notify ? notify.Left : tb.Right - 300;
 
@@ -47,30 +46,12 @@ internal static class TaskbarMetrics
             // Each source is optional: a host without WPF/accessibility assemblies must still get the others.
             try { foreach (var r in AccessibleTaskButtons(tray)) Add(r); } catch (Exception ex) when (ex is not OutOfMemoryException) { }
             try { foreach (var r in AutomationButtons(tray)) Add(r); } catch (Exception ex) when (ex is not OutOfMemoryException) { }
-            if (edges.Count == 0) return null;
-
-            edges.Sort((a, b) => a.L.CompareTo(b.L));
-
-            // Gaps: before the first button, between buttons, after the last one.
-            var best = (Left: 0, Right: 0, Width: 0);
-            void Consider(int from, int to)
-            {
-                if (to - from > best.Width) best = (from, to, to - from);
-            }
-            Consider(tb.Left, edges[0].L);
-            var reach = edges[0].R;
-            for (var i = 1; i < edges.Count; i++)
-            {
-                if (edges[i].L > reach) Consider(reach, edges[i].L);
-                reach = Math.Max(reach, edges[i].R);
-            }
-            Consider(reach, trayLeft);
-
-            return best.Width >= MinGap ? (best.Left + Pad, best.Right - Pad) : null;
+            if (edges.Count == 0) return default;
+            return new Measurement(true, OpsisNewsCrawler.Core.TaskbarMaintenance.SelectFreeSpan(tb.Left, trayLeft, edges));
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or COMException or ElementNotAvailableException)
         {
-            return null;
+            return default;
         }
     }
 

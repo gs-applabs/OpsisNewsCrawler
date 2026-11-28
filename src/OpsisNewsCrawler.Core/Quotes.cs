@@ -107,13 +107,12 @@ public sealed class QuoteStore
     private readonly string candlePath;
     private readonly string backfillPath;
     private readonly Dictionary<string, string> backfill = new(StringComparer.OrdinalIgnoreCase);
+    private bool daysDirty, candlesDirty, backfillDirty;
+    private DateTimeOffset lastSaveAttempt = DateTimeOffset.MinValue;
+    public static readonly TimeSpan SaveInterval = TimeSpan.FromMinutes(1);
 
     /// <summary>The price cache; the folder can be redirected with the environment variable OPSISNEWSCRAWLER_DATA (a test aid, e.g. for screenshots with made-up data).</summary>
-    public static string DefaultPath => Path.Combine(
-        Environment.GetEnvironmentVariable("OPSISNEWSCRAWLER_DATA") is { Length: > 0 } dir
-            ? dir
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OpsisNewsCrawler"),
-        "quotes-cache.json");
+    public static string DefaultPath => Path.Combine(CrawlerDataPaths.Root, "quotes-cache.json");
 
     public QuoteStore(string? path = null)
     {
@@ -139,15 +138,18 @@ public sealed class QuoteStore
         lock (gate)
         {
             if (!days.TryGetValue(code, out var perDay)) days[code] = perDay = new SortedDictionary<string, decimal>(StringComparer.Ordinal);
-            perDay[day] = price;
-            while (perDay.Count > 130) perDay.Remove(perDay.Keys.First());
+            if (!perDay.TryGetValue(day, out var previousPrice) || previousPrice != price)
+            { perDay[day] = price; daysDirty = true; }
+            while (perDay.Count > 130) { perDay.Remove(perDay.Keys.First()); daysDirty = true; }
             // The same price also feeds the day's candle: the first price seen is the open, the extremes are the high and low.
             if (!candles.TryGetValue(code, out var cs)) candles[code] = cs = new SortedDictionary<string, Candle>(StringComparer.Ordinal);
-            cs[day] = cs.TryGetValue(day, out var c)
+            var next = cs.TryGetValue(day, out var c)
                 ? c.Exact ? c with { Close = price, High = Math.Max(c.High, price), Low = Math.Min(c.Low, price) }
                           : new Candle(day, c.Open, Math.Max(c.High, price), Math.Min(c.Low, price), price, false)
                 : new Candle(day, price, price, price, price, false);
-            while (cs.Count > 400) cs.Remove(cs.Keys.First());
+            if (!cs.TryGetValue(day, out var existing) || existing != next)
+            { cs[day] = next; candlesDirty = true; }
+            while (cs.Count > 400) { cs.Remove(cs.Keys.First()); candlesDirty = true; }
         }
     }
 
@@ -157,8 +159,10 @@ public sealed class QuoteStore
         lock (gate)
         {
             if (!candles.TryGetValue(code, out var cs)) candles[code] = cs = new SortedDictionary<string, Candle>(StringComparer.Ordinal);
-            cs[day] = new Candle(day, open, high, low, close, true);
-            while (cs.Count > 400) cs.Remove(cs.Keys.First());
+            var next = new Candle(day, open, high, low, close, true);
+            if (!cs.TryGetValue(day, out var existing) || existing != next)
+            { cs[day] = next; candlesDirty = true; }
+            while (cs.Count > 400) { cs.Remove(cs.Keys.First()); candlesDirty = true; }
         }
     }
 
@@ -186,7 +190,12 @@ public sealed class QuoteStore
     /// <summary>The day (yyyyMMdd) history was last asked for from an optional history source, or null.</summary>
     public string? BackfillDay(string code) { lock (gate) return backfill.GetValueOrDefault(code); }
 
-    public void MarkBackfill(string code, string day) { lock (gate) backfill[code] = day; }
+    public void MarkBackfill(string code, string day)
+    {
+        lock (gate)
+            if (!backfill.TryGetValue(code, out var old) || old != day)
+            { backfill[code] = day; backfillDirty = true; }
+    }
 
     /// <summary>Adds days from a history source: exact candles from the trade file are kept, other days are added or replaced; closes are added where missing.</summary>
     public void MergeCandles(string code, IEnumerable<Candle> incoming)
@@ -197,11 +206,12 @@ public sealed class QuoteStore
             if (!days.TryGetValue(code, out var closes)) days[code] = closes = new SortedDictionary<string, decimal>(StringComparer.Ordinal);
             foreach (var c in incoming)
             {
-                if (!(cs.TryGetValue(c.Day, out var have) && have.Exact)) cs[c.Day] = c;
-                closes.TryAdd(c.Day, c.Close);
+                if (!cs.TryGetValue(c.Day, out var have) || (!have.Exact && have != c))
+                { cs[c.Day] = c; candlesDirty = true; }
+                if (closes.TryAdd(c.Day, c.Close)) daysDirty = true;
             }
-            while (cs.Count > 400) cs.Remove(cs.Keys.First());
-            while (closes.Count > 130) closes.Remove(closes.Keys.First());
+            while (cs.Count > 400) { cs.Remove(cs.Keys.First()); candlesDirty = true; }
+            while (closes.Count > 130) { closes.Remove(closes.Keys.First()); daysDirty = true; }
         }
     }
 
@@ -256,27 +266,40 @@ public sealed class QuoteStore
         }
     }
 
-    public void Save()
+    /// <summary>Provider refreshes coalesce writes; the existing minute tick and shutdown flush the final changes.</summary>
+    public void SaveIfDue(DateTimeOffset? now = null) => SaveCore(now ?? DateTimeOffset.UtcNow, false);
+
+    public void Save() => SaveCore(DateTimeOffset.UtcNow, true);
+
+    private void SaveCore(DateTimeOffset now, bool force)
     {
-        try
+        lock (gate)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            string json;
-            string candleJson;
-            lock (gate)
+            if (!daysDirty && !candlesDirty && !backfillDirty) return;
+            if (!force && now >= lastSaveAttempt && now - lastSaveAttempt < SaveInterval) return;
+            lastSaveAttempt = now;
+            try
             {
-                json = JsonSerializer.Serialize(days);
-                candleJson = JsonSerializer.Serialize(candles.ToDictionary(kv => kv.Key,
-                    kv => kv.Value.ToDictionary(d => d.Key, d => new[] { d.Value.Open, d.Value.High, d.Value.Low, d.Value.Close, d.Value.Exact ? 1m : 0m })));
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                // Hold the store gate through the commit so concurrent providers cannot overwrite a newer snapshot.
+                if (daysDirty)
+                {
+                    SafeFile.WriteAllTextIfChanged(path, JsonSerializer.Serialize(days));
+                    daysDirty = false;
+                }
+                if (candlesDirty)
+                {
+                    SafeFile.WriteAllTextIfChanged(candlePath, JsonSerializer.Serialize(candles.ToDictionary(kv => kv.Key,
+                        kv => kv.Value.ToDictionary(d => d.Key, d => new[] { d.Value.Open, d.Value.High, d.Value.Low, d.Value.Close, d.Value.Exact ? 1m : 0m }))));
+                    candlesDirty = false;
+                }
+                if (backfillDirty)
+                {
+                    SafeFile.WriteAllTextIfChanged(backfillPath, JsonSerializer.Serialize(backfill));
+                    backfillDirty = false;
+                }
             }
-            SafeFile.WriteAllTextIfChanged(path, json);
-            SafeFile.WriteAllTextIfChanged(candlePath, candleJson);
-            string backfillJson;
-            lock (gate) backfillJson = JsonSerializer.Serialize(backfill);
-            SafeFile.WriteAllTextIfChanged(backfillPath, backfillJson);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
     }
 }
@@ -433,7 +456,7 @@ public sealed class AthensDelayedFileProvider : IQuoteProvider
                 var asOf = DateTimeOffset.TryParse(l.At, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var t) ? t : DateTimeOffset.UtcNow;
                 results.Add(new MarketQuote(inst.Symbol, inst.NameEn, l.Price, change, asOf, Delayed: true, ChangeFromOpen: fromOpen));
             }
-            store.Save();
+            store.SaveIfDue();
             lastFile = newest.Url;
             lastWatchKey = watchKey;
             lastResult = results;
@@ -471,7 +494,7 @@ public sealed class GoldApiMetalsProvider : IQuoteProvider
         var done = await Task.WhenAll(tasks).ConfigureAwait(false);
         var results = done.Where(q => q is not null).Select(q => q!).ToList();
         if (results.Count == 0) return Array.Empty<MarketQuote>(); // the service shows its stored copy, labelled
-        store.Save();
+        store.SaveIfDue();
         lastResult = results;
         return results;
     }

@@ -7,6 +7,9 @@ name: installer-e2e
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main, master]
+    paths-ignore: ['docs/**', '**/*.md']
   push:
     branches: [main, master]
     paths-ignore: ['docs/**', '**/*.md']
@@ -27,6 +30,14 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
+      - name: Validate PowerShell syntax before packaging
+        shell: pwsh
+        run: |
+          foreach ($script in @('tools/e2e-installer.ps1','tools/ci-audit.ps1','tools/release.ps1','tools/installer-theme-shots.ps1')) {
+            $tokens = $null; $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script).Path, [ref]$tokens, [ref]$errors)
+            if ($errors.Count -gt 0) { $errors | Out-String | Write-Host; throw "PowerShell syntax: $script" }
+          }
       - name: Inno Setup (free)
         shell: pwsh
         run: ./tools/ci-install-inno.ps1
@@ -39,6 +50,7 @@ jobs:
           path: |
             Output/OpsisNewsCrawler-Setup.exe
             Output/OpsisNewsCrawler-Setup.exe.sha256
+            Output/payload-hashes.json
           retention-days: 7
 
   wizard-shots:
@@ -69,7 +81,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-2022]
-        scenario: [fresh, from-per-user, from-latest, update-helper]
+        scenario: [fresh, from-per-user, from-latest, from-candidate, from-candidate-hidden, update-helper]
         include:
           - os: windows-2025
             scenario: fresh

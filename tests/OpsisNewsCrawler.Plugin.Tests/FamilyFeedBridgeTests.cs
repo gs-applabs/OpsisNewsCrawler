@@ -53,7 +53,30 @@ public sealed class FamilyFeedBridgeTests : IDisposable
         Assert.Same(plugin, PluginFeeds.Find("san-simera"));
     }
 
+    [Fact]
+    public void MissingRegistryEntryIsRestoredWithoutChangingTheFile()
+    {
+        Write(Json("2026-11-26", "from file"));
+        Assert.True(FamilyFeedBridge.Sync(Today, dir));
+        PluginFeeds.Unregister(FamilyFeedBridge.FeedKey);
+        Assert.True(FamilyFeedBridge.Sync(Today, dir));
+        Assert.Equal("from file", PluginFeeds.Find(FamilyFeedBridge.FeedKey)!.GetItems()[0].Text);
+    }
+
+    [Fact]
+    public void TitleOnlyChangeRefreshesFeed()
+    {
+        var json = Json("2026-11-26", "same lines");
+        Write(json);
+        Assert.True(FamilyFeedBridge.Sync(Today, dir));
+        var old = PluginFeeds.Find(FamilyFeedBridge.FeedKey);
+        Write(json.Replace("On this day", "History today — updated"));
+        Assert.True(FamilyFeedBridge.Sync(Today, dir));
+        Assert.NotSame(old, PluginFeeds.Find(FamilyFeedBridge.FeedKey));
+    }
+
     [Theory]
+    [InlineData("{\"schema\":1.5,\"key\":\"san-simera\",\"days\":[]}")]
     [InlineData("not json")]
     [InlineData("{\"schema\":2,\"key\":\"san-simera\",\"days\":[]}")]
     [InlineData("{\"schema\":1,\"key\":\"other\",\"days\":[{\"date\":\"2026-11-26\",\"lines\":[\"x\"]}]}")]

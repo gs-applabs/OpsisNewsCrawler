@@ -1,5 +1,102 @@
 # Changelog
 
+## 0.30.0 — candidate maintenance (2026-11-27)
+
+- Reorganized settings and fixed independent taskbar background material selection, primary/secondary appearance routing, visibility recovery, and repeated compositor updates. Added real HWND and UI action regression checks.
+- Preserved topic identities, improved RSS timeouts and redirects, and hardened live previews.
+- Unified Help / Instructions, License and Version History in the GearWin layout; localized navigation and current candidate history, single embedded repository MIT license, keyboard F1. Candidate changes are not a separate release; verification is tracked in the quality audit.
+
+
+### 0.30.1 — 2026-11-28: release of the Pass 1-23 maintenance line
+
+- Publishes the cumulative maintenance work after v0.30.0 (Passes 1-23 below, runtime candidate `2f2616ce` plus documentation): demand-scoped services and cancellation, bounded RSS deadlines, cache/icon/write limits, taskbar flicker and material fixes, graceful installer shutdown with payload verification, help/history/licence tabs, family feed and map window fixes. v0.30.0 was already published, so the product version is 0.30.1 (plugin and contract ABI stay 1.0.0.0).
+- Release gate fix: `WorldCatalogTests` shares the "custom places" collection (`GreekCities.Custom` is global; a parallel `AppConfig.Normalize` made the pull-request run fail 1 of 750).
+- Final candidate `5ac4e79` (PR #18): Windows build and tests 46111307505 / 46111302094 (750 Core + 81 Plugin, 0 failed), plugin ABI 46111307460, installer E2E 46111307484 (all jobs), extended soak 46111307818 (Low, 30 min active: CPU 0.52%, private memory +9.04 MiB, GDI 0, SafeFile +0.476 MiB; 2 min idle: CPU 0.02%, +0.52 MiB, GDI 0, no writes, demand guard passed). Not verified: physical Windows 10/11, multiple screens/DPI, GPU, UAC/SmartScreen, installed-host lifecycle, multi-hour run, Authenticode.
+- Resource evidence: extended soak 46108370603 (Pass 21, 30 min Low) private memory -2.99 MiB, GDI 0, CPU 0.53%; the +74.31 MiB of Pass 17 (46105509202) did not repeat. This is a smoke measurement, not a leak-free certification.
+
+### Release handoff — 2026-11-28 (Pass 23 runtime, documentation-only successor)
+
+**Do not release from main or the older head of PR #15.** Runtime candidate is `2f2616ce4280be150a0605799e2670ea5b3334dc` (Passes 18–23 cumulative); this successor changes documentation only. The dedicated branch `release/030-claude-final-gate` is the canonical release-handoff branch, with a separate draft validation PR to main. Check its exact HEAD, CI and tree before packaging. PR #15 still holds Pass 21 `b1b7221` while its extended soak 46108370603 is running; do not cancel it or merge competing PRs. When the final candidate is verified, use only one PR for main, preserve history and close the superseded draft without merging. Do not silently substitute an older source. The owner requests Claude Code to perform the next release, not this session.
+
+**Verified exact runtime evidence**
+- [Windows push CI 46109057013](https://github.com/gs-applabs/OpsisNewsCrawler/actions/runs/46109057013), SHA `2f2616ce`: Release build succeeded, 750 Core + 81 Plugin = 831 tests passed, zero failed/skipped. Settings/layout (en/el/de/ar), hygiene, recovery and release-version checks passed. PR-specific screenshots were skipped on push; final PR should capture them.
+- [Real OPSIS host CI 46109175880](https://github.com/gs-applabs/Opsis/actions/runs/46109175880), [evidence artifact](https://github.com/gs-applabs/Opsis/actions/runs/46109175880/artifacts/15249061332), isolated OPSIS PR #21. Host SHA `bea52a8ba9c124df6299dbbd76ffd89f4805ed81` = R81 `cae751ab` plus two CI pin edits only; Crawler SHA `2f2616ce`, Chronikologio SHA `1a2ef201e7fc2748e56379aa62973f3743c3bf96`. Real host output: plugins=2, replaced=True, widget=calendar, feeds=san-simera, Crawler 0.30.0/Chronikologio 1.2.1, both plugin DLLs 1.0.0.0. Shared ABI/UI6 byte hashes matched; host UI file 0.6.0.0, assembly 0.1.0.0. 291 Chronikologio tests, 59 host Node tests, 152 separate Media Suite tests passed. Host SYSLIB0057 warnings remain host-owned. This is smoke of actual Opsis.exe in VM, not a fully installed physical desktop or comprehensive host lifecycle.
+- Pass 23 overlap report: 273 tracked C# files, zero whole-file duplicates, one 12-significant-line overlap (HistoryPageTests:32 / WorldPagesTests:34, distinct fixtures). Eight previous map-form overlap windows eliminated through MapDetailForm. No semantic clone-free certification.
+- Pass 21 Windows/ABI/installer green (828 tests); extended soak 46108370603 still running as of handoff. Pass 17 soak 46105509202: active Low 30min CPU 0.44% all cores, private bytes +74.31 MiB, GDI delta 0, SafeFile +0.401 MiB; idle 2min CPU 0.01%, private +0.07 MiB, GDI delta 0, no optional jobs/RSS/visible bar/history or logical writes. Active growth requires investigation, not proof of leak or leak-free status. Do not treat any earlier run as final candidate evidence.
+
+**Claude release gate checklist (no release until reviewed)**
+1. Fetch the handoff branch and compare against runtime SHA `2f2616ce`. This handoff only changes Markdown; ensure production/test/workflow trees are identical. Use the actual candidate SHA/merge tree from the final PR. If code changes, rerun exact-source gates and real host checks. Review the permanent cross-check/ownership rule; do not recreate existing functionality.
+2. Confirm final PR Windows build, 831+ tests, settings/layout and screenshots, source overlap, ABI DLL and installer E2E (all jobs: fresh Windows 2022/2025, candidate reinstall with visible/hidden bar, published-version upgrade, per-user migration, updater, setup and wizard). Record run/job IDs, conclusions and artifacts. Review any failure before publishing.
+3. Confirm final extended soak label, Low active 30 minutes + idle 2 minutes. Read CPU, private memory, GDI, SafeFile logical writes, resource trend and idle demand guard. Compare with Pass 17 and Pass 21 when available. Broad smoke threshold alone is not memory certification; investigate sustained growth, repeat comparable runs if needed. Other profiles and multi-hour testing are not claimed. Physical Windows 10/11, multiple screens and DPI, GPU, UAC/SmartScreen, manual interactions/live network and installed-host lifecycle need separate acceptance. Standalone Chronikologio bridge still needs matching writer and E2E. No Authenticode signature; hashes establish integrity only.
+4. Product target remains 0.30.0 unless owner explicitly changes it; plugin assembly/file 1.0.0.0, shared contract 1.0.0.0, Opsis.UI 0.6.0.0. Check existing GitHub tags/releases to avoid replacing an existing published version. If a version increment is required, synchronize project versions, installer, About/Help/history and localization, release note filename, then repeat validation. Keep MIT license and existing Inno Setup; no alternate installer or ABI fork.
+5. On clean Windows checkout use existing `tools/ci-hygiene.ps1`, `dotnet restore OpsisNewsCrawler.sln`, `dotnet build OpsisNewsCrawler.sln -c Release --no-restore`, both test projects and `tools/release.ps1` (requires .NET 11 SDK / Windows Desktop runtime and Inno Setup). Use the tested installer artifact if it corresponds to the exact release tree; otherwise rebuild and repeat installer E2E. Validate payload manifest and SHA-256 files; test rollback using existing recovery tool. Use existing generated release assets in `release/0.30.0-assets`, not tracked installers/ZIPs. Publish only one authorized release with matching notes, SHA256 and plugin assets as provided by existing workflow; do not erase previous published releases, user data or rollback snapshots.
+6. Before publishing, update current release notes and canonical CHANGELOG with final run IDs, evidence, and residual risks. Keep only the latest release note and canonical history. No main merge or release was performed by this handoff. If gates remain pending or fail, leave draft and report precise blocker instead of certifying.
+
+### Pass 23 — demand-scoped manual Yahoo catalogue search (2026-11-28)
+
+Preflight: read permanent rule and N01–N40 ownership ledger at Pass 22 `01c6dd6`; verified actual Pass 21 overlap report (9 lexical windows, eight map-form windows and one independent test fixture); Pass 21 build/828 tests/ABI/installer green, extended soak still running. Existing YahooSearch/YahooHistory HTTP client and cooldown remain sole provider; SettingsPanel owns user-driven search. Previously a search used CancellationToken.None and temporarily set the global YahooAccess.Enabled flag. Now one cancellable UI request with explicit per-request consent, no global flag mutation; cancel on query/group change, opt-out, leaving Markets, hiding, reload, rebuilding language UI or disposal. Suppress stale completions/errors and protect replacement generation. Existing two-argument API retained. Added offline Core opt-out and STA UI stale-result/cancellation regression via existing Forms029Tests, no new provider or periodic work. Actual Windows run of Pass 22–23 still pending; host integration and active memory investigation remain open. Do not cancel ongoing prior soak; no main merge/release.
+
+### Pass 22 — permanent pre-implementation rule and verified map overlap (2026-11-28)
+
+Pass 21 Windows CI 749 Core + 79 Plugin tests passed, ABI and installer passed; 30-minute soak still active. Artifact 15248418311 / run 46108370596 records actual PR merge checkout `4df5485a`, 271 C# files, zero exact duplicate files and nine lexical windows. Eight windows are overlapping matches between WeatherMapForm and HazardDetailForm (toolbar, painting, browser lifecycle); one is the similar UI setup in HistoryPageTests / WorldPagesTests (distinct functional coverage retained). Consolidate existing map chrome, navigation, WebView2 security/permissions, tile referer, maximize and disposal in one MapDetailForm; preserve weather's deny-all external navigation, hazard's explicit listed HTTPS links and separate content markup. No extra map or provider; close during async initialization guarded, shared owned fonts disposed after children. Regression verifies both link policies and window type/chrome. QuoteStore now uses existing CrawlerDataPaths.Root; whitespace override falls back like other stores. Breaking.IsBreaking default-branch search found comparative corpus test use; retain legacy baseline, not a second production detector. Exact staged caller review still open. Yahoo search cancellation remains next targeted gap.
+
+Permanent owner rule in CLAUDE.md, AGENTS.md entrypoint, and existing CI hygiene guard; audit now logs candidate locations as well as artifact. No auto-deletion and no proof of semantic equivalence from lexical scan. Current candidate not yet compiled on Windows, stage behind active Pass 21 soak. No main merge or release.
+
+### Current source ownership and backlog cross-check — Pass 21 (2026-11-28)
+
+Audit basis: main `811be98`, verified Pass 17 `c282a2f`, cumulative Pass 20 `710708e` (36 ahead, 0 behind, 101 changed files). The complete Git tree returned 499 entries, 170 production/mirror C# files and 101 test C# files. All 271 C# blob identities were unique: no exact whole-file duplicate. This is not a proof of semantic deduplication. The prior 40 Crawler backlog IDs below are reconciled from the retained changelog and current source paths; source presence is not end-to-end certification. The original standalone proposal attachments were not recoverable from the accessible file search; do not infer missing wording.
+
+| ID | Existing implementation / canonical owner | Residual or limitation |
+|---|---|---|
+| N01 | TopicWatch / TopicMatcher / P2InsightsForm | stable IDs and topic filter; full UI gate |
+| N02 | EmergingTopics | existing analysis, not a second trend engine |
+| N03 | StoryAnalysis.Timeline / StoryExplorer | existing |
+| N04 | StoryAnalysis.Differences | numbers and reported denials; not factual verification |
+| N05 | StoryAnalysis.CommonOrigins / PublisherIdentity | heuristic agency grouping |
+| N06 | FactCheckSupport.MentionsRetraction | mentions, not an external fact-check service |
+| N07 | NewsArchive.Observe / Changes | headline changes, opt-in |
+| N08 | NewsGeo.Hint | one unambiguous country or unknown |
+| N09 | NewsAnalytics.Entities | text heuristic |
+| N10 | NewsSearch.Find | in-memory search |
+| N11 | NewsAnalytics.Places / AnalyticsForm.PaintMap | continental schematic, not geocoded event map |
+| N12 | same publication geography visual | coverage counts, not factual event heatmap |
+| N13 | NewsAnalytics.Relations / PaintGraph | co-occurrence only |
+| N14 | StoryAnalysis.Timeline / NewsAnalytics.Trend | reuse existing time series; full UI review |
+| N15 | NewsAnalytics.Trend / PaintTrend | existing term trend |
+| N16 | AnalyticsForm tiles / Coverage | existing news mosaic |
+| N17 | FocusReaderForm / P2InsightsForm | existing |
+| N18 | FocusReaderForm comparison | existing two-report view |
+| N19 | NewsAnalytics.Coverage | existing publisher coverage |
+| N20 | WidgetStudio / WidgetStudioPresets | reuse five existing widgets |
+| N21 | AnalyticsForm market tiles / QuoteService | existing market heatmap |
+| N22 | EconomicCalendar.Select / imported results | imported JSON; live source not established |
+| N23 | same calendar dividends | imported JSON |
+| N24 | MarketMetrics.Compare | price benchmark, not total-return benchmark |
+| N25 | MarketMetrics.Allocation | currency-separated allocation |
+| N26 | MarketMetrics.AnnualisedVolatility | minimum samples required |
+| N27 | MarketMetrics.MaxDrawdown | existing |
+| N28 | MarketMetrics.TimeWeightedReturnPercent / LedgerValuations | requires valid valuation on each trade day; split limitation |
+| N29 | EconomicCalendar imported macro indicators | no new live provider |
+| N30 | NewsAnalytics.NearMove | temporal association only |
+| N31 | RssNewsProvider / FeedDiscovery | validation and parser tests |
+| N32 | RssNewsProvider.Health / diagnostics | existing |
+| N33 | FeedActivityPolicy | quiet/dormant detection, not automatic disabling |
+| N34 | FeedRetryPolicy.QuietDelay / existing timer | adaptive intervals |
+| N35 | RssNewsProvider / RedirectGuardHandler | bounded requests, cooldown, Retry-After |
+| N36 | RssNewsProvider conditional GET / 304 tests | existing |
+| N37 | DataCache / shared RssNewsProvider | one generated news cache; separate quote/archive stores serve different data |
+| N38 | ReadStore / cache/archive limits | 5,000 read entries, generated-cache caps; actual long-run storage gate |
+| N39 | NewsArchive.Search / NewsSearch | implemented as scan, no dedicated full-text index |
+| N40 | FeedRetryPolicy / RssNewsProvider cooldown | temporary source isolation |
+
+All 40 retained IDs have an identified existing implementation path or narrower implementation; this is a reconciled inventory, not 40 newly completed features. N39 indexing, real live calendar data (if required), accuracy of heuristics and runtime gates are not silently completed. The old P1 table below is historical; its 'not started' for N39 refers to the earlier pre-P2 state. No second implementations of topic analysis, story clustering, archive, gallery, charts, portfolio, alerts, calendar or digest are authorized.
+
+**Exclusive runtime ownership:** Standalone Program and plugin TickerController use the same TickerHost, one host-owned RssNewsProvider, lazy QuoteService/QuoteStore, RefreshScheduler, DataCache, bounded CrawlerEventDispatch and five widget IDs. InstanceGuard protects the normal profile. DeferredDemand owns delayed retry only, not a parallel periodic scheduler. Existing BreakingEngine is the urgent scoring owner; legacy Breaking.IsBreaking remains a possible compatibility overlap to audit for callers, while Breaking.ToPlayableUrl and Normalize are used helpers. Do not delete the whole legacy file. QuoteStore retains an older data-root expression; CrawlerDataPaths is the shared owner for future path consolidation, with probe behavior preserved. Existing SettingsPanel asynchronous Yahoo search uses CancellationToken.None; audit cancellation and stale UI results before adding any new search. These are review targets, not verified identical behavior. Legacy portfolio and transaction ledger intentionally coexist for migration; do not merge balances automatically.
+
+**Cross-app ownership:** Opsis owns capability discovery/broker, trust/permissions and future SDK2/sandbox, shell/DeskStrip, placement, host palette and shared weather. Opsis.UI owns common controls. Chronikologio owns calendar/history; Crawler only consumes san-simera through PluginFeeds or FamilyFeedBridge. Media Suite owns general media conversion/playback; Crawler retains explicit live-news preview and MediaSuiteBridge M3U handoff. GearWin owns general diagnostics/repair/backups. Shared Opsis.UI and ABI blobs at Crawler Pass 20 and Opsis R81 `cae751ab` match exactly (4a5b4e0a1e1ec56780a1f581b79f0b272e3b52bd, 7beb06349daef31ae4c80f2a47a32c7477f1e50d); no new contract or UI fork. Host workflow still pins older Crawler `4d97e29`; exact candidate dual-plugin runtime is open. The 10 later SDK/host-owned proposals are excluded from Crawler reimplementation, not declared completed.
+
+**New verified evidence:** Pass 17 Windows/ABI/installer/soak 4/4 green. Run 46105509202 active Low 30 min / 360 samples: CPU 0.44% all cores, private bytes +74.31 MiB, GDI delta 0, SafeFile +0.401 MiB logical payload; idle Low 2 min / 24 samples: CPU 0.01%, private +0.07 MiB, GDI delta 0, zero logical writes and idle demand gate passed. The active memory growth is an investigation priority despite smoke pass; not proof of leak or leak-free operation. Passes 18–20 require own exact Windows validation. Existing hygiene script now produces a source overlap review report over tracked C# files (whole file hashes and exact normalized substantial line windows); lexical candidates are review-only, not semantic proof, and no files are removed. Review report before each subsequent code pass and use existing owner + test rather than creating duplicate service. Physical multi-monitor/DPI, installed host lifecycle, manual functional controls and long final soak remain open. No main merge or release.
+
 ### 0.30.0 — 2026-11-26: analytics (P2 of the backlog); includes the news-intelligence work below, which was planned as 0.29.0 and not released on its own
 
 One Analytics window (Intelligence centre) over data the program already holds; no new provider, scheduler or cache except the opt-in archive. Implemented with unit tests and checked as rendered images with sample data (`--snapshot-analytics`), not manually on Windows.

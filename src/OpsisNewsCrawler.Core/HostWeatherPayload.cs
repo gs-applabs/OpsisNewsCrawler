@@ -51,4 +51,21 @@ public static class HostWeatherPayload
                el.ValueKind == JsonValueKind.Number &&
                el.TryGetDouble(out value) && double.IsFinite(value);
     }
+
+    /// <summary>Only missing requested cities need the fallback provider. Ignore unrelated or duplicate results.</summary>
+    public static string[] MissingCities(IEnumerable<string> requested, IEnumerable<WeatherReading> shared)
+    {
+        var have = shared.Select(r => r.CityId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return requested.Distinct(StringComparer.OrdinalIgnoreCase).Where(id => !have.Contains(id)).ToArray();
+    }
+
+    /// <summary>Prefer shared fresh observations, then fallback, then retain previous observations for requested cities only.</summary>
+    public static IReadOnlyList<WeatherReading> Merge(IEnumerable<string> requested,
+        IEnumerable<WeatherReading> shared, IEnumerable<WeatherReading> fallback, IEnumerable<WeatherReading> previous)
+    {
+        var byCity = shared.Concat(fallback).Concat(previous)
+            .GroupBy(r => r.CityId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        return requested.Distinct(StringComparer.OrdinalIgnoreCase).Where(byCity.ContainsKey).Select(id => byCity[id]).ToArray();
+    }
 }

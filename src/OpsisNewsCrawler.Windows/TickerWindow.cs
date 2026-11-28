@@ -109,11 +109,23 @@ public sealed class TickerWindow : Form
     /// <summary>Raised when <see cref="HiddenByTaskbar"/> changes.</summary>
     public event Action? HiddenByTaskbarChanged;
     private bool hiddenByFullscreen;   // another app is fullscreen
+    private bool fullscreenObserved;
+    private IntPtr observedTaskbar;
+    private int measurementGeneration;
     private int animToY = int.MinValue, animFromY;
     private long animStartMs;
     private string themeModeName = "system";
     private string colorMode = "theme";
     private string backdropStyle = "acrylic";
+    private (IntPtr Handle, string Style, int Tint, int Alpha)? appliedBackdrop;
+
+    private void ApplyBackdrop(string style, Color tint, int alpha)
+    {
+        if (!IsHandleCreated) return;
+        var next = (Handle, style, tint.ToArgb(), alpha);
+        if (appliedBackdrop == next) return;
+        if (Native.SetBackdrop(Handle, style, tint, alpha)) appliedBackdrop = next;
+    }
     private Color customColor = Color.FromArgb(0x4A, 0x90, 0xD9);
 
     public event Action? RefreshRequested;
@@ -309,7 +321,10 @@ public sealed class TickerWindow : Form
     public bool TaskbarAutoDetect { get; set; } = true;
 
     private (int Left, int Right)? measuredSpan;
-    private bool measuring;
+    private bool spanMeasured;
+    private Task<TaskbarMetrics.Measurement>? measurementTask;
+    private int measurementTaskGeneration;
+    private bool integratedFallback;
 
     [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public bool IsEditMode => editMode;
@@ -417,6 +432,7 @@ public sealed class TickerWindow : Form
 
     protected override void OnHandleCreated(EventArgs e)
     {
+        appliedBackdrop = null;
         ApplyShapeRegion();   // the shape was chosen before the window existed
         base.OnHandleCreated(e);
         Native.MarkNoSnap(Handle); // DeskZones must not snap the strip while the user moves it
@@ -425,6 +441,7 @@ public sealed class TickerWindow : Form
 
     protected override void OnHandleDestroyed(EventArgs e)
     {
+        appliedBackdrop = null;
         Native.ClearNoSnap(Handle);
         base.OnHandleDestroyed(e);
     }
@@ -456,6 +473,17 @@ public sealed class TickerWindow : Form
         backdropStyle = style;
         ApplyLook();
     }
+
+    // Change the position, color and material as one operation; avoid intermediate DWM states.
+    internal void ConfigureAppearance(TickerPosition target, string style, string mode, int rgb)
+    {
+        backdropStyle = style;
+        colorMode = mode;
+        customColor = Color.FromArgb(255, Color.FromArgb(rgb));
+        SetPosition(target);
+    }
+
+    internal (string Material, string ColorMode) ConfiguredAppearance => (backdropStyle, colorMode);
 
     /// <summary>The tint chosen by the user for this bar, or null for the default look of the position.</summary>
     private Color? ResolveTint() => colorMode switch
@@ -532,7 +560,7 @@ public sealed class TickerWindow : Form
     /// <summary>The background may have changed (position, theme, wallpaper, display): measure once, after things have settled.</summary>
     private void RequestSample()
     {
-        if (IsDisposed || !AutoTextActive) { sampleSlow.Stop(); sampleDebounce.Stop(); return; }
+        if (IsDisposed || !running || !Visible || !AutoTextActive) { sampleSlow.Stop(); sampleDebounce.Stop(); return; }
         WireSampling();
         sampleDebounce.Stop();
         sampleDebounce.Start();
@@ -613,7 +641,7 @@ public sealed class TickerWindow : Form
             var hoverOverlay = light ? Color.FromArgb(34, 0, 0, 0) : Color.FromArgb(48, 255, 255, 255);
             canvas.SetLook(text, tintSource, hoverOverlay, text, !light);
             canvasB.SetLook(text, tintSource, hoverOverlay, text, !light);
-            if (IsHandleCreated) Native.SetBackdrop(Handle, backdropStyle, tint, (int)Math.Round(255 * Math.Clamp(Theme.Opacity, 0.3, 1.0)));
+            ApplyBackdrop(backdropStyle, tint, (int)Math.Round(255 * Math.Clamp(Theme.Opacity, 0.3, 1.0)));
             return;
         }
 
@@ -622,12 +650,9 @@ public sealed class TickerWindow : Form
             // On the taskbar: completely clear, only the text and the logos are drawn, in the taskbar's own text colour.
             var st = TaskbarStyle.Read();
             var darkSurface = !st.Light || st.AccentOnTaskbar;
-            // "Like the taskbar": no tint at all, so what is seen is the colour of the taskbar itself. Measured on Windows 11: blur or acrylic with no tint differ from the bare
-            // taskbar by one unit of 255 (38,38,21 -> 39,39,22), while the transparent-gradient material is a light blue (178,200,216) and "disabled" is black: so this mode
-            // always uses blur, whatever material is chosen for the other colour modes.
-            var clear = colorMode is "taskbar" or "theme" or "";
-            var material = clear ? "blur" : backdropStyle;
-            if (!clear && backdropStyle == "gradient")
+            // Follow taskbar means no custom tint; the selected material still applies.
+            var material = backdropStyle;
+            if (material == "gradient")
             {
                 // The transparent-gradient material is the light blue: dark text reads on it.
                 SetDarkTextLook();
@@ -637,7 +662,7 @@ public sealed class TickerWindow : Form
                 canvas.SetLook(st.Text, st.SourceText, st.HoverOverlay, st.Text, darkSurface);
                 canvasB.SetLook(st.Text, st.SourceText, st.HoverOverlay, st.Text, darkSurface);
             }
-            if (IsHandleCreated) Native.SetBackdrop(Handle, material, Color.Black, 0);
+            ApplyBackdrop(material, Color.Black, 0);
             return;
         }
 
@@ -646,7 +671,7 @@ public sealed class TickerWindow : Form
             // The bar on the desktop looks like the Opsis DeskStrip: the same dark glass (blur behind, tint 0x202228 at 40 %), white text.
             canvas.SetLook(Color.White, Color.FromArgb(150, 205, 255), Color.FromArgb(48, 255, 255, 255), Color.White, true);
             canvasB.SetLook(Color.White, Color.FromArgb(150, 205, 255), Color.FromArgb(48, 255, 255, 255), Color.White, true);
-            if (IsHandleCreated) Native.SetBackdrop(Handle, "blur", Color.FromArgb(0x28, 0x22, 0x20), 0x66);
+            ApplyBackdrop("blur", Color.FromArgb(0x28, 0x22, 0x20), 0x66);
             return;
         }
 
@@ -666,7 +691,7 @@ public sealed class TickerWindow : Form
             var baseColor = Theme.IsDark ? Color.FromArgb(0x20, 0x20, 0x20) : Color.FromArgb(0xF3, 0xF3, 0xF3);
             // Dark text needs a light surface behind it: the light theme never gets more transparent than ~75 %.
             var (glass, glassAlpha) = Native.GlassTint(baseColor, Theme.Accent, Theme.Opacity, Theme.IsDark ? 18 : 0xC0);
-            Native.SetBackdrop(Handle, backdropStyle, glass, glassAlpha);
+            ApplyBackdrop(backdropStyle, glass, glassAlpha);
         }
     }
 
@@ -885,18 +910,24 @@ public sealed class TickerWindow : Form
         if (!running) return;
 
         // Never draw over a fullscreen video / browser / game: hide, and come back afterwards.
-        var fullscreen = Native.IsFullscreenAppActive(Handle, hostWindowDetector);
+        var integrated = position == TickerPosition.TaskbarIntegrated;
+        var monitor = (Screen.PrimaryScreen ?? Screen.AllScreens[0]).Bounds;
+        var candidate = Native.IsFullscreenAppActive(Handle, hostWindowDetector, integrated ? monitor : null);
+        var fullscreen = integrated ? TaskbarMaintenance.ConfirmFullscreen(candidate, fullscreenObserved, hiddenByFullscreen) : candidate;
+        fullscreenObserved = candidate;
         hiddenByFullscreen = fullscreen;
-        if (fullscreen && Visible)
+        if (fullscreen)
         {
-            HidePreview();
-            Hide();
+            slideActive = false;
+            if (Visible) { HidePreview(); Hide(); }
         }
-        else if (!fullscreen && !Visible && !hiddenByTaskbar)
+        else if (!integrated && !Visible && !hiddenByTaskbar)
         {
-            Show();
             Reposition();
+            Show();
         }
+        // Integrated visibility is owned exclusively by FollowTaskbarTick, which
+        // also knows the current Explorer/auto-hide state. No competing Show calls.
         if (fullscreen) return;
 
         if (!PauseOnForeground)
@@ -930,7 +961,23 @@ public sealed class TickerWindow : Form
 
     public void SetPosition(TickerPosition value)
     {
+        var notifyHiddenReset = false;
+        if (position != value)
+        {
+            slideActive = false;
+            animToY = int.MinValue;
+            fullscreenObserved = false;
+            hiddenByFullscreen = false;
+            notifyHiddenReset = hiddenByTaskbar;
+            hiddenByTaskbar = false;
+            observedTaskbar = IntPtr.Zero;
+            measuredSpan = null;
+            spanMeasured = false;
+            integratedFallback = false;
+            measurementGeneration++;
+        }
         position = value;
+        if (notifyHiddenReset) HiddenByTaskbarChanged?.Invoke();
         if (value != TickerPosition.Custom) SetEditMode(false);
         ApplyLook();
         Reposition();
@@ -1004,6 +1051,7 @@ public sealed class TickerWindow : Form
 
     public void Reposition()
     {
+        if (position == TickerPosition.TaskbarIntegrated && slideActive) return;
         var screen = TargetScreen ?? Screen.PrimaryScreen ?? Screen.AllScreens[0];
         var wa = screen.WorkingArea;
         var h = TickerHeight;
@@ -1037,19 +1085,35 @@ public sealed class TickerWindow : Form
                 break;
             case TickerPosition.TaskbarIntegrated:
                 var tb = Native.GetTaskbarRect();
-                if (tb.IsEmpty || tb.Width < tb.Height)
+                if (tb.IsEmpty)
                 {
+                    if (running) return; // transient Explorer restart
+                    target = BottomStrip(screen, h);
+                    break;
+                }
+                integratedFallback = tb.Width < tb.Height || (TaskbarAutoDetect && spanMeasured &&
+                    (measuredSpan is not { } valid || Math.Min(tb.Right, valid.Right) - Math.Max(tb.Left, valid.Left) < TaskbarMaintenance.MinimumIntegratedWidth));
+                if (integratedFallback)
+                {
+                    // No safe horizontal gap: keep the ticker available above the
+                    // taskbar, rather than covering pinned apps or disappearing.
                     target = BottomStrip(screen, h);
                     break;
                 }
                 var left = tb.Left + Math.Max(0, TaskbarLeftOffset);
                 var right = tb.Right - Math.Max(0, TaskbarRightOffset);
-                if (TaskbarAutoDetect && measuredSpan is { } span && span.Right - span.Left >= 180)
+                if (TaskbarAutoDetect && measuredSpan is { } span)
                 {
                     left = Math.Max(tb.Left, span.Left);
                     right = Math.Min(tb.Right, span.Right);
                 }
-                target = new Rectangle(left, tb.Top, Math.Max(200, right - left), tb.Height);
+                else
+                {
+                    // Manual offsets retain their existing minimum; measured spans never grow into buttons.
+                    left = Math.Clamp(left, tb.Left, Math.Max(tb.Left, tb.Right - Math.Min(200, tb.Width)));
+                    right = Math.Clamp(right, left + Math.Min(200, tb.Width), tb.Right);
+                }
+                target = new Rectangle(left, tb.Top, right - left, tb.Height);
                 if (target != lastLoggedIntegrated)
                 {
                     // Help to find out why a bar inside the taskbar might not match its height on another PC.
@@ -1092,7 +1156,27 @@ public sealed class TickerWindow : Form
         {
             // A bar inside the taskbar hides and shows together with it - and slides out and in like the taskbar does,
             // not a jump (the bar above the taskbar already does the same).
-            var cloaked = autoHide && Native.IsTaskbarHiddenByAutoHide();
+            var taskbar = Native.GetTaskbarHandle();
+            if (taskbar == IntPtr.Zero)
+            {
+                slideActive = false;
+                if (Visible) { HidePreview(); Hide(); }
+                observedTaskbar = IntPtr.Zero;
+                return;
+            }
+            if (taskbar != observedTaskbar)
+            {
+                observedTaskbar = taskbar;
+                measuredSpan = null;
+                spanMeasured = false;
+                slideActive = false;
+                measurementGeneration++;
+                autoHide = Native.IsTaskbarAutoHide();
+                lastTaskbarStyle = "";
+                appliedBackdrop = null;
+            }
+            CompleteTaskbarMeasurement();
+            var cloaked = !integratedFallback && autoHide && Native.IsTaskbarHiddenByAutoHide();
             if (cloaked != hiddenByTaskbar)
             {
                 hiddenByTaskbar = cloaked;
@@ -1106,6 +1190,12 @@ public sealed class TickerWindow : Form
                         StartSlide(Top, screenBottom);
                     }
                 }
+                else if (!hiddenByFullscreen && integratedFallback)
+                {
+                    slideActive = false;
+                    Reposition();
+                    if (!Visible) Show();
+                }
                 else if (!hiddenByFullscreen)
                 {
                     if (!Visible)
@@ -1118,6 +1208,12 @@ public sealed class TickerWindow : Form
                     StartSlide(Top, tbTop.IsEmpty ? Top : tbTop.Top);
                 }
             }
+            if (hiddenByFullscreen)
+            {
+                slideActive = false;
+                if (Visible) Hide();
+                return;
+            }
             if (slideActive)
             {
                 StepSlide();
@@ -1128,16 +1224,26 @@ public sealed class TickerWindow : Form
                 if (Visible) Hide();
                 return;
             }
-            if (!Visible) return;
+            if (!Visible)
+            {
+                if (hiddenByFullscreen) return;
+                Reposition();
+                Show();
+            }
             // The taskbar can take the top of the z-order and its size / icons change: look again about every second, but touch the window only when something is really wrong
             // (see TaskbarMaintenance: re-setting the z-order and the backdrop every second made the bar flicker, and it fought with the tray overflow window).
             var style = taskbarTick % TaskbarMaintenance.CheckEvery == 0 ? TaskbarStyle.Read().ToString() : lastTaskbarStyle;
-            var todo = TaskbarMaintenance.Decide(taskbarTick, style != lastTaskbarStyle, TaskbarMaintenance.IsShellFlyout(Native.ForegroundClassName()), taskbarTick % TaskbarMaintenance.TopCheckEvery != 0 || Native.IsAtTopOfTopmost(Handle));
-            lastTaskbarStyle = style;
-            if (todo.KeepOnTop) { Log.Write("Bar inside the taskbar: a window lies above it (" + Native.TopmostAbove(Handle) + "), put back on top"); Native.KeepTopMost(Handle); }
-            if (todo.ApplyLook) { Log.Write("Bar inside the taskbar: look applied (the taskbar style changed, or the slow refresh)"); ApplyLook(); }
+            var flyout = Native.IsShellFlyoutActive();
+            var todo = TaskbarMaintenance.Decide(taskbarTick, style != lastTaskbarStyle, flyout, taskbarTick % TaskbarMaintenance.TopCheckEvery != 0 || !Native.IsTaskbarCovering(Handle));
+            if (todo.KeepOnTop && !integratedFallback) Native.RestoreAboveTaskbar(Handle);
+            if (todo.ApplyLook)
+            {
+                // Rare recovery is deliberate; normal refreshes never reapply identical composition.
+                if (taskbarTick % TaskbarMaintenance.LookRefreshEvery == 0) appliedBackdrop = null;
+                ApplyLook(); lastTaskbarStyle = style;
+            }
             if (todo.Reposition) Reposition();
-            if (TaskbarAutoDetect && !measuring && (taskbarTick % 66 == 2 || measuredSpan is null && taskbarTick % 10 == 2))
+            if (!flyout && TaskbarAutoDetect && measurementTask is null && (taskbarTick % 66 == 2 || !spanMeasured && taskbarTick % 10 == 2))
                 MeasureTaskbarInBackground();
             return;
         }
@@ -1226,19 +1332,34 @@ public sealed class TickerWindow : Form
 
     private void MeasureTaskbarInBackground()
     {
-        measuring = true;
-        _ = Task.Run(() => TaskbarMetrics.MeasureFreeSpan()).ContinueWith(t =>
+        measurementTaskGeneration = measurementGeneration;
+        measurementTask = Task.Run(() =>
         {
-            if (IsDisposed || !IsHandleCreated) return;
-            BeginInvoke(new Action(() =>
-            {
-                measuring = false;
-                var span = t.IsCompletedSuccessfully ? t.Result : null;
-                if (span is null || span == measuredSpan) return;
-                measuredSpan = span;
-                Reposition();
-            }));
+            try { return TaskbarMetrics.MeasureFreeSpan(); }
+            catch (Exception ex) when (ex is not OutOfMemoryException) { return default; }
         });
+    }
+
+    // Poll the single worker from the existing UI timer. No BeginInvoke callback
+    // can be lost when Explorer or this form recreates its window handle.
+    private void CompleteTaskbarMeasurement()
+    {
+        if (measurementTask is not { IsCompleted: true } completed) return;
+        measurementTask = null;
+        if (!completed.IsCompletedSuccessfully) { _ = completed.Exception; return; }
+        if (measurementTaskGeneration != measurementGeneration || !TaskbarAutoDetect) return;
+        var measurement = completed.Result;
+        if (!measurement.Known) return;
+        if (spanMeasured && measuredSpan == measurement.Span) return;
+        spanMeasured = true;
+        measuredSpan = measurement.Span;
+        if (!slideActive && !hiddenByTaskbar && !hiddenByFullscreen && !Native.IsShellFlyoutActive()) Reposition();
+    }
+
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        if (!IsDisposed && running) RequestSample();
     }
 
     private const int WM_NCHITTEST = 0x84, WM_EXITSIZEMOVE = 0x232, WM_SETCURSOR = 0x20;
@@ -1300,9 +1421,15 @@ public sealed class TickerWindow : Form
 
     public void StartTicker()
     {
+        if (running) return;
         running = true;
+        autoHide = Native.IsTaskbarAutoHide();
+        var integrated = position == TickerPosition.TaskbarIntegrated;
         Reposition();
-        Show();
+        var hidden = integrated && !integratedFallback && autoHide && Native.IsTaskbarHiddenByAutoHide();
+        if (hiddenByTaskbar != hidden) { hiddenByTaskbar = hidden; HiddenByTaskbarChanged?.Invoke(); }
+        if (!hidden && (!integrated || Native.GetTaskbarHandle() != IntPtr.Zero)) Show();
+        RequestSample();
         taskbarTimer.Start();
         stepper.Restart(clock.Elapsed.TotalSeconds);
         focusTimer.Start();
@@ -1312,7 +1439,15 @@ public sealed class TickerWindow : Form
     public void StopTicker()
     {
         running = false;
+        measurementGeneration++;
+        slideActive = false;
+        fullscreenObserved = false;
+        hiddenByFullscreen = false;
+        if (hiddenByTaskbar) { hiddenByTaskbar = false; HiddenByTaskbarChanged?.Invoke(); }
+        animToY = int.MinValue;
         taskbarTimer.Stop();
+        sampleDebounce.Stop();
+        sampleSlow.Stop();
         if (appBarRegistered)
         {
             Native.AppBarRemove(Handle);
@@ -1321,6 +1456,7 @@ public sealed class TickerWindow : Form
         HidePreview();
         scrollTimer.Stop();
         focusTimer.Stop();
+        toastTimer.Stop();
         Hide();
     }
 

@@ -45,8 +45,13 @@ public static class FamilyFeedBridge
             var current = PluginFeeds.Find(FeedKey);
             if (current is not null && !ReferenceEquals(current, ours))
             {
-                ours = null; lastSignature = "";   // a plugin in this process provides the flow: leave it alone
+                ours = null; lastSignature = ""; lastStamp = ""; lastHadData = false;   // a plugin in this process provides the flow: leave it alone
                 return false;
+            }
+            // The registry may have been cleared independently of this bridge.
+            if (current is null && ours is not null)
+            {
+                ours = null; lastSignature = ""; lastStamp = ""; lastHadData = false;
             }
             var day = today ?? DateOnly.FromDateTime(DateTime.Now);
             var path = Path.Combine(folder ?? DefaultFolder, FileName);
@@ -62,7 +67,7 @@ public static class FamilyFeedBridge
                 ours = null; lastSignature = "";
                 return true;
             }
-            var signature = day.ToString("O") + "\n" + string.Join("\n", data.Lines);
+            var signature = JsonSerializer.Serialize(new { Day = day, data.TitleEl, data.TitleEn, data.Lines });
             if (ours is not null && signature == lastSignature) return false;
             var lines = data.Lines;
             var feed = new PluginFeed(FeedKey, data.TitleEl, data.TitleEn, () => lines.Select(l => new PluginFeedItem(l)).ToList());
@@ -91,9 +96,11 @@ public static class FamilyFeedBridge
             var info = new FileInfo(path);
             if (!info.Exists || info.Length is 0 or > MaxFileBytes) return null;
             if ((info.Attributes & FileAttributes.ReparsePoint) != 0) return null;   // no links
-            using var doc = JsonDocument.Parse(File.ReadAllBytes(path), new JsonDocumentOptions { MaxDepth = 8 });
+            var bytes = OpsisNewsCrawler.Core.BoundedLocalFile.Read(path, (int)MaxFileBytes);
+            if (bytes is null) return null;
+            using var doc = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 8 });
             var root = doc.RootElement;
-            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("schema", out var schema) || schema.ValueKind != JsonValueKind.Number || schema.GetInt32() != 1) return null;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("schema", out var schema) || schema.ValueKind != JsonValueKind.Number || !schema.TryGetInt32(out var schemaVersion) || schemaVersion != 1) return null;
             if (!root.TryGetProperty("key", out var key) || key.ValueKind != JsonValueKind.String || key.GetString() != FeedKey) return null;
             if (!root.TryGetProperty("days", out var days) || days.ValueKind != JsonValueKind.Array) return null;
             var wanted = day.ToString("yyyy-MM-dd");

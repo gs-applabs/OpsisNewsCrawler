@@ -9,7 +9,7 @@
 #
 # Results: <Out>\report.md (also the job summary), the Inno logs, crawler.log, a screenshot. Exit code 1 on any failed check.
 param(
-    [Parameter(Mandatory)][ValidateSet('fresh', 'from-per-user', 'from-latest', 'update-helper', 'integrated')][string]$Scenario,
+    [Parameter(Mandatory)][ValidateSet('fresh', 'from-per-user', 'from-latest', 'from-candidate', 'from-candidate-hidden', 'update-helper', 'integrated')][string]$Scenario,
     [Parameter(Mandatory)][string]$NewSetup,
     [string]$Repository = 'gs-applabs/OpsisNewsCrawler',
     [string]$PerUserTag = 'v0.17.0',
@@ -37,6 +37,12 @@ function Check([bool]$ok, [string]$what) {
     $line = "- **$mark** $what"
     $script:report.Add($line)
     Write-Host "$mark  $what"
+}
+function Stop-OnFailure([string]$why) {
+    $script:report.Add("- **BLOCKED** $why")
+    $script:report | Set-Content (Join-Path $Out 'report.md')
+    if ($env:GITHUB_STEP_SUMMARY) { $script:report | Add-Content $env:GITHUB_STEP_SUMMARY }
+    throw $why
 }
 function Note([string]$text) { $script:report.Add("- _NOT VERIFIED_ $text"); Write-Host "NOT VERIFIED  $text" }
 function Run-Setup([string]$exe, [string[]]$arguments, [string]$logName) {
@@ -166,7 +172,22 @@ if ($Scenario -eq 'integrated') {
 
 # ---- 1. the old version ----------------------------------------------------------------------------------------------------------------
 $oldIsPerUser = $false
-if ($Scenario -ne 'fresh') {
+if ($Scenario -in 'from-candidate','from-candidate-hidden') {
+    # Install and run this exact candidate, then reinstall it with no force option.
+    $tag = 'current candidate'
+    $code = Run-Setup $NewSetup @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/MODE=separate','/DEPS=none') 'candidate-first-install.log'
+    if ($code -ne 0) { Stop-OnFailure "Candidate initial install failed ($code)" }
+    New-Item -ItemType Directory -Force $SettingsDir | Out-Null
+    $candidateConfig = @{
+        Language='de'; ScrollSpeed=80; CheckForUpdates=$false; WelcomeDisabled=$true
+        BarsEnabled=($Scenario -ne 'from-candidate-hidden')
+    }
+    $candidateConfig | ConvertTo-Json | Set-Content (Join-Path $SettingsDir 'config.json') -Encoding utf8
+    $oldExe = Join-Path $MachineDir 'OpsisNewsCrawler.exe'
+    $oldRunning = Start-Process -FilePath $oldExe -PassThru
+    Start-Sleep -Seconds 8
+    if ($oldRunning.HasExited) { Stop-OnFailure 'Candidate did not remain running before reinstall' }
+} elseif ($Scenario -ne 'fresh') {
     $tag = if ($Scenario -eq 'from-per-user') { $PerUserTag } else { (& gh release view --repo $Repository --json tagName --jq .tagName) }
     $oldDir = Join-Path $Out 'old'
     New-Item -ItemType Directory -Force $oldDir | Out-Null
@@ -212,8 +233,11 @@ if ($Scenario -ne 'fresh') {
 
 # ---- 2. the new setup ------------------------------------------------------------------------------------------------------------------
 $newArgs = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/MODE=separate', '/BAR=above', '/DEPS=none')
-if ($Scenario -eq 'from-per-user') { $newArgs += '/TASKS="startup"' }
-if ($Scenario -eq 'from-latest') { $newArgs += '/CLOSEAPPLICATIONS' }   # as the program starts the setup of an update
+if ($Scenario -eq 'from-per-user') { $newArgs += '/TASKS="startup"','/CLOSEAPPLICATIONS','/FORCECLOSEAPPLICATIONS' }
+# Explicit forced recovery is permitted for the legacy release only. Candidate
+# reinstalls MUST close gracefully, never hide a regression behind forced exit.
+if ($Scenario -eq 'from-latest') { $newArgs += '/CLOSEAPPLICATIONS','/FORCECLOSEAPPLICATIONS' }
+if ($Scenario -in 'from-candidate','from-candidate-hidden') { $newArgs += '/CLOSEAPPLICATIONS' }
 if ($Scenario -eq 'update-helper') {
     $oldVersion = [version](($oldExeInfo = (Get-Item $oldExe).VersionInfo.ProductVersion).Split('+')[0])
     if ($oldVersion -lt [version]'0.20.3') {
@@ -235,6 +259,7 @@ if ($Scenario -eq 'update-helper') {
     $finished = $helper.WaitForExit(240000)
     Check $finished 'the update helper finished'
     Check ($finished -and $helper.ExitCode -eq 0) "the update helper succeeded (exit code $(if ($finished) { $helper.ExitCode } else { 'none' }))"
+    if (!$finished -or $helper.ExitCode -ne 0) { Stop-OnFailure 'Update helper failed; no further product audit' }
     $logLine = if (Test-Path $helperLog) { (Get-Content $helperLog | Select-Object -Last 1) } else { '' }
     Check ($logLine -like '*|ok|0|*') "last-update.log says the update worked: $logLine"
     Start-Sleep -Seconds 8
@@ -246,13 +271,33 @@ if ($Scenario -eq 'update-helper') {
 } else {
     $code = Run-Setup $NewSetup $newArgs 'new-setup.log'
     Check ($code -eq 0) "the new setup finished (exit code $code)"
-    if ($Scenario -eq 'from-latest') {
+    if ($code -ne 0) { Stop-OnFailure "Setup failed ($code); do not audit the old installed binaries" }
+    if ($Scenario -in 'from-latest','from-candidate','from-candidate-hidden') {
         Start-Sleep -Seconds 1
-        Check ($oldRunning.HasExited -or -not (Get-Process -Id $oldRunning.Id -ErrorAction SilentlyContinue)) 'the installer closed the running old program'
+        $closed = $oldRunning.HasExited -or -not (Get-Process -Id $oldRunning.Id -ErrorAction SilentlyContinue)
+        Check $closed 'the installer closed the running old program'
+        if (!$closed) { Stop-OnFailure 'Old process still running; no further product audit' }
+        if ($Scenario -in 'from-candidate','from-candidate-hidden') {
+            $setupLog = Get-Content (Join-Path $Out 'new-setup.log') -Raw
+            Check ($setupLog -match 'Signalled normal shutdown of installed Crawler PID') 'candidate received explicit shutdown event'
+            if ($Scenario -eq 'from-candidate-hidden') {
+                $saved = Get-Content (Join-Path $SettingsDir 'config.json') -Raw | ConvertFrom-Json
+                Check ($saved.BarsEnabled -eq $false) 'hidden candidate keeps bars disabled after reinstall'
+            }
+        }
     }
 }
 Start-Sleep -Seconds 2
 
+$manifest = Join-Path (Split-Path -Parent $NewSetup) 'payload-hashes.json'
+if (!(Test-Path $manifest)) { Stop-OnFailure 'Exact candidate payload hash manifest missing' }
+$expectedPayload = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+foreach ($entry in $expectedPayload.PSObject.Properties) {
+    $installed = Join-Path $MachineDir $entry.Name
+    $match = (Test-Path -LiteralPath $installed) -and ((Get-FileHash -LiteralPath $installed -Algorithm SHA256).Hash -eq $entry.Value)
+    Check $match "installed $($entry.Name) matches staged candidate SHA-256"
+    if (!$match) { Stop-OnFailure 'Installed binary is not the candidate under test' }
+}
 $version = Expected-Version
 Check (Test-Path (Join-Path $MachineDir 'OpsisNewsCrawler.exe')) 'the program is in Program Files'
 if ($version) { Check (((Get-Item (Join-Path $MachineDir 'OpsisNewsCrawler.exe')).VersionInfo.ProductVersion) -like "$version*") "the installed program is version $version" }
@@ -275,6 +320,12 @@ if ($Scenario -eq 'fresh') {
 }
 
 # ---- 3. start it ------------------------------------------------------------------------------------------------------------------------
+if ($Scenario -eq 'from-per-user') {
+    $handoff = Join-Path $SettingsDir 'first-run.json'
+    $pending = if (Test-Path $handoff) { Get-Content $handoff -Raw | ConvertFrom-Json } else { $null }
+    Check ($null -ne $pending -and $pending.StartWithWindows -eq $true) 'installer persisted the explicit startup request before first launch'
+    if (Test-Path $handoff) { Copy-Item $handoff (Join-Path $Out 'startup-handoff-before.json') }
+}
 $exe = Join-Path $MachineDir 'OpsisNewsCrawler.exe'
 $smoke = Start-Process -FilePath $exe -PassThru        # a normal start: tray icon, bars, the welcome guide of a first run
 Start-Sleep -Seconds 12
@@ -300,17 +351,18 @@ Start-Sleep -Seconds 2
 # the audits run with a throw-away configuration (isolated registry), once per forced tier
 foreach ($tier in @('', 'Low', 'High')) {
     $env:OPSISNEWSCRAWLER_FORCE_TIER = $tier
-    foreach ($kind in 'audit-settings', 'audit-layout') {
+    foreach ($kind in 'audit-settings', 'audit-layout', 'audit-scroll') {
         $cfg = Join-Path $Out "$kind-$tier.json"
         $rep = Join-Path $Out "$kind-$tier.txt"
         Set-Content $cfg '{"Language":"en","Position":"Top"}' -Encoding utf8
         $p = Start-Process -FilePath $exe -ArgumentList "--$kind", "`"$rep`"", '--config', "`"$cfg`"" -PassThru
-        if (-not $p.WaitForExit(600000)) { $p.Kill() }
-        # The verdict is the report (what the audit found); the exit code of the process is shown too. A clean report with an exit code other than 0
-        # (seen once on a runner, the process ended badly after writing it) is a warning, not a finding about the settings.
+        if (-not $p.WaitForExit(600000)) { $p.Kill(); $p.WaitForExit(); throw "Timeout: $kind tier=$tier" }
+        # Both report and process must be clean; a crash after a report is still a failure.
         $text = if (Test-Path $rep) { Get-Content $rep -Raw } else { '' }
         $clean = if ($kind -eq 'audit-settings') { $text -match '0 change nothing, 0 not shown again' -and $text -match 'keyboard checks failed: 0' -and $text -notmatch '(?m)^ERROR' }
-                 else { $text -match 'nothing sticks out' }
+                 elseif ($kind -eq 'audit-layout') { $text -match 'nothing sticks out' }
+                 else { $text -match '(?m)^Scroll audit: [1-9][0-9]* pages that scroll, [1-9][0-9]* checks, 0 moved, 0 errors\s*$' -and $text -notmatch '(?m)^(MOVED|ERROR)' }
+        $clean = $clean -and ($p.ExitCode -eq 0)
         if (-not $clean) {
             Write-Host "::group::DIAGNOSTIC $kind tier=$tier exit=$($p.ExitCode)"
             Write-Host "Report exists: $(Test-Path $rep); characters: $($text.Length)"
@@ -323,7 +375,6 @@ foreach ($tier in @('', 'Low', 'High')) {
             Write-Host "::endgroup::"
         }
         Check $clean "$kind with tier '$(if ($tier) { $tier } else { 'detected' })' reports nothing wrong (exit code $($p.ExitCode))"
-        if ($clean -and $p.ExitCode -ne 0) { Write-Host "::warning::$kind ($tier) wrote a clean report but ended with exit code $($p.ExitCode)" }
     }
 }
 $env:OPSISNEWSCRAWLER_FORCE_TIER = ''

@@ -42,6 +42,13 @@ foreach ($name in "OpsisNewsCrawler.OpsisPlugin.dll", "OpsisNewsCrawler.Windows.
 if (Get-ChildItem $pluginDst -Filter "*MotionDesk*" -ErrorAction SilentlyContinue) { throw "old MotionDesk-named files in the plugin payload - delete them" }
 "payload version: $appVersion"
 
+# Exact staged payload hashes distinguish same-version candidates (0.30.0).
+$payloadHashes = [ordered]@{}
+foreach ($name in @('OpsisNewsCrawler.exe','OpsisNewsCrawler.dll','OpsisNewsCrawler.Core.dll','OpsisNewsCrawler.Windows.dll')) {
+  $payloadHashes[$name] = (Get-FileHash (Join-Path $stage $name) -Algorithm SHA256).Hash
+}
+$payloadHashes | ConvertTo-Json | Set-Content -LiteralPath "$r\Output\payload-hashes.json" -Encoding utf8
+
 # P0: the plugin must ship the single host-canonical ABI DLL, not a separately compiled same-version assembly.
 $canonicalContract = "$r\libs\OpsisNewsCrawler.Plugin.Abstractions.dll"
 $shippedContract = "$pluginDst\OpsisNewsCrawler.Plugin.Abstractions.dll"

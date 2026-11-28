@@ -16,7 +16,7 @@ public sealed class ReadStore
     private readonly Dictionary<string, DateTimeOffset> read = new(StringComparer.OrdinalIgnoreCase);
 
     public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OpsisNewsCrawler", "read.json");
+        CrawlerDataPaths.Root, "read.json");
 
     public ReadStore(string? path = null)
     {

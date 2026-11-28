@@ -109,18 +109,17 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
         Version,
         "Μπάρα ειδήσεων και τιμών για την επιφάνεια εργασίας: RSS ανά κατηγορία, τιμές Euronext Athens, μετάλλων και πετρελαίου, δύο μπάρες.",
         "News and price bar for the desktop: RSS per category, Euronext Athens, metals and oil prices, two bars.",
-        "Opsis Team",
+        "gs-applabs",
         "MIT",
         new[]
         {
-            new PluginAboutSection("Βοήθεια", "Help", AboutTexts.Help),
-            new PluginAboutSection("Οδηγίες χρήσης", "Instructions", AboutTexts.Instructions),
-            new PluginAboutSection("Ιστορικό εκδόσεων", "Version history", AboutTexts.History),
+            new PluginAboutSection("Βοήθεια / Οδηγίες", "Help / Instructions", AboutTexts.Guide),
             new PluginAboutSection("Άδεια χρήσης", "License", AboutTexts.License),
+            new PluginAboutSection("Ιστορικό εκδόσεων", "Version history", AboutTexts.History),
         });
 
     public IReadOnlyList<PluginMenuItem> GetTrayMenuItems() => BuildTrayMenu(
-        () => NavigationRequested?.Invoke(NavigationKey), Refresh,
+        OnSettingsRequested, Refresh,
         () => { if (_controller.IsPaused) Resume(); else Pause(); }, CloseCrawler, OpenCrawler);
 
     /// <summary>
@@ -140,11 +139,11 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
     /// <summary>Host desktop widgets use the common Opsis palette and only in-memory data.</summary>
     public IReadOnlyList<PluginWidget> GetWidgets() => new[]
     {
-        new PluginWidget("crawler-news", "Ειδήσεις", "News", () => new CrawlerWidgetPanel(_controller.Host, "news")),
-        new PluginWidget("crawler-markets", "Αγορές", "Markets", () => new CrawlerWidgetPanel(_controller.Host, "markets")),
-        new PluginWidget("crawler-weather", "Καιρός", "Weather", () => new CrawlerWidgetPanel(_controller.Host, "weather")),
-        new PluginWidget("crawler-breaking", "Έκτακτες", "Breaking", () => new CrawlerWidgetPanel(_controller.Host, "breaking")),
-        new PluginWidget("crawler-history", "Σαν σήμερα", "On this day", () => new CrawlerWidgetPanel(_controller.Host, "history"))
+        new PluginWidget("crawler-news", "Ειδήσεις", "News", () => _controller.CreateView(h => new CrawlerWidgetPanel(h, "news"))),
+        new PluginWidget("crawler-markets", "Αγορές", "Markets", () => _controller.CreateView(h => new CrawlerWidgetPanel(h, "markets"))),
+        new PluginWidget("crawler-weather", "Καιρός", "Weather", () => _controller.CreateView(h => new CrawlerWidgetPanel(h, "weather"))),
+        new PluginWidget("crawler-breaking", "Έκτακτες", "Breaking", () => _controller.CreateView(h => new CrawlerWidgetPanel(h, "breaking"))),
+        new PluginWidget("crawler-history", "Σαν σήμερα", "On this day", () => _controller.CreateView(h => new CrawlerWidgetPanel(h, "history")))
     };
 
     public IReadOnlyList<PluginNavigationItem> GetNavigationItems() =>
@@ -156,7 +155,7 @@ public sealed class OpsisNewsCrawlerPlugin : IOpsisNewsCrawlerPlugin, IPluginPro
                 "News Crawler",
                 () =>
                 {
-                    try { return new SettingsPanel(_controller.Host, showCloseButton: false, showAboutTabs: false) { HostThemeLocked = true }; }
+                    try { return _controller.CreateView(h => new SettingsPanel(h, showCloseButton: false, showAboutTabs: false) { HostThemeLocked = true }); }
                     catch (Exception ex) { Log.Write($"Plugin settings page failed: {ex}"); throw; }
                 },
                 90)
@@ -173,19 +172,43 @@ internal sealed class TickerController
     public bool IsPaused => _host?.Paused ?? false;
 
     private bool hostSafeMode;
+    private bool runtimeActive;
+    internal bool CanCreateView => runtimeActive && _guard.IsOwner && !hostSafeMode;
+    internal event Action? AvailabilityChanged;
+
+    internal Control CreateView(Func<TickerHost, Control> factory) => new OwnedCrawlerView(this, factory);
+
+    internal string UnavailableText => Loc.T(hostSafeMode ? "plugin.inactive.safeMode" :
+        StandaloneRunning ? "plugin.inactive.standalone" : "plugin.inactive.stopped");
+    private bool startRequested;
     private bool shellHold;
     private Func<double, double, Task<string>>? weatherProvider;
 
     public void ConfigureP0Environment(bool safeMode, bool hold, Func<double, double, Task<string>> provider)
     {
+        var wasSafe = hostSafeMode;
         hostSafeMode = safeMode;
         shellHold = hold;
         weatherProvider = provider;
-        if (_host is null) return; // host sets these before Start(), no eager UI
-        _host.HostSafeMode = safeMode;
-        _host.HostWeatherProvider = provider;
-        _host.SetHostShellHold(hold);
-        if (safeMode) _host.Stop();
+        if (safeMode)
+        {
+            runtimeActive = false;
+            AvailabilityChanged?.Invoke();
+            _fallbackSettings?.Hide();
+            _fallbackSettings?.Dispose();
+            _fallbackSettings = null;
+        }
+        if (_host is not null)
+        {
+            _host.HostSafeMode = safeMode;
+            _host.HostWeatherProvider = provider;
+            // Stop before reconfiguring shell positions so Safe Mode cannot start a refresh.
+            if (safeMode) _host.Stop();
+            _host.SetHostShellHold(hold);
+        }
+        // Temporary host suspension does not change the user's requested state.
+        if (wasSafe && !safeMode && startRequested) StartCore();
+        else if (wasSafe != safeMode) AvailabilityChanged?.Invoke();
     }
 
     public void SetHostTier(string? tier)
@@ -195,7 +218,12 @@ internal sealed class TickerController
     }
 
     /// <summary>The host (Opsis) told us its language: the crawler's own language setting is then ignored.</summary>
-    public bool LanguageFromHost { get; set; }
+    private bool languageFromHost;
+    public bool LanguageFromHost
+    {
+        get => languageFromHost;
+        set { languageFromHost = value; if (_host is not null) _host.LanguageFollowsHost = value; }
+    }
 
     public event Action? SettingsRequested;
 
@@ -203,10 +231,12 @@ internal sealed class TickerController
     {
         get
         {
+            if (!_guard.IsOwner || hostSafeMode)
+                throw new InvalidOperationException("Crawler runtime has no ownership.");
             if (_host is null)
             {
-                _host = new TickerHost { HostedByOpsis = true, LanguageFollowsHost = LanguageFromHost };
                 if (LanguageFromHost) Loc.SetLanguage(Context.Snapshot.Language);
+                _host = new TickerHost(null, null, hostedByOpsis: true, languageFollowsHost: LanguageFromHost);
                 _host.SetHostTier(Context.Snapshot.PerformanceTier);
                 _host.HostSafeMode = hostSafeMode;
                 _host.SetHostShellHold(shellHold);
@@ -226,6 +256,11 @@ internal sealed class TickerController
 
     public void ShowFallbackSettings()
     {
+        if (!CanCreateView)
+        {
+            MessageBox.Show(UnavailableText, "Opsis News Crawler", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
         _fallbackSettings ??= new SettingsForm(Host);
         _fallbackSettings.ShowSettings();
     }
@@ -237,6 +272,12 @@ internal sealed class TickerController
 
     public void Start()
     {
+        startRequested = true;
+        StartCore();
+    }
+
+    private void StartCore()
+    {
         if (hostSafeMode)
         {
             Log.Write("Crawler disabled by Opsis Safe Mode.");
@@ -245,22 +286,141 @@ internal sealed class TickerController
         if (!_guard.TryAcquire())
         {
             StandaloneRunning = true;
+            runtimeActive = false;
+            AvailabilityChanged?.Invoke();
             Log.Write("Plugin: the stand-alone Opsis News Crawler is running; the plugin does not start a second bar.");
             return;
         }
         StandaloneRunning = false;
-        try { Host.Start(); }
-        catch { _guard.Release(); throw; }
+        try
+        {
+            Host.Start();
+            runtimeActive = true;
+            AvailabilityChanged?.Invoke();
+        }
+        catch
+        {
+            runtimeActive = false;
+            AvailabilityChanged?.Invoke();
+            // If cleanup itself fails, retain ownership rather than allowing a second writer.
+            _host?.Stop();
+            _host?.Dispose();
+            _host = null;
+            _guard.Release();
+            throw;
+        }
     }
 
     public void Stop()
     {
+        startRequested = false;
+        runtimeActive = false;
+        StandaloneRunning = false;
+        // Remove host-owned child controls before releasing the configuration lease.
+        AvailabilityChanged?.Invoke();
+        _fallbackSettings?.Hide();
+        _fallbackSettings?.Dispose();
+        _fallbackSettings = null;
         _host?.Stop();
+        _host?.Dispose();
+        _host = null;
         _guard.Release();
     }
     public void Pause() => _host?.Pause();
     public void Resume() => _host?.Resume();
     public void Refresh() => _host?.Refresh();
-    public void SetMode(TickerMode mode) => Host.SetMode(mode);
-    public void SetPosition(TickerPosition position) => Host.SetPosition(position);
+    public void SetMode(TickerMode mode) { if (CanCreateView) Host.SetMode(mode); }
+    public void SetPosition(TickerPosition position) { if (CanCreateView) Host.SetPosition(position); }
+}
+
+
+/// <summary>Stable shell for host-cached pages/widgets. Never construct a second
+/// runtime while standalone owns the mutex. Release content before ownership
+/// transfer, and recreate it on a later explicit start.</summary>
+internal sealed class OwnedCrawlerView : UserControl
+{
+    private readonly TickerController owner;
+    private readonly Func<TickerHost, Control> factory;
+    private Control? content;
+    private bool syncing, releasing, viewDisposed;
+    private readonly Label unavailable = new()
+    {
+        Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter,
+        Padding = new Padding(12), AutoEllipsis = true, AccessibleRole = AccessibleRole.StaticText
+    };
+
+    public OwnedCrawlerView(TickerController owner, Func<TickerHost, Control> factory)
+    {
+        this.owner = owner;
+        this.factory = factory;
+        Dock = DockStyle.Fill;
+        Controls.Add(unavailable);
+        owner.AvailabilityChanged += Sync;
+        Loc.Changed += Sync;
+        Sync();
+    }
+
+    private void Sync()
+    {
+        if (Disposing || IsDisposed || viewDisposed || syncing || releasing) return;
+        syncing = true;
+        try
+        {
+        if (owner.CanCreateView)
+        {
+            if (content is null && Visible)
+            {
+                content = factory(owner.Host);
+                content.Dock = DockStyle.Fill;
+                Controls.Add(content);
+                content.BringToFront();
+            }
+            unavailable.Visible = content is null;
+        }
+        else
+        {
+            ReleaseContent();
+            unavailable.Text = owner.UnavailableText;
+            unavailable.RightToLeft = Loc.IsRtl ? RightToLeft.Yes : RightToLeft.No;
+            unavailable.Visible = true;
+        }
+        }
+        finally { syncing = false; }
+    }
+
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        if (owner is not null) Sync();
+    }
+
+    private void ReleaseContent()
+    {
+        if (content is null || releasing) return;
+        releasing = true;
+        var previous = content;
+        content = null;
+        try
+        {
+            if (previous is SettingsPanel settings) settings.FlushPendingChanges();
+        }
+        finally
+        {
+            Controls.Remove(previous);
+            previous.Dispose();
+            releasing = false;
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing && !viewDisposed)
+        {
+            viewDisposed = true;
+            owner.AvailabilityChanged -= Sync;
+            Loc.Changed -= Sync;
+            ReleaseContent();
+        }
+        base.Dispose(disposing);
+    }
 }

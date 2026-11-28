@@ -15,8 +15,11 @@ public sealed partial class SettingsPanel : UserControl
     private readonly bool showCloseButton;
     private readonly bool showAboutTabs;
     private bool loading;
+    private bool applying;
+    private bool applyingTheme;
     private bool hasUnsavedChanges;
     private bool dirtyTrackingAttached;
+    private readonly HashSet<Control> transientControls = new();
     private Action? performanceInfoHandler;
 
     private FlatNav tabs = null!;
@@ -67,6 +70,7 @@ public sealed partial class SettingsPanel : UserControl
     private Label yahooStatus = null!;
     private readonly List<FlatButton> yahooPresetButtons = new();
     private List<YahooHit> yahooHits = new();
+    private CancellationTokenSource? yahooSearchLease;
     private Control yahooCatalog = null!;
     private FlatComboBox miniShape = null!;
     private FlatComboBox barShape = null!;
@@ -241,6 +245,13 @@ public sealed partial class SettingsPanel : UserControl
         Theme.Changed += OnThemeChanged;
         Loc.Changed += OnLanguageChanged;
         previewTimer.Tick += (_, _) => UpdatePreview();
+        historyRetry.Tick += OnHistoryRetry;
+        OpsisNewsCrawler.Plugin.Abstractions.PluginFeeds.Changed += OnPluginFeedsChanged;
+        autoApplyTimer.Tick += (_, _) =>
+        {
+            autoApplyTimer.Stop();
+            if (!IsDisposed && !Disposing && !loading && built && hasUnsavedChanges) ApplySettings();
+        };
         Build();
         overviewTimer.Tick += (_, _) => RefreshOverview();
         if (Visible && IsHandleCreated) { previewTimer.Start(); overviewTimer.Start(); }
@@ -249,7 +260,7 @@ public sealed partial class SettingsPanel : UserControl
     protected override void OnVisibleChanged(EventArgs e)
     {
         base.OnVisibleChanged(e);
-        if (IsDisposed) return;
+        if (IsDisposed || Disposing) return;
         if (Visible)
         {
             previewTimer.Start();
@@ -258,6 +269,8 @@ public sealed partial class SettingsPanel : UserControl
         }
         else
         {
+            CancelYahooSearch();
+            FlushPendingChanges();
             previewTimer.Stop();
             overviewTimer.Stop();
             sourceTimer.Stop();
@@ -268,6 +281,9 @@ public sealed partial class SettingsPanel : UserControl
     {
         if (disposing)
         {
+            CancelYahooSearch(updateUi: false);
+            autoApplyTimer.Stop();
+            autoApplyTimer.Dispose();
             previewTimer.Stop();
             if (performanceInfoHandler is not null) host.PerformanceChanged -= performanceInfoHandler;
             overviewTimer.Stop();
@@ -299,14 +315,20 @@ public sealed partial class SettingsPanel : UserControl
 
     private void OnThemeChanged()
     {
-        if (IsDisposed) return;
-        Theme.Apply(this);
-        Invalidate(true);
+        if (IsDisposed || Disposing || loading || applyingTheme) return;
+        if (IsHandleCreated && InvokeRequired)
+        {
+            BeginInvoke(new Action(OnThemeChanged));
+            return;
+        }
+        applyingTheme = true;
+        try { Theme.Apply(this); Invalidate(true); }
+        finally { applyingTheme = false; }
     }
 
     private void OnLanguageChanged()
     {
-        if (IsDisposed) return;
+        if (IsDisposed || Disposing) return;
         if (InvokeRequired) BeginInvoke(new Action(Rebuild));
         else Rebuild();
     }
@@ -316,7 +338,8 @@ public sealed partial class SettingsPanel : UserControl
     // ---- preview of the bars ----------------------------------------------------------------
 
     /// <summary>Sub-pages of the Settings tab whose choices change how a bar looks: Bars, Position, Look, Breaking.</summary>
-    private static readonly int[] PreviewSubs = { 1, 2, 3 };
+    private readonly HashSet<int> previewPages = new();
+    private readonly Dictionary<string, int> pageIds = new(StringComparer.Ordinal);
 
     /// <summary>The desktop bar's place and size as fractions of the primary screen (for the preview).</summary>
     private RectangleF DesktopRelative()
@@ -328,8 +351,8 @@ public sealed partial class SettingsPanel : UserControl
     private void UpdatePreview()
     {
         if (!Visible || !built || barPreview is null || barPreview.IsDisposed || tabs is null) return;
-        var show = PreviewSubs.Contains(tabs.SelectedIndex);
-        if (barPreview.Visible != show) barPreview.Visible = show;
+        var show = previewPages.Contains(tabs.SelectedIndex);
+        tabs.ShowFooter(show);
         if (!show) return;
         var dark = themeMode.SelectedIndex switch { 1 => false, 2 => true, 3 or 4 or 6 => true, 5 => false, _ => Theme.IsDark };
         barPreview.SetState(new BarPreviewState(
@@ -348,14 +371,17 @@ public sealed partial class SettingsPanel : UserControl
 
     private void Rebuild()
     {
+        CancelYahooSearch(updateUi: false);
         RightToLeft = Loc.IsRtl ? RightToLeft.Yes : RightToLeft.No;
         var selectedTab = built ? CurrentLeaf() : 0;
+        var aboutSection = selectedAboutSection;
         SuspendLayout();
         foreach (var c in Controls.Cast<Control>().ToList()) c.Dispose();
         Controls.Clear();
         dirtyTrackingAttached = false;
         Build();
         SelectTab(selectedTab);
+        if (showAboutTabs) SelectAboutSection(aboutSection);
         ResumeLayout(true);
     }
 
@@ -363,55 +389,59 @@ public sealed partial class SettingsPanel : UserControl
     {
         loading = true;
         watchLists.Clear();
+        transientControls.Clear();
         tabs = new FlatNav { Dock = DockStyle.Fill };
         tabs.Badge = new AnimatedAppIcon(() => !MinimiseAnimation.Simple);   // always moving: the tray option is for the tray icon only
 
-        // One navigation rail: three groups (Settings, Sources, Information), every page under its group.
+        // Stable page IDs keep automation independent of the visible order.
+        pageIds.Clear();
+        previewPages.Clear();
         AddGroup(Loc.T("pk.settings"),
-            (Loc.T("pk.general"), BuildGeneral()),
-            // Every bar setting is on one page: placement, what each bar shows, the desktop bar.
-            (L("tab.bars"), Combine(
-                (Loc.T("pk.placement.and.behaviour.where"), BuildPosition()),
-                (Loc.T("pk.what.each.bar.shows"), BuildBars()),
-                (Loc.T("pk.desktop.bar.a.free"), BuildDesktopBar()),
-                (Loc.T("pk.other.monitors.one.bar"), BuildMonitors()))),
-            (L("tab.look"), BuildLook()),
-            (Loc.IsGreek ? "P1 · Στούντιο widgets" : "P1 · Widget Studio", BuildWidgetStudio()),
-            (L("tab.breaking"), BuildBreaking()));
-        AddGroup(L("tab.sources"),
-            (Loc.T("pk.news.flow"), Combine((null, BuildSources()), (L("tab.readLater"), BuildReadLater()))),
-            (Loc.T("pk.markets.flow"), BuildMarkets()),
-            (Loc.T("pk.weather.flow"), BuildWeather()),
-            (L("hazard.flow"), BuildHazards()),
-            (L("history.flow"), BuildHistory()),
-            (Loc.IsGreek ? "P2 · Έξυπνες ειδήσεις" : "P2 · News intelligence", BuildP2Insights()));
-        var info = new List<(string, Control)>();
+            ("general", Loc.T("pk.general"), BuildGeneral(), false));
+        AddGroup(L("tab.bars"),
+            ("position", L("tab.position"), BuildPosition(), true),
+            ("content", L("nav.barContent"), BuildBars(), true),
+            ("desktop", L("pk.desktop.bar"), BuildDesktopBar(), true),
+            ("monitors", L("card.monitors"), BuildMonitors(), true),
+            ("appearance", L("tab.look"), BuildLook(), true),
+            ("widgets", L("nav.widgetStudio"), BuildWidgetStudio(), false));
+        AddGroup(L("nav.news"),
+            ("sources", Loc.T("pk.news.flow"), BuildSources(), false),
+            ("readLater", L("tab.readLater"), BuildReadLater(), false),
+            ("breaking", L("tab.breaking"), BuildBreaking(), false),
+            ("intelligence", L("nav.intelligence"), BuildP2Insights(), false));
+        AddGroup(L("nav.data"),
+            ("markets", Loc.T("pk.markets.flow"), BuildMarkets(), false),
+            ("weather", Loc.T("pk.weather.flow"), BuildWeather(), false),
+            ("hazards", L("hazard.flow"), BuildHazards(), false),
+            ("historyFeed", L("history.flow"), BuildHistory(), false));
+        var info = new List<(string, string, Control, bool)>();
+        info.Add(("updates", L("tab.updates"), BuildUpdates(), false));
+        info.Add(("dependencies", L("tab.dependencies"), BuildDependencies(), false));
         if (showAboutTabs)
         {
-            info.Add((L("tab.help"), BuildInfoPage(() => AboutTexts.Help, host)));
-            info.Add((L("tab.instructions"), BuildInfoPage(() => AboutTexts.Instructions, host)));
-            info.Add((L("tab.history"), BuildInfoPage(() => AboutTexts.History)));
-            info.Add((L("tab.license"), BuildInfoPage(() => AboutTexts.License)));
+            info.Add(("help", AboutTexts.HelpTitle, BuildAboutPage(), false));
         }
-        info.Add((L("tab.updates"), BuildUpdates()));
-        info.Add((L("tab.dependencies"), BuildDependencies()));
         AddGroup(Loc.T("pk.information"), info.ToArray());
+        if (showAboutTabs)
+            foreach (var alias in new[] { "instructions", "license", "history" }) pageIds[alias] = pageIds["help"];
 
         // Every change is saved by itself a moment after it is made (see AutoApply): there is no Apply button, and the window closes with its own X.
         // Export / import of the settings live on the General page (card "Backup of the settings").
         status = new Label { AutoSize = true, MaximumSize = new Size(900, 0), Padding = new Padding(8, 11, 0, 0), Tag = "muted", Text = L("settings.legend") };
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, Padding = new Padding(12, 4, 12, 6) };
         bar.Controls.Add(status);
-        autoApplyTimer.Tick += (_, _) =>
-        {
-            autoApplyTimer.Stop();
-            if (!IsDisposed && !loading && built && hasUnsavedChanges) ApplySettings();
-        };
-        VisibleChanged += (_, _) => FlushPendingChanges();   // leaving the page (Opsis) or hiding the window saves what is pending
+        // The lifetime-owned auto-apply handler is registered once in the constructor.
 
-        barPreview = new BarPreview { Dock = DockStyle.Bottom, Visible = false };
+        barPreview = new BarPreview { Visible = false };
+        tabs.SetFooter(barPreview);
+        tabs.SelectedIndexChanged += (_, _) =>
+        {
+            if (pageIds.TryGetValue("markets", out var markets) && tabs.SelectedIndex != markets)
+                CancelYahooSearch();
+            UpdatePreview();
+        };
         Controls.Add(tabs);
-        Controls.Add(barPreview);
         Controls.Add(bar);
         built = true;
 
@@ -425,10 +455,32 @@ public sealed partial class SettingsPanel : UserControl
     }
 
     /// <summary>A group heading of the navigation rail with its pages; every page is one of the Build... pages.</summary>
-    private void AddGroup(string title, params (string Title, Control Page)[] pages)
+    private void AddGroup(string title, params (string Id, string Title, Control Page, bool Preview)[] pages)
     {
         tabs.AddGroup(title);
-        foreach (var (pageTitle, page) in pages) tabs.AddPage(pageTitle, page);
+        foreach (var (id, pageTitle, page, preview) in pages)
+        {
+            var index = tabs.AddPage(pageTitle, page);
+            pageIds.Add(id, index);
+            if (preview) previewPages.Add(index);
+        }
+    }
+
+    public bool SelectPage(string id)
+    {
+        if (!pageIds.TryGetValue(id, out var index)) return false;
+        SelectTab(index);
+        if (id is "help" or "instructions" or "license" or "history") SelectAboutSection(id);
+        return true;
+    }
+
+    internal bool SearchFindsPage(string query, string pageId)
+    {
+        if (!pageIds.TryGetValue(pageId, out var index)) return false;
+        tabs.SearchFor(query);
+        var matches = tabs.SearchMatches(index);
+        tabs.SearchFor("");
+        return matches;
     }
 
     private int CurrentLeaf() => Math.Max(0, tabs.SelectedIndex);
@@ -473,7 +525,8 @@ public sealed partial class SettingsPanel : UserControl
     {
         var row = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 2, 0, 2) };
         // The label grows to a second or third line instead of being cut off (long translations), so the row adapts to its content.
-        var needed = TextRenderer.MeasureText(label, new Font("Segoe UI", 9f), new Size(labelWidth, 0), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height + 10;
+        using var labelFont = new Font("Segoe UI", 9f);
+        var needed = TextRenderer.MeasureText(label, labelFont, new Size(labelWidth, 0), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height + 10;
         row.Controls.Add(new Label { Text = label, AutoSize = false, Width = labelWidth, Height = Math.Max(32, needed), TextAlign = ContentAlignment.MiddleLeft });
         row.Controls.Add(control);
         return row;
@@ -511,30 +564,6 @@ public sealed partial class SettingsPanel : UserControl
         refresh = new FlatNumber();
         refresh.Configure(AppConfig.MinRefreshSeconds, AppConfig.MaxRefreshSeconds, 30);
         flow.Controls.Add(Row(L("lbl.refresh"), refresh));
-        speed = new FlatNumber();
-        speed.Configure(AppConfig.MinScrollSpeed, AppConfig.MaxScrollSpeed, 10);
-        flow.Controls.Add(Row(L("lbl.speed"), speed));
-
-        // Each bar, and each half of a split bar, has its own speed; 0 = the same as the speed above.
-        var speedCard = new FlatCard(L("speed.card"));
-        var speedFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        speedFlow.Controls.Add(Note(L("speed.note"), 700));
-        FlatNumber SpeedBox()
-        {
-            var box = new FlatNumber { Width = 120 };
-            box.Configure(0, AppConfig.MaxScrollSpeed, 10);
-            return box;
-        }
-        speedMainB = SpeedBox(); speedSecond = SpeedBox(); speedSecondB = SpeedBox(); speedMini = SpeedBox(); speedMiniB = SpeedBox(); speedMonitor = SpeedBox(); speedMonitorB = SpeedBox();
-        speedFlow.Controls.Add(Row(L("speed.mainB"), speedMainB, 340));
-        speedFlow.Controls.Add(Row(L("speed.second"), speedSecond, 340));
-        speedFlow.Controls.Add(Row(L("speed.secondB"), speedSecondB, 340));
-        speedFlow.Controls.Add(Row(L("speed.mini"), speedMini, 340));
-        speedFlow.Controls.Add(Row(L("speed.miniB"), speedMiniB, 340));
-        speedFlow.Controls.Add(Row(L("speed.monitors"), speedMonitor, 340));
-        speedFlow.Controls.Add(Row(L("speed.monitorsB"), speedMonitorB, 340));
-        speedCard.Controls.Add(speedFlow);
-        flow.Controls.Add(speedCard);
 
         // Performance: Automatic follows the PC (what was detected is shown); the others force a tier.
         var perfCard = new FlatCard(L("card.performance"));
@@ -608,16 +637,7 @@ public sealed partial class SettingsPanel : UserControl
         };
         flow.Controls.Add(reset);
         flow.Controls.Add(openLog);
-        var diagnostics = new FlatButton
-        {
-            Text = Loc.T("diag.button")
-        };
-        diagnostics.Click += (_, _) =>
-        {
-            using var dialog = new P0DiagnosticsForm(host);
-            dialog.ShowDialog(this);
-        };
-        flow.Controls.Add(diagnostics);
+        // Diagnostics already lives in the overview card above.
         return page;
     }
 
@@ -730,10 +750,39 @@ public sealed partial class SettingsPanel : UserControl
         flow.Controls.Add(second);
 
         secondEnabled.CheckedChanged += (_, _) => UpdateBarsUi();
+        flow.Controls.Add(BuildSpeedCard());
         return page;
     }
 
-    /// <summary>The bars of the other monitors (one per screen, each with its own content): the last section of the Bars page.</summary>
+    /// <summary>All bar scroll speeds in one place.</summary>
+    private Control BuildSpeedCard()
+    {
+        // Each bar, and each half of a split bar, has its own speed; 0 = the same as the main speed.
+        var speedCard = new FlatCard(L("speed.card"));
+        var speedFlow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+        speed = new FlatNumber();
+        speed.Configure(AppConfig.MinScrollSpeed, AppConfig.MaxScrollSpeed, 10);
+        speedFlow.Controls.Add(Row(L("lbl.speed"), speed, 340));
+        speedFlow.Controls.Add(Note(L("speed.note"), 700));
+        FlatNumber SpeedBox()
+        {
+            var box = new FlatNumber { Width = 120 };
+            box.Configure(0, AppConfig.MaxScrollSpeed, 10);
+            return box;
+        }
+        speedMainB = SpeedBox(); speedSecond = SpeedBox(); speedSecondB = SpeedBox(); speedMini = SpeedBox(); speedMiniB = SpeedBox(); speedMonitor = SpeedBox(); speedMonitorB = SpeedBox();
+        speedFlow.Controls.Add(Row(L("speed.mainB"), speedMainB, 340));
+        speedFlow.Controls.Add(Row(L("speed.second"), speedSecond, 340));
+        speedFlow.Controls.Add(Row(L("speed.secondB"), speedSecondB, 340));
+        speedFlow.Controls.Add(Row(L("speed.mini"), speedMini, 340));
+        speedFlow.Controls.Add(Row(L("speed.miniB"), speedMiniB, 340));
+        speedFlow.Controls.Add(Row(L("speed.monitors"), speedMonitor, 340));
+        speedFlow.Controls.Add(Row(L("speed.monitorsB"), speedMonitorB, 340));
+        speedCard.Controls.Add(speedFlow);
+        return speedCard;
+
+    }
+
     private Control BuildMonitors()
     {
         var page = NewPage(out var flow);
@@ -1147,25 +1196,86 @@ public sealed partial class SettingsPanel : UserControl
         UpdateStockStatus(CatalogFor(SelectedMic).Count);
     }
 
-    private static Control BuildInfoPage(Func<string> text, TickerHost? host = null)
+    private string selectedAboutSection = "instructions";
+    private readonly Dictionary<string, Control> aboutPages = new();
+    private readonly Dictionary<string, FlatButton> aboutButtons = new();
+
+    // Same three-section pattern as GearWin; shared controls, one destination, no extra background timer.
+    private Control BuildAboutPage()
+    {
+        aboutPages.Clear();
+        aboutButtons.Clear();
+        var page = new Panel { Padding = new Padding(8, 6, 8, 6) };
+        var body = new Panel { Dock = DockStyle.Fill };
+        var header = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true,
+            Padding = new Padding(8, 4, 8, 4) };
+        foreach (var (id, caption, text) in new (string, string, Func<string>)[]
+        {
+            ("instructions", AboutTexts.HelpTitle, () => AboutTexts.Guide),
+            ("license", L("tab.license"), () => AboutTexts.License),
+            ("history", L("tab.history"), () => AboutTexts.History)
+        })
+        {
+            var button = new FlatButton { Text = caption, Name = "about-" + id };
+            transientControls.Add(button);
+            button.Click += (_, _) => SelectAboutSection(id);
+            header.Controls.Add(button);
+            aboutButtons.Add(id, button);
+            var section = BuildInfoPage(text, id == "instructions" ? host : null);
+            section.Dock = DockStyle.Fill;
+            section.Visible = false;
+            body.Controls.Add(section);
+            aboutPages.Add(id, section);
+        }
+        page.Controls.Add(body);
+        page.Controls.Add(header);
+        SelectAboutSection("instructions");
+        return page;
+    }
+
+    private void SelectAboutSection(string id)
+    {
+        if (id == "help") id = "instructions";
+        if (!aboutPages.ContainsKey(id)) return;
+        selectedAboutSection = id;
+        foreach (var (key, page) in aboutPages) page.Visible = key == id;
+        foreach (var (key, button) in aboutButtons) button.SetPrimary(key == id);
+    }
+
+    internal string SelectedAboutSection => selectedAboutSection;
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == Keys.F1 && showAboutTabs)
+        {
+            FlushPendingChanges();
+            SelectPage("help");
+            return true;
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    private Control BuildInfoPage(Func<string> text, TickerHost? infoHost = null)
     {
         var page = new Panel { Padding = new Padding(8, 6, 8, 6) };
         var box = new TextBox
         {
             Multiline = true, ReadOnly = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, BorderStyle = BorderStyle.None,
-            Font = new Font("Segoe UI", 10f), TabStop = false, Tag = "surface",
+            Font = new Font("Segoe UI", 10f), TabStop = true, Tag = "surface",
             Text = text().Replace("\r\n", "\n").Replace("\n", "\r\n")
         };
         var frame = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 12, 8, 12), Tag = "surface" };
         frame.Controls.Add(box);
         page.Controls.Add(frame);
-        if (host is not null)
+        if (infoHost is not null)
         {
             var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, Padding = new Padding(16, 4, 8, 4) };
             var welcome = new FlatButton { Text = Loc.T("tray.welcome") };
             var family = new FlatButton { Text = Loc.T("tray.suite") };
-            welcome.Click += (_, _) => host.ShowWelcome();
-            family.Click += (_, _) => host.ShowSuite();
+            transientControls.Add(welcome);
+            transientControls.Add(family);
+            welcome.Click += (_, _) => infoHost.ShowWelcome();
+            family.Click += (_, _) => infoHost.ShowSuite();
             bar.Controls.Add(welcome);
             bar.Controls.Add(family);
             page.Controls.Add(bar);   // Top, added after the Fill frame so it docks above it
@@ -1190,13 +1300,13 @@ public sealed partial class SettingsPanel : UserControl
 
     public void LoadFromConfig()
     {
+        CancelYahooSearch();
         var was = loading;
         loading = true;
         try
         {
             var c = host.Config;
-            workTopics = (c.TopicWatches ?? new()).Select(t=>new TopicWatch {
-                Name=t.Name, Terms=t.Terms.ToList(), Region=t.Region, Enabled=t.Enabled }).ToList();
+            workTopics = (c.TopicWatches ?? new()).Select(t => t.Clone()).ToList();
             RebuildTopics();
             LoadWidgetStudio();
             var langs = Loc.Available();
@@ -1276,7 +1386,7 @@ public sealed partial class SettingsPanel : UserControl
             taskbarColor.SelectSilently(c.TaskbarBarColorMode switch { "lightblue" => 1, "accent" => 2, "custom" => 3, _ => 0 });
             taskbarSwatch.Rgb = c.TaskbarBarCustomColor;
             taskbarSwatch.Enabled = taskbarColor.SelectedIndex == 3;
-            taskbarBackdrop.Enabled = taskbarColor.SelectedIndex != 0;   // completely clear = no material at all
+            taskbarBackdrop.Enabled = true; // material is independent of the selected tint
             barBackdrop.SelectSilently(c.BarBackdrop switch { "blur" => 1, "gradient" => 2, _ => 0 });
             taskbarBackdrop.SelectSilently(c.TaskbarBarBackdrop switch { "acrylic" => 0, "gradient" => 2, _ => 1 });
             breakingEnabled.Checked = c.BreakingEnabled;
@@ -1339,6 +1449,7 @@ public sealed partial class SettingsPanel : UserControl
         dirtyTrackingAttached = true;
         foreach (var control in Descendants(tabs))
         {
+            if (transientControls.Contains(control)) continue;
             switch (control)
             {
                 case FlatCheckBox check:
@@ -1508,8 +1619,9 @@ public sealed partial class SettingsPanel : UserControl
 
     private static IEnumerable<Control> Descendants(Control root)
     {
-        foreach (Control child in root.Controls)
+        foreach (var child in root.Controls.Cast<Control>().ToArray())
         {
+            if (child.IsDisposed || child.Parent != root) continue;
             yield return child;
             foreach (var nested in Descendants(child)) yield return nested;
         }
@@ -1530,7 +1642,7 @@ public sealed partial class SettingsPanel : UserControl
     public void FlushPendingChanges()
     {
         autoApplyTimer.Stop();
-        if (hasUnsavedChanges && built && !loading && !IsDisposed) ApplySettings();
+        if (hasUnsavedChanges && built && !loading && !applying && !IsDisposed && !Disposing) ApplySettings();
     }
 
     /// <summary>Called before the window is hidden: a pending change is saved (there is no "unsaved changes" question any more); always true.</summary>
@@ -1568,7 +1680,9 @@ public sealed partial class SettingsPanel : UserControl
     private void UpdateYahooUi()
     {
         var on = yahooHistory.Checked;
+        if (!on) CancelYahooSearch(updateUi: false);
         foreach (var c in new Control[] { yahooSearch, yahooSearchButton, yahooAddButton, yahooRemoveButton, yahooHitList, yahooGroup }.Concat(yahooPresetButtons)) c.Enabled = on;
+        yahooSearchButton.Enabled = on && yahooSearchLease is null;
         if (!on) yahooStatus.Text = L("yahoo.off");
         else if (yahooStatus.Text.Length == 0 || yahooStatus.Text == L("yahoo.off")) yahooStatus.Text = L("yahoo.localHint");
     }
@@ -1577,6 +1691,7 @@ public sealed partial class SettingsPanel : UserControl
     private void ShowYahooCatalogue()
     {
         if (yahooHitList is null || yahooHitList.IsDisposed) return;
+        CancelYahooSearch();
         var groupKey = yahooGroup.SelectedIndex > 0 && yahooGroup.SelectedIndex <= YahooPresets.All.Count ? YahooPresets.All[yahooGroup.SelectedIndex - 1].Key : null;
         var items = YahooPresets.Filter(groupKey, yahooSearch.Value);
         yahooHits = items.Select(x => new YahooHit(x.Item.Symbol, Loc.IsGreek ? x.Item.NameEl : x.Item.NameEn, L("yahoo.group." + x.GroupKey), "")).ToList();
@@ -1585,28 +1700,57 @@ public sealed partial class SettingsPanel : UserControl
         yahooStatus.Text = yahooHits.Count == 0 ? L("yahoo.none") : L("yahoo.localHint");
     }
 
-    private async Task RunYahooSearchAsync()
+    private void CancelYahooSearch(bool updateUi = true)
     {
+        var old = yahooSearchLease;
+        yahooSearchLease = null;
+        old?.Cancel(); // the awaiting operation owns disposal
+        if (old is not null && updateUi && !IsDisposed && !Disposing && yahooSearchButton is { IsDisposed: false })
+        {
+            yahooSearchButton.Enabled = yahooHistory.Checked;
+            yahooStatus.Text = yahooHistory.Checked ? L("yahoo.localHint") : L("yahoo.off");
+        }
+    }
+
+    // Test seam uses the same UI lifecycle without a provider request.
+    internal async Task RunYahooSearchAsync(Func<string, CancellationToken, Task<IReadOnlyList<YahooHit>>>? search = null)
+    {
+        if (IsDisposed || Disposing || !Visible || !yahooHistory.Checked || yahooSearchLease is not null) return;
         var query = yahooSearch.Value.Trim();
-        if (query.Length < 2 || !yahooHistory.Checked) return;
-        // the switch is applied with the other settings; a search needs it now
-        YahooAccess.Enabled = true;
+        if (query.Length < 2) return;
+        using var lease = new CancellationTokenSource();
+        yahooSearchLease = lease;
+        var token = lease.Token;
         yahooSearchButton.Enabled = false;
         yahooStatus.Text = Loc.T("pk.testing");
+        bool IsCurrent() => ReferenceEquals(yahooSearchLease, lease) && !token.IsCancellationRequested &&
+            !IsDisposed && !Disposing && Visible && yahooHistory.Checked &&
+            string.Equals(query, yahooSearch.Value.Trim(), StringComparison.Ordinal);
         try
         {
-            yahooHits = (await YahooSearch.SearchAsync(query, CancellationToken.None)).ToList();
+            // Explicit checked consent for this manual request only. Never toggle the
+            // process-wide history/quotes switch or restore an obsolete global value.
+            var result = await (search is null
+                ? YahooSearch.SearchAsync(query, token, explicitlyEnabled: true)
+                : search(query, token));
+            if (!IsCurrent()) return;
+            yahooHits = result.ToList();
             yahooHitList.ClearRows();
             foreach (var h in yahooHits) yahooHitList.AddRow($"{h.Symbol}  —  {h.Name}   ({h.Type}, {h.Exchange})", false);
             yahooStatus.Text = yahooHits.Count == 0 ? L("yahoo.none") : Loc.T("yahoo.found", yahooHits.Count);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException)
         {
-            yahooStatus.Text = Loc.T("yahoo.error", ex.Message);
+            if (IsCurrent()) yahooStatus.Text = Loc.T("yahoo.error", ex.Message);
         }
         finally
         {
-            if (!IsDisposed) { yahooSearchButton.Enabled = yahooHistory.Checked; YahooAccess.Enabled = host.Config.HistoryFromYahoo; }
+            if (ReferenceEquals(yahooSearchLease, lease))
+            {
+                yahooSearchLease = null;
+                if (!IsDisposed && !Disposing) yahooSearchButton.Enabled = yahooHistory.Checked;
+            }
         }
     }
 
@@ -1656,10 +1800,18 @@ public sealed partial class SettingsPanel : UserControl
 
     private void ApplySettings()
     {
+        if (applying || loading || IsDisposed || Disposing) return;
+        applying = true;
+        try { ApplySettingsCore(); }
+        finally { applying = false; }
+    }
+
+    private void ApplySettingsCore()
+    {
         var c = host.Config;
         c.WidgetProfiles = ReadWidgetStudio();
-        c.TopicWatches = workTopics.Select(t => new TopicWatch { Name=t.Name, Terms=t.Terms.ToList(),
-            Region=t.Region, Enabled=t.Enabled }).ToList();
+        c.TopicWatches = workTopics.Select(t => t.Clone()).ToList();
+        TopicWatch.EnsureStableIds(c.TopicWatches);
         var mutedKeywords = mutedNewsKeywords.Value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).Take(100).ToList();
         var newsSettingsChanged = c.NewsMaxAgeHours != newsMaxAge.Value || c.NewsSortNewestFirst != newsNewestFirst.Checked || c.StockNewsOnly != stockNewsOnly.Checked || !c.MutedNewsKeywords.SequenceEqual(mutedKeywords, StringComparer.OrdinalIgnoreCase);
         c.Language = Loc.Available().ElementAtOrDefault(Math.Max(0, language.SelectedIndex)).Code ?? c.Language;
@@ -2178,19 +2330,30 @@ public sealed partial class SettingsPanel : UserControl
     }
 
     /// <summary>Downloads the selected feed (or every feed of the category) and reports whether it works and how fresh it is.</summary>
+    private bool testingFeeds;
     private async void TestFeeds(bool selectedOnly)
     {
+        if (testingFeeds) return;
         if (SelectedCategory() is not { } cat) return;
         var feeds = selectedOnly
             ? (feedList.SelectedIndex >= 0 && feedList.SelectedIndex < cat.Feeds.Count ? new List<FeedSource> { cat.Feeds[feedList.SelectedIndex] } : new List<FeedSource>())
             : cat.Feeds.ToList();
         if (feeds.Count == 0) return;
-        discoverStatus.Text = Loc.T("pk.testing");
+        testingFeeds = true;
+        var statusLabel = discoverStatus;
+        statusLabel.Text = Loc.T("pk.testing");
         try
         {
             using var provider = new RssNewsProvider();
-            var results = await Task.WhenAll(feeds.Select(f => provider.TestAsync(f.Url))).ConfigureAwait(true);
-            if (IsDisposed) return;
+            using var limit = new SemaphoreSlim(RssNewsProvider.MaxConcurrentPerHost);
+            async Task<FeedTestResult> TestOne(FeedSource feed)
+            {
+                await limit.WaitAsync();
+                try { return await provider.TestAsync(feed.Url); }
+                finally { limit.Release(); }
+            }
+            var results = await Task.WhenAll(feeds.Select(TestOne)).ConfigureAwait(true);
+            if (IsDisposed || statusLabel.IsDisposed || !ReferenceEquals(statusLabel, discoverStatus)) return;
             if (feeds.Count == 1)
             {
                 var r = results[0];
@@ -2207,8 +2370,9 @@ public sealed partial class SettingsPanel : UserControl
         catch (Exception ex)
         {
             Log.Write($"feed test failed: {ex.GetType().Name}: {ex.Message}");
-            if (!IsDisposed) discoverStatus.Text = ex is OperationCanceledException or InvalidOperationException ? ex.Message : Loc.T("feed.fail", ex.GetType().Name);
+            if (!IsDisposed && !statusLabel.IsDisposed) statusLabel.Text = ex is OperationCanceledException or InvalidOperationException ? ex.Message : Loc.T("feed.fail", ex.GetType().Name);
         }
+        finally { testingFeeds = false; }
     }
 
     private void ImportOpml()
@@ -2259,31 +2423,40 @@ public sealed partial class SettingsPanel : UserControl
     {
         if (SelectedCategory() is not { } cat) return;
         var text = siteBox.Value.Trim();
-        if (text.Length == 0) return;
-        discoverStatus.Text = L("msg.searching");
-        siteBox.Enabled = false;
+        if (text.Length == 0 || !siteBox.Enabled) return;
+        var input = siteBox;
+        var statusLabel = discoverStatus;
+        var categoryId = cat.Id;
+        statusLabel.Text = L("msg.searching");
+        input.Enabled = false;
         try
         {
             var found = await FeedDiscovery.DiscoverAsync(text);
-            if (IsDisposed) return;
+            if (IsDisposed || input.IsDisposed || !ReferenceEquals(input, siteBox)) return;
+            // An auto-save or a category edit may replace the editable list while discovery is running.
+            var target = workCategories.FirstOrDefault(c => c.Id == categoryId);
+            if (target is null) return;
             if (found.Count == 0)
             {
                 discoverStatus.Text = L("msg.noRss");
                 return;
             }
-            foreach (var f in found.Take(3)) AddFeed(cat, f.Name, f.Url);
-            discoverStatus.Text = Loc.T("msg.added", Math.Min(3, found.Count));
+            var before = target.Feeds.Count;
+            foreach (var f in found.Take(3)) AddFeed(target, f.Name, f.Url);
+            var added = target.Feeds.Count - before;
+            statusLabel.Text = added == 0 ? L("msg.exists") : Loc.T("msg.added", added);
+            if (added > 0) MarkDirty();
             siteBox.Value = "";
         }
         catch (Exception ex)
         {
             // an async void handler must never let an exception out: it would end the program
             Log.Write($"add feed from site failed: {ex.GetType().Name}: {ex.Message}");
-            if (!IsDisposed) discoverStatus.Text = L("msg.noRss");
+            if (!IsDisposed && !statusLabel.IsDisposed) statusLabel.Text = L("msg.noRss");
         }
         finally
         {
-            if (!IsDisposed) siteBox.Enabled = true;
+            if (!IsDisposed && !input.IsDisposed) input.Enabled = true;
         }
     }
 

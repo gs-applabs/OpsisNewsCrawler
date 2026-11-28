@@ -190,7 +190,7 @@ public sealed class AppConfig
     public bool WelcomeDisabled { get; set; }
     /// <summary>Version for which the Opsis family window was offered after the welcome guide.</summary>
     public string SuiteOfferedVersion { get; set; } = "";
-    /// <summary>1 = the update logic of 0.13.6 (check on by default); older settings files get the new default once.</summary>
+    /// <summary>1 = current update logic. Preserve an explicit user choice when migrating older settings.</summary>
     public int UpdateLogicVersion { get; set; }
     public DateTimeOffset LastUpdateCheck { get; set; } = DateTimeOffset.MinValue;
 
@@ -476,9 +476,9 @@ public sealed class AppConfig
             {
                 config = new AppConfig { IsFirstRun = true };
                 config.Normalize();
-                config.Save(path);
-                // A clean install has no config yet: the choices of the setup (language, default bar, start with Windows) must still be applied.
+                // Apply the one-time setup choices before creating the first config.
                 ApplyFirstRun(config, path);
+                config.Save(path);
                 return config;
             }
 
@@ -507,24 +507,40 @@ public sealed class AppConfig
         {
             if (!File.Exists(file)) return;
             using var doc = JsonDocument.Parse(File.ReadAllText(file));
-            if (doc.RootElement.TryGetProperty("Language", out var lang) && lang.GetString() is { Length: > 0 } code)
-            {
+            // An existing config is authoritative, even if an old setup marker survived.
+            if (config.IsFirstRun && doc.RootElement.TryGetProperty("Language", out var lang) &&
+                lang.ValueKind == JsonValueKind.String && lang.GetString() is { Length: > 0 } code)
                 config.Language = code;
-                config.Save(configPath);
-            }
             if (doc.RootElement.TryGetProperty("StartWithWindows", out var sw) && sw.ValueKind == JsonValueKind.True) config.StartWithWindowsRequested = true;
-            if (doc.RootElement.TryGetProperty("Position", out var p) &&
-                Enum.TryParse<TickerPosition>(p.GetString(), true, out var position) &&
+            if (config.IsFirstRun && doc.RootElement.TryGetProperty("Position", out var p) &&
+                p.ValueKind == JsonValueKind.String && Enum.TryParse<TickerPosition>(p.GetString(), true, out var position) &&
                 position is TickerPosition.BottomTaskbar or TickerPosition.TaskbarIntegrated)
             {
                 config.Position = position;
                 if (position == TickerPosition.TaskbarIntegrated) config.SecondBarEnabled = false;
-                config.Save(configPath);
             }
-            File.Delete(file);
+            if (config.IsFirstRun && !config.TrySave(configPath)) return;
+            // Keep a requested startup action until the real standalone app
+            // confirms that it has written the correct per-user Run entry.
+            // Config readers (including the hosted plugin) cannot consume it.
+            if (!config.StartWithWindowsRequested) File.Delete(file);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
+        }
+    }
+
+    public void AcknowledgeStartupRegistration(string configPath)
+    {
+        if (!StartWithWindowsRequested) return;
+        try
+        {
+            File.Delete(Path.Combine(Path.GetDirectoryName(configPath) ?? "", "first-run.json"));
+            StartWithWindowsRequested = false;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Write("Startup handoff acknowledgement failed: " + ex.GetType().Name);
         }
     }
 
@@ -537,7 +553,7 @@ public sealed class AppConfig
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            SafeFile.WriteAllText(path, JsonSerializer.Serialize(this, JsonOptions));
+            SafeFile.WriteAllTextIfChanged(path, JsonSerializer.Serialize(this, JsonOptions));
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -548,7 +564,7 @@ public sealed class AppConfig
 
     internal void Normalize()
     {
-        if (UpdateLogicVersion < 1) { CheckForUpdates = true; UpdateLogicVersion = 1; }
+        if (UpdateLogicVersion < 1) UpdateLogicVersion = 1;
         NewsRefreshSeconds = RefreshIntervalSeconds;
         PerformanceMode = PerformanceClassifier.ModeText(PerformanceClassifier.ParseMode(PerformanceMode));
         NetworkCostMode = NetworkCostMode == "metered" ? "metered" : "normal";   // "auto" | "low" | "balanced" | "high"
@@ -609,7 +625,7 @@ public sealed class AppConfig
                 (x.Metric == "changePercent" ? x.Threshold is >= -100 and <= 100 : x.Threshold > 0))
             .Select(x => { x.Metric = x.Metric == "changePercent" ? "changePercent" : "price"; x.RearmMargin = Math.Clamp(x.RearmMargin, 0m, 1_000_000m); x.MaxAgeMinutes = Math.Clamp(x.MaxAgeMinutes, 0, 10080); return x; }).Take(200).ToList();
         TopicWatches = (TopicWatches ?? new()).Where(x => x is not null && !string.IsNullOrWhiteSpace(x.Name))
-            .Select(x => { x.Name=x.Name.Trim()[..Math.Min(80,x.Name.Trim().Length)]; x.Terms=(x.Terms ?? new()).Where(t=>t.Trim().Length>=3).Select(t=>t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList(); x.Region=(x.Region??"").Trim(); return x; })
+            .Select(x => { x.Name=x.Name.Trim()[..Math.Min(80,x.Name.Trim().Length)]; x.Terms=(x.Terms ?? new()).Where(t=>t is not null && t.Trim().Length>=3).Select(t=>t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList(); x.Region=(x.Region??"").Trim(); return x; })
             .Take(50).ToList();
         TopicWatch.EnsureStableIds(TopicWatches);
         EconomicEvents = (EconomicEvents ?? new()).Where(x => x is not null &&

@@ -25,7 +25,7 @@ public sealed class NewsArchive
     private bool dirty;
 
     public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OpsisNewsCrawler", "news-archive.json");
+        CrawlerDataPaths.Root, "news-archive.json");
 
     private sealed record File_(List<ArchivedStory> Stories, List<ArticleChange> Changes);
 
@@ -89,9 +89,9 @@ public sealed class NewsArchive
     {
         var cutoff = now.AddDays(-RetentionDays);
         foreach (var key in stories.Where(p => p.Value.SeenAt < cutoff).Select(p => p.Key).ToList()) { stories.Remove(key); dirty = true; }
+        if (changes.RemoveAll(c => c.SeenAt < cutoff) > 0) dirty = true;
         if (stories.Count <= MaxItems) return;
         foreach (var key in stories.OrderBy(p => p.Value.SeenAt).Take(stories.Count - MaxItems).Select(p => p.Key).ToList()) { stories.Remove(key); dirty = true; }
-        changes.RemoveAll(c => c.SeenAt < cutoff);
     }
 
     private void Write(DateTimeOffset now)
@@ -120,6 +120,7 @@ public sealed class NewsArchive
             foreach (var s in (data.Stories ?? new()).Where(s => s is not null && !string.IsNullOrEmpty(s.Url) && !string.IsNullOrEmpty(s.Title)).Take(MaxItems))
                 stories[s.Url] = s;
             changes.AddRange((data.Changes ?? new()).Where(c => c is not null).TakeLast(MaxChanges));
+            Prune(DateTimeOffset.UtcNow);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {

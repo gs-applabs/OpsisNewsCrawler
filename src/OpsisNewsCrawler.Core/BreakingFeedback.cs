@@ -70,7 +70,7 @@ public sealed class BreakingFeedback
 
     public bool IsEmpty => MutedSources.Count == 0 && MutedTopics.Count == 0 && RejectedStories.Count == 0 && SourceRejections.Count == 0;
 
-    public static string DefaultPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OpsisNewsCrawler", "breaking-feedback.json");
+    public static string DefaultPath => Path.Combine(CrawlerDataPaths.Root, "breaking-feedback.json");
 
     public static BreakingFeedback Load(string? path = null)
     {

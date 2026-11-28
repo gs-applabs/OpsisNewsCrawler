@@ -22,6 +22,7 @@ public class TaskbarMaintenanceTests
         Assert.True(TaskbarMaintenance.Decide(10, false, false, alreadyOnTop: false).KeepOnTop);
         Assert.True(TaskbarMaintenance.Decide(30, false, false, alreadyOnTop: false).KeepOnTop);
         Assert.False(TaskbarMaintenance.Decide(31, false, false, alreadyOnTop: false).KeepOnTop);
+        Assert.True(TaskbarMaintenance.Decide(2, false, false, alreadyOnTop: false).KeepOnTop);
     }
 
     [Fact]
@@ -52,4 +53,31 @@ public class TaskbarMaintenanceTests
     [InlineData("", false)]
     [InlineData(null, false)]
     public void ShellFlyoutClassesAreRecognised(string? name, bool expected) => Assert.Equal(expected, TaskbarMaintenance.IsShellFlyout(name));
+
+    [Fact]
+    public void FullscreenRequiresActualTargetMonitorCoverageAndNoCaption()
+    {
+        Assert.False(TaskbarMaintenance.CoversMonitor(true, 0, 0, 1920, 1080, 0, 0, 1920, 1080));
+        Assert.False(TaskbarMaintenance.CoversMonitor(false, 1920, 0, 3840, 1080, 0, 0, 1920, 1080));
+        Assert.False(TaskbarMaintenance.CoversMonitor(false, 0, 0, 1920, 1040, 0, 0, 1920, 1080));
+        Assert.True(TaskbarMaintenance.CoversMonitor(false, 0, 0, 1920, 1080, 0, 0, 1920, 1080));
+    }
+
+    [Fact]
+    public void TransientFullscreenIsIgnoredAndExitRecoversImmediately()
+    {
+        Assert.False(TaskbarMaintenance.ConfirmFullscreen(true, false, false));
+        Assert.True(TaskbarMaintenance.ConfirmFullscreen(true, true, false));
+        Assert.True(TaskbarMaintenance.ConfirmFullscreen(true, false, true));
+        Assert.False(TaskbarMaintenance.ConfirmFullscreen(false, true, true));
+    }
+
+    [Fact]
+    public void AutomaticGapIncludesPaddingAndNeverOverlapsButtons()
+    {
+        var span = TaskbarMaintenance.SelectFreeSpan(0, 1000, new[] { (-20, 200), (392, 800), (790, 1050) });
+        Assert.Equal((206, 386), span!.Value);
+        Assert.Null(TaskbarMaintenance.SelectFreeSpan(0, 1000, new[] { (0, 200), (391, 1000) }));
+        Assert.Null(TaskbarMaintenance.SelectFreeSpan(0, 1000, new[] { (-10, 1020) }));
+    }
 }

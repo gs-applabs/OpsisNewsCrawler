@@ -16,7 +16,7 @@ public sealed partial class TickerHost
     private DateTimeOffset? hazardDataAt;
 
     /// <summary>Disasters are fetched when a bar shows them, or when the animated icon should show the highest alert.</summary>
-    private bool NeedsHazards => Needs(SlotKind.Hazards) || Config.HazardInIcon;
+    private bool NeedsHazards => Needs(SlotKind.Hazards) || (BarsOn && Config.HazardInIcon);
 
     private HazardFilter HazardFilterNow() => new(Config.HazardRegion, Config.HazardMinMagnitude, Config.HazardMaxAgeHours,
         Config.HazardKinds.Count == 0 ? Enum.GetValues<HazardKind>() : Config.HazardKinds.Select(Enum.Parse<HazardKind>).ToList());
@@ -49,16 +49,18 @@ public sealed partial class TickerHost
 
     private async Task RefreshHazardsAsync()
     {
-        if (disposed || !NeedsHazards || refreshingHazards) return;
+        if (disposed || !started || !NeedsHazards || refreshingHazards) return;
         refreshingHazards = true;
+        var epoch = startEpoch;
+        var token = DemandToken("hazards");
         try
         {
-            var events = await hazardService.FetchAsync((HazardSources)Config.HazardSources, lifetimeToken);
+            var events = await hazardService.FetchAsync((HazardSources)Config.HazardSources, token);
             var failed = hazardService.LastFailed;
             var skipped = hazardService.LastSkipped;
             void Apply()
             {
-                if (disposed) return;
+                if (disposed || !started || token.IsCancellationRequested || epoch != startEpoch || !NeedsHazards) return;
                 hasHazards = true;
                 hazardFailed = failed;
                 hazardSkipped = skipped;
