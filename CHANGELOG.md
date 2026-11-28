@@ -11,6 +11,7 @@
 
 - Publishes the cumulative maintenance work after v0.30.0 (Passes 1-23 below, runtime candidate `2f2616ce` plus documentation): demand-scoped services and cancellation, bounded RSS deadlines, cache/icon/write limits, taskbar flicker and material fixes, graceful installer shutdown with payload verification, help/history/licence tabs, family feed and map window fixes. v0.30.0 was already published, so the product version is 0.30.1 (plugin and contract ABI stay 1.0.0.0).
 - Release gate fix: `WorldCatalogTests` shares the "custom places" collection (`GreekCities.Custom` is global; a parallel `AppConfig.Normalize` made the pull-request run fail 1 of 750).
+- Final candidate `5ac4e79` (PR #18): Windows build and tests 46111307505 / 46111302094 (750 Core + 81 Plugin, 0 failed), plugin ABI 46111307460, installer E2E 46111307484 (all jobs), extended soak 46111307818 (Low, 30 min active: CPU 0.52%, private memory +9.04 MiB, GDI 0, SafeFile +0.476 MiB; 2 min idle: CPU 0.02%, +0.52 MiB, GDI 0, no writes, demand guard passed). Not verified: physical Windows 10/11, multiple screens/DPI, GPU, UAC/SmartScreen, installed-host lifecycle, multi-hour run, Authenticode.
 - Resource evidence: extended soak 46108370603 (Pass 21, 30 min Low) private memory -2.99 MiB, GDI 0, CPU 0.53%; the +74.31 MiB of Pass 17 (46105509202) did not repeat. This is a smoke measurement, not a leak-free certification.
 
 ### Release handoff — 2026-11-28 (Pass 23 runtime, documentation-only successor)
