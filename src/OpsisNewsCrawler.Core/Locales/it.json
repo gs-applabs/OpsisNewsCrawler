@@ -745,5 +745,8 @@
   "nav.openIntelligence": "Apri il centro notizie",
   "note.taskbarMaterial": "Il materiale dello sfondo è indipendente dal colore. Sfocatura e acrilico seguono la barra delle applicazioni senza tinta personalizzata; il gradiente può apparire azzurro.",
   "guide.widgets": "I profili dei widget regolano disposizione, quantità di informazioni e filtri delle notizie. Opsis gestisce posizione e visibilità.",
-  "guide.intelligence": "Create e attivate elenchi di parole chiave. Il centro notizie offre storie raggruppate, confronto delle fonti, cronologie, analisi, ricerca nell'archivio e riepiloghi HTML. I confronti sono indizi, non verifiche dei fatti."
+  "guide.intelligence": "Create e attivate elenchi di parole chiave. Il centro notizie offre storie raggruppate, confronto delle fonti, cronologie, analisi, ricerca nell'archivio e riepiloghi HTML. I confronti sono indizi, non verifiche dei fatti.",
+  "plugin.inactive.safeMode": "Crawler è disattivato nella modalità provvisoria di Opsis.",
+  "plugin.inactive.standalone": "Crawler è in esecuzione come applicazione autonoma. Chiuderlo e scegliere Apri Crawler.",
+  "plugin.inactive.stopped": "Crawler è inattivo. Scegliere Apri Crawler dal menu."
 }

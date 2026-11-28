@@ -745,5 +745,8 @@
   "nav.openIntelligence": "Open news center",
   "note.taskbarMaterial": "The background material is independent of the color. Blur and Acrylic follow the taskbar without a custom tint; Gradient may appear light blue.",
   "guide.widgets": "Widget profiles control the layout, amount of information and news filters. Opsis owns placement and visibility.",
-  "guide.intelligence": "Create and enable keyword watchlists; open the news center for grouped stories, source comparison, timelines, analytics, archive search and HTML digests. Source comparisons are clues, not fact checks."
+  "guide.intelligence": "Create and enable keyword watchlists; open the news center for grouped stories, source comparison, timelines, analytics, archive search and HTML digests. Source comparisons are clues, not fact checks.",
+  "plugin.inactive.safeMode": "Crawler is disabled in Opsis Safe Mode.",
+  "plugin.inactive.standalone": "Standalone Crawler is running. Close it and choose Open Crawler.",
+  "plugin.inactive.stopped": "Crawler is inactive. Choose Open Crawler from the menu."
 }

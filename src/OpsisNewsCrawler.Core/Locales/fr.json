@@ -745,5 +745,8 @@
   "nav.openIntelligence": "Ouvrir le centre d’actualités",
   "note.taskbarMaterial": "Le matériau de fond est indépendant de la couleur. Le flou et l’acrylique suivent la barre des tâches sans teinte personnalisée ; le dégradé peut paraître bleu clair.",
   "guide.widgets": "Les profils de widgets règlent la disposition, le volume d'informations et les filtres d'actualités. Opsis gère la position et la visibilité.",
-  "guide.intelligence": "Créez et activez des listes de mots-clés. Le centre d'actualités propose des articles groupés, la comparaison des sources, des chronologies, des analyses, la recherche d'archives et des synthèses HTML. Les comparaisons sont des indices, pas des vérifications."
+  "guide.intelligence": "Créez et activez des listes de mots-clés. Le centre d'actualités propose des articles groupés, la comparaison des sources, des chronologies, des analyses, la recherche d'archives et des synthèses HTML. Les comparaisons sont des indices, pas des vérifications.",
+  "plugin.inactive.safeMode": "Crawler est désactivé en mode sans échec d’Opsis.",
+  "plugin.inactive.standalone": "Crawler fonctionne en mode autonome. Fermez-le puis choisissez Ouvrir Crawler.",
+  "plugin.inactive.stopped": "Crawler est inactif. Choisissez Ouvrir Crawler dans le menu."
 }

@@ -745,5 +745,8 @@
   "nav.openIntelligence": "打开新闻中心",
   "note.taskbarMaterial": "背景材质独立于颜色。模糊和亚克力跟随任务栏，不添加自定义色调；渐变可能呈浅蓝色。",
   "guide.widgets": "小组件配置文件用于设置布局、信息量和新闻筛选。位置和可见性由 Opsis 管理。",
-  "guide.intelligence": "创建并启用关键词列表。新闻中心提供报道分组、来源比较、时间线、分析、归档搜索和 HTML 摘要。比较仅提供线索，不代表事实核查。"
+  "guide.intelligence": "创建并启用关键词列表。新闻中心提供报道分组、来源比较、时间线、分析、归档搜索和 HTML 摘要。比较仅提供线索，不代表事实核查。",
+  "plugin.inactive.safeMode": "Crawler 在 Opsis 安全模式下已禁用。",
+  "plugin.inactive.standalone": "独立版 Crawler 正在运行。请关闭它，然后选择打开 Crawler。",
+  "plugin.inactive.stopped": "Crawler 未启用。请从菜单中选择打开 Crawler."
 }

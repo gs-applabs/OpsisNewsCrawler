@@ -745,5 +745,8 @@
   "nav.openIntelligence": "Nachrichtenzentrale öffnen",
   "note.taskbarMaterial": "Das Hintergrundmaterial ist unabhängig von der Farbe. Unschärfe und Acryl folgen der Taskleiste ohne eigene Tönung; der Verlauf kann hellblau erscheinen.",
   "guide.widgets": "Widget-Profile steuern Layout, Informationsmenge und Nachrichtenfilter. Opsis verwaltet Position und Sichtbarkeit.",
-  "guide.intelligence": "Erstellen und aktivieren Sie Stichwortlisten. Das Nachrichtenzentrum bietet gruppierte Meldungen, Quellenvergleich, Zeitachsen, Analysen, Archivsuche und HTML-Zusammenfassungen. Vergleiche sind Hinweise, keine Faktenprüfung."
+  "guide.intelligence": "Erstellen und aktivieren Sie Stichwortlisten. Das Nachrichtenzentrum bietet gruppierte Meldungen, Quellenvergleich, Zeitachsen, Analysen, Archivsuche und HTML-Zusammenfassungen. Vergleiche sind Hinweise, keine Faktenprüfung.",
+  "plugin.inactive.safeMode": "Crawler ist im abgesicherten Modus von Opsis deaktiviert.",
+  "plugin.inactive.standalone": "Crawler läuft eigenständig. Beenden Sie ihn und wählen Sie Crawler öffnen.",
+  "plugin.inactive.stopped": "Crawler ist inaktiv. Wählen Sie im Menü Crawler öffnen."
 }

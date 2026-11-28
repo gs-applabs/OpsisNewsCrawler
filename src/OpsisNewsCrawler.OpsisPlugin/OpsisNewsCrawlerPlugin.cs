@@ -178,11 +178,8 @@ internal sealed class TickerController
 
     internal Control CreateView(Func<TickerHost, Control> factory) => new OwnedCrawlerView(this, factory);
 
-    internal string UnavailableText => hostSafeMode
-        ? (Loc.IsGreek ? "Ο Crawler είναι ανενεργός σε ασφαλή λειτουργία του OPSIS." : "Crawler is disabled in Opsis Safe Mode.")
-        : StandaloneRunning
-            ? (Loc.IsGreek ? "Εκτελείται ο αυτόνομος Crawler. Κλείστε τον και επιλέξτε Άνοιγμα Crawler." : "Standalone Crawler is running. Close it and choose Open Crawler.")
-            : (Loc.IsGreek ? "Ο Crawler είναι ανενεργός. Επιλέξτε Άνοιγμα από το μενού." : "Crawler is inactive. Choose Open Crawler from the menu.");
+    internal string UnavailableText => Loc.T(hostSafeMode ? "plugin.inactive.safeMode" :
+        StandaloneRunning ? "plugin.inactive.standalone" : "plugin.inactive.stopped");
     private bool startRequested;
     private bool shellHold;
     private Func<double, double, Task<string>>? weatherProvider;
@@ -384,6 +381,7 @@ internal sealed class OwnedCrawlerView : UserControl
         {
             ReleaseContent();
             unavailable.Text = owner.UnavailableText;
+            unavailable.RightToLeft = Loc.IsRtl ? RightToLeft.Yes : RightToLeft.No;
             unavailable.Visible = true;
         }
         }

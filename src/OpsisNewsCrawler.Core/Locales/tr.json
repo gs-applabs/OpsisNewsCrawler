@@ -745,5 +745,8 @@
   "nav.openIntelligence": "Haber merkezini aç",
   "note.taskbarMaterial": "Arka plan malzemesi renkten bağımsızdır. Bulanıklık ve akrilik özel renk tonu olmadan görev çubuğunu izler; gradyan açık mavi görünebilir.",
   "guide.widgets": "Widget profilleri düzeni, bilgi miktarını ve haber filtrelerini belirler. Konum ve görünürlüğü Opsis yönetir.",
-  "guide.intelligence": "Anahtar kelime listeleri oluşturup etkinleştirin. Haber merkezi gruplanmış haberler, kaynak karşılaştırması, zaman çizelgesi, analiz, arşiv araması ve HTML özetleri sunar. Karşılaştırmalar ipucudur, doğruluk kontrolü değildir."
+  "guide.intelligence": "Anahtar kelime listeleri oluşturup etkinleştirin. Haber merkezi gruplanmış haberler, kaynak karşılaştırması, zaman çizelgesi, analiz, arşiv araması ve HTML özetleri sunar. Karşılaştırmalar ipucudur, doğruluk kontrolü değildir.",
+  "plugin.inactive.safeMode": "Crawler, Opsis Güvenli Modunda devre dışı.",
+  "plugin.inactive.standalone": "Bağımsız Crawler çalışıyor. Kapatın ve Crawler'ı Aç seçeneğini belirleyin.",
+  "plugin.inactive.stopped": "Crawler etkin değil. Menüden Crawler'ı Aç seçeneğini belirleyin."
 }
